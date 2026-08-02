@@ -1,0 +1,6 @@
+.env
+deploy/.env.production
+backups/
+server
+analytics-worker
+*.log

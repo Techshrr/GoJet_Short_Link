@@ -12,6 +12,15 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		client := &http.Client{Timeout: 2 * time.Second}
+		response, err := client.Get("http://127.0.0.1:8080/health")
+		if err != nil || response.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		response.Body.Close()
+		return
+	}
 	address := getenv("REDIS_ADDRESS", "127.0.0.1:6379")
 	db, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
 	limit, _ := strconv.Atoi(getenv("VISIT_RATE_LIMIT_PER_MINUTE", "60"))
