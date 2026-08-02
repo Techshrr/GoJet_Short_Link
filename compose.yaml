@@ -21,6 +21,20 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+  analytics-reconciler:
+    build:
+      context: .
+      dockerfile: services/analytics-reconciler/Dockerfile
+    environment:
+      REDIS_ADDRESS: redis:6379
+      MYSQL_DSN: gojet:gojet@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      ANALYTICS_RECONCILE_BATCH: ${ANALYTICS_RECONCILE_BATCH:-500}
+      ANALYTICS_RECONCILE_INTERVAL_SECONDS: ${ANALYTICS_RECONCILE_INTERVAL_SECONDS:-60}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
   platform-api:
     build:
       context: .

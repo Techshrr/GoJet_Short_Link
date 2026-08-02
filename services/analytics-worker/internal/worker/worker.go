@@ -19,10 +19,12 @@ type Worker struct {
 	db                      *sql.DB
 	stream, group, consumer string
 	batch                   int64
+	claimIdle               time.Duration
+	maxInvalidAttempts      int
 }
 
 func New(r *redis.Client, db *sql.DB, stream, group, consumer string, batch int64) *Worker {
-	return &Worker{redis: r, db: db, stream: stream, group: group, consumer: consumer, batch: batch}
+	return &Worker{redis: r, db: db, stream: stream, group: group, consumer: consumer, batch: batch, claimIdle: 30 * time.Second, maxInvalidAttempts: 5}
 }
 func (w *Worker) EnsureGroup(ctx context.Context) error {
 	err := w.redis.XGroupCreateMkStream(ctx, w.stream, w.group, "0").Err()
@@ -59,6 +61,16 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 }
 func (w *Worker) consume(ctx context.Context) error {
+	claimed, _, err := w.redis.XAutoClaim(ctx, &redis.XAutoClaimArgs{Stream: w.stream, Group: w.group, Consumer: w.consumer, MinIdle: w.claimIdle, Start: "0-0", Count: w.batch}).Result()
+	if err != nil && err != redis.Nil {
+		return err
+	}
+	if err = w.handle(ctx, claimed); err != nil {
+		return err
+	}
+	if len(claimed) > 0 {
+		return nil
+	}
 	streams, err := w.redis.XReadGroup(ctx, &redis.XReadGroupArgs{Group: w.group, Consumer: w.consumer, Streams: []string{w.stream, ">"}, Count: w.batch, Block: 5 * time.Second}).Result()
 	if err == redis.Nil {
 		return nil
@@ -67,14 +79,35 @@ func (w *Worker) consume(ctx context.Context) error {
 		return err
 	}
 	for _, stream := range streams {
-		for _, message := range stream.Messages {
-			if err := w.process(ctx, message); err != nil {
-				w.recordFailure(ctx, message.ID, err)
-				continue
+		if err = w.handle(ctx, stream.Messages); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type permanentEventError struct{ error }
+
+func (w *Worker) handle(ctx context.Context, messages []redis.XMessage) error {
+	for _, message := range messages {
+		if err := w.process(ctx, message); err != nil {
+			attempts := w.recordFailure(ctx, message.ID, err)
+			var permanent permanentEventError
+			if errors.As(err, &permanent) && attempts >= w.maxInvalidAttempts {
+				if _, stateErr := w.db.ExecContext(ctx, `UPDATE analytics_worker_failures SET state='dead_letter' WHERE stream_id=?`, message.ID); stateErr != nil {
+					return stateErr
+				}
+				if ackErr := w.redis.XAck(ctx, w.stream, w.group, message.ID).Err(); ackErr != nil {
+					return ackErr
+				}
 			}
-			if err := w.redis.XAck(ctx, w.stream, w.group, message.ID).Err(); err != nil {
-				return err
-			}
+			continue
+		}
+		if _, err := w.db.ExecContext(ctx, `UPDATE analytics_worker_failures SET state='resolved',resolved_at=NOW() WHERE stream_id=? AND state<>'resolved'`, message.ID); err != nil {
+			return err
+		}
+		if err := w.redis.XAck(ctx, w.stream, w.group, message.ID).Err(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -82,7 +115,7 @@ func (w *Worker) consume(ctx context.Context) error {
 func (w *Worker) process(ctx context.Context, message redis.XMessage) error {
 	event, err := ParseEvent(message)
 	if err != nil {
-		return err
+		return permanentEventError{err}
 	}
 	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -108,11 +141,15 @@ func (w *Worker) process(ctx context.Context, message redis.XMessage) error {
 	}
 	return tx.Commit()
 }
-func (w *Worker) recordFailure(ctx context.Context, id string, cause error) {
-	_, err := w.db.ExecContext(ctx, `INSERT INTO analytics_worker_failures(stream_id,error_message,attempts) VALUES(?,?,1) ON DUPLICATE KEY UPDATE error_message=VALUES(error_message),attempts=attempts+1,last_failed_at=CURRENT_TIMESTAMP`, id, cause.Error())
+func (w *Worker) recordFailure(ctx context.Context, id string, cause error) int {
+	_, err := w.db.ExecContext(ctx, `INSERT INTO analytics_worker_failures(stream_id,error_message,attempts,state,resolved_at) VALUES(?,?,1,'retrying',NULL) ON DUPLICATE KEY UPDATE error_message=VALUES(error_message),attempts=attempts+1,state='retrying',resolved_at=NULL,last_failed_at=CURRENT_TIMESTAMP`, id, cause.Error())
 	if err != nil {
 		log.Printf("record failure %s: %v (original: %v)", id, err, cause)
+		return 0
 	}
+	var attempts int
+	_ = w.db.QueryRowContext(ctx, `SELECT attempts FROM analytics_worker_failures WHERE stream_id=?`, id).Scan(&attempts)
+	return attempts
 }
 func null(value string) any {
 	if value == "" {

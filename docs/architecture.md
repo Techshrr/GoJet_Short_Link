@@ -17,8 +17,11 @@ while deployable data-plane services belong in `services`.
    than silently losing the visit or displaying a false zero.
 4. The analytics worker consumes the stream with a consumer group, writes
    idempotent events and daily aggregates to MySQL, and acknowledges only
-   successful transactions. Parsing and database failures remain pending and
-   are recorded in `analytics_worker_failures` for diagnosis.
+   successful transactions. It reclaims abandoned Pending events with
+   `XAUTOCLAIM`; permanent parse failures enter a recoverable dead letter.
+5. A bounded analytics reconciler compares Redis realtime counters with MySQL,
+   repairs Redis only upward, and records worker lag and recovery for the admin
+   diagnostics center.
 
 `GET /api/links/{id}/stats` reads live Redis values, so a delayed worker never
 makes a visited link appear unused. `GET /api/system/analytics` exposes the

@@ -53,6 +53,23 @@ services:
       mysql:
         condition: service_healthy
 
+  analytics-reconciler:
+    build:
+      context: ..
+      dockerfile: services/analytics-reconciler/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      ANALYTICS_RECONCILE_BATCH: ${ANALYTICS_RECONCILE_BATCH:-500}
+      ANALYTICS_RECONCILE_INTERVAL_SECONDS: ${ANALYTICS_RECONCILE_INTERVAL_SECONDS:-60}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
   platform-api:
     build:
       context: ..

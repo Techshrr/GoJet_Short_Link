@@ -120,6 +120,7 @@ func main() {
 	mux.HandleFunc("POST /api/admin/diagnostics/reconcile", s.admin("settings.manage", s.adminRunReconciliation))
 	mux.HandleFunc("POST /api/admin/diagnostics/cache/flush", s.admin("settings.manage", s.adminFlushCache))
 	mux.HandleFunc("PUT /api/admin/diagnostics/maintenance", s.admin("settings.manage", s.adminMaintenance))
+	mux.HandleFunc("POST /api/admin/analytics/failures/{id}/requeue", s.admin("settings.manage", s.adminRequeueAnalyticsFailure))
 	mux.HandleFunc("POST /api/mail/verification", s.user(s.queueVerification))
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)

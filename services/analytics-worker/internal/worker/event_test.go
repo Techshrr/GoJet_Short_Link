@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"context"
+	"errors"
 	"github.com/redis/go-redis/v9"
 	"testing"
 )
@@ -12,6 +14,15 @@ func TestParseEvent(t *testing.T) {
 	}
 	if event.StreamID != "1-0" || event.LinkID != "link-1" || event.RefererHost != "source.example" || event.IsBot {
 		t.Fatalf("unexpected event: %+v", event)
+	}
+}
+
+func TestMalformedEventsAreClassifiedPermanentBeforeDatabaseAccess(t *testing.T) {
+	w := &Worker{}
+	err := w.process(context.Background(), redis.XMessage{ID: "3-0", Values: map[string]any{"link_id": "9"}})
+	var permanent permanentEventError
+	if !errors.As(err, &permanent) {
+		t.Fatalf("expected permanent event error, got %v", err)
 	}
 }
 func TestParseEventRejectsIncompleteMessage(t *testing.T) {

@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func (s *server) adminUserSessions(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +274,7 @@ func (s *server) adminDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 	dbStats := s.db.Stats()
 	counts := map[string]int64{}
-	queries := map[string]string{"mail_queued": `SELECT COUNT(*) FROM mail_messages WHERE status IN ('pending','sending')`, "mail_failed": `SELECT COUNT(*) FROM mail_messages WHERE status='failed'`, "file_scan_backlog": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('pending','scanning')`, "file_scan_failed": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('infected','error')`, "analytics_failures": `SELECT COUNT(*) FROM analytics_worker_failures`, "active_user_sessions": `SELECT COUNT(*) FROM user_sessions WHERE revoked_at IS NULL AND expires_at>NOW()`, "quarantined_resources": `SELECT COUNT(*) FROM admin_resource_quarantine WHERE status='quarantined'`}
+	queries := map[string]string{"mail_queued": `SELECT COUNT(*) FROM mail_messages WHERE status IN ('pending','sending')`, "mail_failed": `SELECT COUNT(*) FROM mail_messages WHERE status='failed'`, "file_scan_backlog": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('pending','scanning')`, "file_scan_failed": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('infected','error')`, "analytics_retrying": `SELECT COUNT(*) FROM analytics_worker_failures WHERE state='retrying'`, "analytics_dead_letters": `SELECT COUNT(*) FROM analytics_worker_failures WHERE state='dead_letter'`, "analytics_worker_lag": `SELECT COUNT(*) FROM analytics_reconciliation WHERE status='worker_lag'`, "active_user_sessions": `SELECT COUNT(*) FROM user_sessions WHERE revoked_at IS NULL AND expires_at>NOW()`, "quarantined_resources": `SELECT COUNT(*) FROM admin_resource_quarantine WHERE status='quarantined'`}
 	for key, query := range queries {
 		var n int64
 		if s.db.QueryRowContext(ctx, query).Scan(&n) == nil {
@@ -293,9 +296,89 @@ func (s *server) adminDiagnostics(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	mismatches := []map[string]any{}
+	mismatchRows, _ := s.db.QueryContext(ctx, `SELECT link_id,redis_clicks,mysql_clicks,delta,status,detail,checked_at,first_mismatch_at FROM analytics_reconciliation WHERE status<>'consistent' ORDER BY checked_at DESC LIMIT 50`)
+	if mismatchRows != nil {
+		defer mismatchRows.Close()
+		for mismatchRows.Next() {
+			var linkID, status, detail string
+			var redisClicks, mysqlClicks, delta int64
+			var checked time.Time
+			var first sql.NullTime
+			if mismatchRows.Scan(&linkID, &redisClicks, &mysqlClicks, &delta, &status, &detail, &checked, &first) == nil {
+				mismatches = append(mismatches, map[string]any{"link_id": linkID, "redis_clicks": redisClicks, "mysql_clicks": mysqlClicks, "delta": delta, "status": status, "detail": detail, "checked_at": checked, "first_mismatch_at": nullableTime(first)})
+			}
+		}
+	}
+	deadLetters := []map[string]any{}
+	deadRows, _ := s.db.QueryContext(ctx, `SELECT id,stream_id,error_message,attempts,last_failed_at FROM analytics_worker_failures WHERE state='dead_letter' ORDER BY last_failed_at DESC LIMIT 50`)
+	if deadRows != nil {
+		defer deadRows.Close()
+		for deadRows.Next() {
+			var id int64
+			var streamID, message string
+			var attempts int
+			var failed time.Time
+			if deadRows.Scan(&id, &streamID, &message, &attempts, &failed) == nil {
+				deadLetters = append(deadLetters, map[string]any{"id": id, "stream_id": streamID, "error": message, "attempts": attempts, "last_failed_at": failed})
+			}
+		}
+	}
 	maintenance, _, _ := s.settings.Get(ctx, "system.maintenance_mode")
-	jsonResponse(w, 200, map[string]any{"database": map[string]any{"status": healthState(dbErr), "latency_ms": dbLatency, "open_connections": dbStats.OpenConnections, "in_use": dbStats.InUse, "idle": dbStats.Idle}, "redis": map[string]any{"status": healthState(redisErr), "latency_ms": redisLatency, "stream_events": stream, "consumer_pending": pending}, "queues": counts, "maintenance_mode": maintenance == "true", "jobs": jobs, "checked_at": time.Now().UTC()})
+	jsonResponse(w, 200, map[string]any{"database": map[string]any{"status": healthState(dbErr), "latency_ms": dbLatency, "open_connections": dbStats.OpenConnections, "in_use": dbStats.InUse, "idle": dbStats.Idle}, "redis": map[string]any{"status": healthState(redisErr), "latency_ms": redisLatency, "stream_events": stream, "consumer_pending": pending}, "queues": counts, "reconciliation": mismatches, "dead_letters": deadLetters, "maintenance_mode": maintenance == "true", "jobs": jobs, "checked_at": time.Now().UTC()})
 }
+
+var requeueDeadLetter = redis.NewScript(`
+local existing=redis.call('GET',KEYS[2])
+if existing then return existing end
+local id=redis.call('XADD',KEYS[1],'*',unpack(ARGV))
+redis.call('SET',KEYS[2],id)
+return id`)
+
+func (s *server) adminRequeueAnalyticsFailure(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if decode(w, r, &in) != nil {
+		return
+	}
+	if err != nil || len(strings.TrimSpace(in.Reason)) < 3 {
+		jsonResponse(w, 422, map[string]string{"error": "失败记录和至少 3 个字符的重试原因必填"})
+		return
+	}
+	var streamID, state string
+	if err = s.db.QueryRowContext(r.Context(), `SELECT stream_id,state FROM analytics_worker_failures WHERE id=?`, id).Scan(&streamID, &state); err != nil {
+		jsonResponse(w, 404, map[string]string{"error": "失败记录不存在"})
+		return
+	}
+	if state != "dead_letter" {
+		jsonResponse(w, 409, map[string]string{"error": "只有死信事件需要人工重新投递"})
+		return
+	}
+	messages, err := s.redis.XRangeN(r.Context(), "gojet:analytics:events", streamID, streamID, 1).Result()
+	if err != nil || len(messages) != 1 {
+		jsonResponse(w, 409, map[string]string{"error": "Redis Stream 中已找不到原始事件，无法安全重建"})
+		return
+	}
+	args := make([]any, 0, len(messages[0].Values)*2)
+	for key, value := range messages[0].Values {
+		args = append(args, key, value)
+	}
+	newID, err := requeueDeadLetter.Run(r.Context(), s.redis, []string{"gojet:analytics:events", "gojet:dead-requeue:" + strconv.FormatInt(id, 10)}, args...).Text()
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "重新投递 Stream 失败"})
+		return
+	}
+	_, err = s.db.ExecContext(r.Context(), `UPDATE analytics_worker_failures SET state='resolved',resolved_at=NOW(),error_message=CONCAT(error_message,' | manually requeued as ',?) WHERE id=? AND state='dead_letter'`, newID, id)
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "事件已投递但失败状态更新失败"})
+		return
+	}
+	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO system_job_runs(job_name,status,triggered_by,details,finished_at) VALUES('analytics.dead_letter_requeue','success',?,JSON_OBJECT('old_stream_id',?,'new_stream_id',?,'reason',?),NOW())`, currentAdmin(r).ID, streamID, newID, in.Reason)
+	jsonResponse(w, 202, map[string]string{"stream_id": newID})
+}
+
 func healthState(err error) string {
 	if err != nil {
 		return "outage"

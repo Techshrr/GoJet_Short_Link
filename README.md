@@ -12,6 +12,8 @@ release; the evidence-based completion matrix is maintained in
 go test -race ./...
 go vet ./...
 npm run test:e2e
+# Requires a real redis-server and verifies XAUTOCLAIM/recovery semantics:
+make test-integration
 ```
 
 Configuration is documented in [`.env.example`](.env.example). No dashboard
