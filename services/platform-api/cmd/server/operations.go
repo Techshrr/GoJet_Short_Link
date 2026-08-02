@@ -189,3 +189,37 @@ func nullableString(v string) any {
 	}
 	return v
 }
+func (s *server) publicStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	components := map[string]map[string]any{}
+	dbStatus := "operational"
+	if err := s.db.PingContext(ctx); err != nil {
+		dbStatus = "outage"
+	}
+	components["database"] = map[string]any{"status": dbStatus}
+	redisStatus := "operational"
+	if err := s.redis.Ping(ctx).Err(); err != nil {
+		redisStatus = "outage"
+	}
+	backlog, _ := s.redis.XLen(ctx, "gojet:analytics:events").Result()
+	components["redirect_analytics"] = map[string]any{"status": redisStatus, "stream_events": backlog}
+	var failed, pending int64
+	mailStatus := "operational"
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(status='failed'),0),COALESCE(SUM(status IN ('pending','sending')),0) FROM mail_messages`).Scan(&failed, &pending); err != nil {
+		mailStatus = "outage"
+	} else if failed > 0 {
+		mailStatus = "degraded"
+	}
+	components["mail"] = map[string]any{"status": mailStatus, "failed": failed, "queued": pending}
+	overall := "operational"
+	for _, component := range components {
+		if component["status"] == "outage" {
+			overall = "outage"
+			break
+		}
+		if component["status"] == "degraded" {
+			overall = "degraded"
+		}
+	}
+	jsonResponse(w, 200, map[string]any{"status": overall, "components": components, "checked_at": time.Now().UTC()})
+}

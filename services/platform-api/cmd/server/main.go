@@ -29,6 +29,7 @@ type server struct {
 	workspace  *workspace.Service
 	links      *links.Service
 	domains    *domains.Service
+	redis      *redis.Client
 	adminToken string
 }
 
@@ -55,10 +56,11 @@ func main() {
 		log.Fatal(err)
 	}
 	workspaceService := workspace.New(db)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), adminToken: required("ADMIN_API_TOKEN")}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, adminToken: required("ADMIN_API_TOKEN")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
+	mux.HandleFunc("GET /api/public/status", s.publicStatus)
 	mux.HandleFunc("PUT /api/admin/settings/mail", s.admin(s.saveMail))
 	mux.HandleFunc("POST /api/admin/mail/test", s.admin(s.testMail))
 	mux.HandleFunc("GET /api/admin/mail/logs", s.admin(s.mailLogs))
