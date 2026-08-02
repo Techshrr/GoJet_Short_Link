@@ -1,0 +1,1 @@
+{"name":"gojet-v4","private":true,"scripts":{"test:e2e":"playwright test"},"devDependencies":{"@playwright/test":"^1.62.1"}}
