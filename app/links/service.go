@@ -29,14 +29,19 @@ type Link struct {
 	ExpiresAt                                *string         `json:"expires_at,omitempty"`
 	MaxClicks                                *int64          `json:"max_clicks,omitempty"`
 	OneTime                                  bool            `json:"one_time"`
-	FolderID, CampaignID                     *int64          `json:",omitempty"`
+	FolderID                                 *int64          `json:"folder_id,omitempty"`
+	CampaignID                               *int64          `json:"campaign_id,omitempty"`
+	TagIDs                                   []int64         `json:"tag_ids,omitempty"`
+	FolderName, CampaignName                 string          `json:",omitempty"`
+	TagNames                                 []string        `json:",omitempty"`
 	UTM, RoutingRules, ABDestinations        json.RawMessage `json:",omitempty"`
 	CreatedAt                                string          `json:"created_at,omitempty"`
 	Clicks, Visitors                         int64           `json:",omitempty"`
 }
 type Filter struct {
-	Search, Status string
-	Limit, Offset  int
+	Search, Status, Domain      string
+	FolderID, CampaignID, TagID int64
+	Limit, Offset               int
 }
 type Dimension struct {
 	Name  string `json:"name"`
@@ -90,6 +95,9 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 		normalized := parsed.UTC().Format(time.RFC3339)
 		l.ExpiresAt = &normalized
 	}
+	if err = s.validateOrganization(ctx, workspaceID, l.FolderID, l.CampaignID, l.TagIDs); err != nil {
+		return Link{}, err
+	}
 	l.Status = "active"
 	if l.Password != "" {
 		if len(l.Password) < 6 {
@@ -106,6 +114,12 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 		return Link{}, err
 	}
 	l.ID, _ = result.LastInsertId()
+	for _, tagID := range uniqueIDs(l.TagIDs) {
+		if _, err = s.db.ExecContext(ctx, `INSERT INTO link_tags(link_id,tag_id) VALUES(?,?)`, l.ID, tagID); err != nil {
+			_, _ = s.db.ExecContext(ctx, `DELETE FROM short_links WHERE id=?`, l.ID)
+			return Link{}, err
+		}
+	}
 	l.WorkspaceID = workspaceID
 	l.CreatedBy = userID
 	if err = s.syncRedis(ctx, l); err != nil {
@@ -137,23 +151,39 @@ func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter)
 	if f.Limit < 1 || f.Limit > 100 {
 		f.Limit = 25
 	}
-	where := `workspace_id=?`
+	where := `l.workspace_id=? AND l.deleted_at IS NULL`
 	args := []any{workspaceID}
 	if f.Status != "" {
-		where += ` AND status=?`
+		where += ` AND l.status=?`
 		args = append(args, f.Status)
 	}
 	if f.Search != "" {
-		where += ` AND (code LIKE ? OR title LIKE ? OR destination LIKE ?)`
+		where += ` AND (l.code LIKE ? OR l.title LIKE ? OR l.destination LIKE ?)`
 		q := "%" + f.Search + "%"
 		args = append(args, q, q, q)
 	}
+	if f.Domain != "" {
+		where += ` AND l.domain=?`
+		args = append(args, f.Domain)
+	}
+	if f.FolderID > 0 {
+		where += ` AND l.folder_id=?`
+		args = append(args, f.FolderID)
+	}
+	if f.CampaignID > 0 {
+		where += ` AND l.campaign_id=?`
+		args = append(args, f.CampaignID)
+	}
+	if f.TagID > 0 {
+		where += ` AND EXISTS(SELECT 1 FROM link_tags selected_tag WHERE selected_tag.link_id=l.id AND selected_tag.tag_id=?)`
+		args = append(args, f.TagID)
+	}
 	var total int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM short_links WHERE `+where, args...).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM short_links l WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace_id,created_by,code,domain,destination,title,status,redirect_status,one_time,created_at FROM short_links WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT l.id,l.workspace_id,l.created_by,l.code,l.domain,l.destination,l.title,l.status,l.redirect_status,l.one_time,l.folder_id,l.campaign_id,COALESCE(f.name,''),COALESCE(c.name,''),COALESCE((SELECT GROUP_CONCAT(t.name ORDER BY t.name SEPARATOR 0x1F) FROM link_tags lt JOIN tags t ON t.id=lt.tag_id WHERE lt.link_id=l.id),''),l.created_at FROM short_links l LEFT JOIN folders f ON f.id=l.folder_id LEFT JOIN campaigns c ON c.id=l.campaign_id WHERE `+where+` ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -162,8 +192,12 @@ func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter)
 	for rows.Next() {
 		var l Link
 		var created string
-		if err = rows.Scan(&l.ID, &l.WorkspaceID, &l.CreatedBy, &l.Code, &l.Domain, &l.Destination, &l.Title, &l.Status, &l.RedirectStatus, &l.OneTime, &created); err != nil {
+		var tagNames string
+		if err = rows.Scan(&l.ID, &l.WorkspaceID, &l.CreatedBy, &l.Code, &l.Domain, &l.Destination, &l.Title, &l.Status, &l.RedirectStatus, &l.OneTime, &l.FolderID, &l.CampaignID, &l.FolderName, &l.CampaignName, &tagNames, &created); err != nil {
 			return nil, 0, err
+		}
+		if tagNames != "" {
+			l.TagNames = strings.Split(tagNames, "\x1f")
 		}
 		l.CreatedAt = created
 		clicks, _ := s.redis.Get(ctx, "gojet:clicks:"+fmt.Sprint(l.ID)).Int64()
@@ -173,6 +207,152 @@ func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter)
 		out = append(out, l)
 	}
 	return out, total, rows.Err()
+}
+
+func (s *Service) BulkMove(ctx context.Context, userID, workspaceID int64, ids []int64, folderID, campaignID *int64) (int64, error) {
+	role, err := s.workspaces.Role(ctx, workspaceID, userID)
+	if err != nil || !workspace.Allowed(role, "edit") {
+		return 0, errors.New("forbidden")
+	}
+	if err = s.validateOrganization(ctx, workspaceID, folderID, campaignID, nil); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 || len(ids) > 100 {
+		return 0, errors.New("请选择 1 到 100 条链接")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var affected int64
+	for _, id := range uniqueIDs(ids) {
+		result, updateErr := tx.ExecContext(ctx, `UPDATE short_links SET folder_id=?,campaign_id=? WHERE id=? AND workspace_id=? AND deleted_at IS NULL`, folderID, campaignID, id, workspaceID)
+		if updateErr != nil {
+			return 0, updateErr
+		}
+		count, _ := result.RowsAffected()
+		affected += count
+	}
+	if err = tx.Commit(); err == nil {
+		s.audit(ctx, userID, workspaceID, "links.bulk_moved", affected)
+	}
+	return affected, err
+}
+
+func (s *Service) BulkTags(ctx context.Context, userID, workspaceID int64, ids, tagIDs []int64) (int64, error) {
+	role, err := s.workspaces.Role(ctx, workspaceID, userID)
+	if err != nil || !workspace.Allowed(role, "edit") {
+		return 0, errors.New("forbidden")
+	}
+	if len(ids) == 0 || len(ids) > 100 {
+		return 0, errors.New("请选择 1 到 100 条链接")
+	}
+	if err = s.validateOrganization(ctx, workspaceID, nil, nil, tagIDs); err != nil {
+		return 0, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var affected int64
+	for _, id := range uniqueIDs(ids) {
+		var exists int
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM short_links WHERE id=? AND workspace_id=? AND deleted_at IS NULL`, id, workspaceID).Scan(&exists); err != nil {
+			return 0, err
+		}
+		if exists == 0 {
+			continue
+		}
+		if _, err = tx.ExecContext(ctx, `DELETE FROM link_tags WHERE link_id=?`, id); err != nil {
+			return 0, err
+		}
+		for _, tagID := range uniqueIDs(tagIDs) {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO link_tags(link_id,tag_id) VALUES(?,?)`, id, tagID); err != nil {
+				return 0, err
+			}
+		}
+		affected++
+	}
+	if err = tx.Commit(); err == nil {
+		s.audit(ctx, userID, workspaceID, "links.bulk_tagged", affected)
+	}
+	return affected, err
+}
+
+func (s *Service) BulkDelete(ctx context.Context, userID, workspaceID int64, ids []int64) (int64, error) {
+	role, err := s.workspaces.Role(ctx, workspaceID, userID)
+	if err != nil || !workspace.Allowed(role, "edit") {
+		return 0, errors.New("forbidden")
+	}
+	ids = uniqueIDs(ids)
+	if len(ids) == 0 || len(ids) > 100 {
+		return 0, errors.New("请选择 1 到 100 条链接")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var affected int64
+	for _, id := range ids {
+		result, updateErr := tx.ExecContext(ctx, `UPDATE short_links SET status='paused',deleted_at=NOW() WHERE id=? AND workspace_id=? AND deleted_at IS NULL`, id, workspaceID)
+		if updateErr != nil {
+			return 0, updateErr
+		}
+		count, _ := result.RowsAffected()
+		affected += count
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		_ = s.SyncByID(ctx, id)
+	}
+	s.audit(ctx, userID, workspaceID, "links.bulk_deleted", affected)
+	return affected, nil
+}
+
+func (s *Service) validateOrganization(ctx context.Context, workspaceID int64, folderID, campaignID *int64, tagIDs []int64) error {
+	checks := []struct {
+		id    *int64
+		table string
+		name  string
+	}{{folderID, "folders", "文件夹"}, {campaignID, "campaigns", "活动"}}
+	for _, check := range checks {
+		if check.id == nil {
+			continue
+		}
+		var count int
+		query := `SELECT COUNT(*) FROM ` + check.table + ` WHERE id=? AND workspace_id=?`
+		if err := s.db.QueryRowContext(ctx, query, *check.id, workspaceID).Scan(&count); err != nil || count != 1 {
+			return errors.New(check.name + "不属于当前工作区")
+		}
+	}
+	for _, tagID := range uniqueIDs(tagIDs) {
+		var count int
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tags WHERE id=? AND workspace_id=?`, tagID, workspaceID).Scan(&count); err != nil || count != 1 {
+			return errors.New("标签不属于当前工作区")
+		}
+	}
+	return nil
+}
+
+func (s *Service) audit(ctx context.Context, userID, workspaceID int64, action string, affected int64) {
+	_, _ = s.db.ExecContext(ctx, `INSERT INTO audit_logs(actor_user_id,workspace_id,action,target_type,target_id,metadata) VALUES(?,?,?,'links','bulk',JSON_OBJECT('affected',?))`, userID, workspaceID, action, affected)
+}
+
+func uniqueIDs(ids []int64) []int64 {
+	seen := map[int64]bool{}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
 }
 func (s *Service) BulkStatus(ctx context.Context, userID, workspaceID int64, ids []int64, status string) (int64, error) {
 	role, err := s.workspaces.Role(ctx, workspaceID, userID)
@@ -189,7 +369,7 @@ func (s *Service) BulkStatus(ctx context.Context, userID, workspaceID int64, ids
 	defer tx.Rollback()
 	affected := int64(0)
 	for _, id := range ids {
-		result, err := tx.ExecContext(ctx, `UPDATE short_links SET status=? WHERE id=? AND workspace_id=?`, status, id, workspaceID)
+		result, err := tx.ExecContext(ctx, `UPDATE short_links SET status=? WHERE id=? AND workspace_id=? AND deleted_at IS NULL`, status, id, workspaceID)
 		if err != nil {
 			return 0, err
 		}

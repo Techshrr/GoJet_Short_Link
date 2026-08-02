@@ -23,3 +23,10 @@ func TestNullableJSON(t *testing.T) {
 		t.Fatal("JSON was discarded")
 	}
 }
+
+func TestUniqueIDsDropsInvalidAndDuplicateValues(t *testing.T) {
+	values := uniqueIDs([]int64{3, 0, 3, -1, 8, 8})
+	if len(values) != 2 || values[0] != 3 || values[1] != 8 {
+		t.Fatalf("unexpected IDs %#v", values)
+	}
+}

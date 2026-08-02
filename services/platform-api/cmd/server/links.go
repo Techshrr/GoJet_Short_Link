@@ -1,10 +1,13 @@
 package main
 
 import (
-	"github.com/Techshrr/GoJet_Short_Link/app/links"
+	"encoding/csv"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/Techshrr/GoJet_Short_Link/app/links"
 )
 
 func (s *server) listLinks(w http.ResponseWriter, r *http.Request) {
@@ -13,14 +16,118 @@ func (s *server) listLinks(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "invalid workspace"})
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	items, total, err := s.links.List(r.Context(), currentUser(r).ID, wid, links.Filter{Search: r.URL.Query().Get("search"), Status: r.URL.Query().Get("status"), Limit: limit, Offset: offset})
+	filter := linkFilter(r)
+	items, total, err := s.links.List(r.Context(), currentUser(r).ID, wid, filter)
 	if err != nil {
 		jsonResponse(w, 403, map[string]string{"error": "无法读取链接"})
 		return
 	}
-	jsonResponse(w, 200, map[string]any{"data": items, "total": total, "limit": limit, "offset": offset})
+	jsonResponse(w, 200, map[string]any{"data": items, "total": total, "limit": filter.Limit, "offset": filter.Offset})
+}
+
+func (s *server) bulkLinkDelete(w http.ResponseWriter, r *http.Request) {
+	workspaceID, err := pathID(r, "id")
+	var input struct {
+		IDs []int64 `json:"ids"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "工作区编号无效"})
+		return
+	}
+	affected, err := s.links.BulkDelete(r.Context(), currentUser(r).ID, workspaceID, input.IDs)
+	if err != nil {
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]int64{"affected": affected})
+}
+
+func (s *server) exportLinksCSV(w http.ResponseWriter, r *http.Request) {
+	workspaceID, err := pathID(r, "id")
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "工作区编号无效"})
+		return
+	}
+	filter := linkFilter(r)
+	filter.Limit = 100
+	filter.Offset = 0
+	all := []links.Link{}
+	for len(all) < 10_000 {
+		items, total, listErr := s.links.List(r.Context(), currentUser(r).ID, workspaceID, filter)
+		if listErr != nil {
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "无法导出链接"})
+			return
+		}
+		all = append(all, items...)
+		filter.Offset += len(items)
+		if len(items) == 0 || int64(filter.Offset) >= total {
+			break
+		}
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="gojet-links.csv"`)
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"短码", "域名", "目标地址", "标题", "状态", "文件夹", "活动", "标签", "点击", "独立访客", "创建时间"})
+	for _, item := range all {
+		_ = writer.Write([]string{item.Code, item.Domain, item.Destination, item.Title, item.Status, item.FolderName, item.CampaignName, strings.Join(item.TagNames, ","), strconv.FormatInt(item.Clicks, 10), strconv.FormatInt(item.Visitors, 10), item.CreatedAt})
+	}
+	writer.Flush()
+}
+
+func linkFilter(r *http.Request) links.Filter {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	folderID, _ := strconv.ParseInt(r.URL.Query().Get("folder"), 10, 64)
+	campaignID, _ := strconv.ParseInt(r.URL.Query().Get("campaign"), 10, 64)
+	tagID, _ := strconv.ParseInt(r.URL.Query().Get("tag"), 10, 64)
+	return links.Filter{Search: r.URL.Query().Get("search"), Status: r.URL.Query().Get("status"), Domain: r.URL.Query().Get("domain"), FolderID: folderID, CampaignID: campaignID, TagID: tagID, Limit: limit, Offset: offset}
+}
+
+func (s *server) bulkLinkMove(w http.ResponseWriter, r *http.Request) {
+	workspaceID, err := pathID(r, "id")
+	var input struct {
+		IDs        []int64 `json:"ids"`
+		FolderID   *int64  `json:"folder_id"`
+		CampaignID *int64  `json:"campaign_id"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "工作区编号无效"})
+		return
+	}
+	affected, err := s.links.BulkMove(r.Context(), currentUser(r).ID, workspaceID, input.IDs, input.FolderID, input.CampaignID)
+	if err != nil {
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]int64{"affected": affected})
+}
+
+func (s *server) bulkLinkTags(w http.ResponseWriter, r *http.Request) {
+	workspaceID, err := pathID(r, "id")
+	var input struct {
+		IDs    []int64 `json:"ids"`
+		TagIDs []int64 `json:"tag_ids"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "工作区编号无效"})
+		return
+	}
+	affected, err := s.links.BulkTags(r.Context(), currentUser(r).ID, workspaceID, input.IDs, input.TagIDs)
+	if err != nil {
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]int64{"affected": affected})
 }
 func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")

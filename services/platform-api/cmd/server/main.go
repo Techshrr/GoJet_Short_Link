@@ -9,6 +9,7 @@ import (
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 	"github.com/Techshrr/GoJet_Short_Link/app/links"
 	appmail "github.com/Techshrr/GoJet_Short_Link/app/mail"
+	"github.com/Techshrr/GoJet_Short_Link/app/organization"
 	appresources "github.com/Techshrr/GoJet_Short_Link/app/resources"
 	"github.com/Techshrr/GoJet_Short_Link/app/settings"
 	"github.com/Techshrr/GoJet_Short_Link/app/workspace"
@@ -32,6 +33,7 @@ type server struct {
 	domains    *domains.Service
 	redis      *redis.Client
 	resources  *appresources.Service
+	organizer  *organization.Service
 	adminToken string
 }
 
@@ -58,7 +60,7 @@ func main() {
 		log.Fatal(err)
 	}
 	workspaceService := workspace.New(db)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080")), adminToken: required("ADMIN_API_TOKEN")}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080")), organizer: organization.New(db, rdb, workspaceService), adminToken: required("ADMIN_API_TOKEN")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
@@ -104,6 +106,16 @@ func main() {
 	mux.HandleFunc("GET /api/workspaces/{id}/links", s.user(s.listLinks))
 	mux.HandleFunc("POST /api/workspaces/{id}/links", s.user(s.createLink))
 	mux.HandleFunc("PATCH /api/workspaces/{id}/links/bulk-status", s.user(s.bulkLinkStatus))
+	mux.HandleFunc("PATCH /api/workspaces/{id}/links/bulk-move", s.user(s.bulkLinkMove))
+	mux.HandleFunc("PATCH /api/workspaces/{id}/links/bulk-tags", s.user(s.bulkLinkTags))
+	mux.HandleFunc("DELETE /api/workspaces/{id}/links/bulk", s.user(s.bulkLinkDelete))
+	mux.HandleFunc("GET /api/workspaces/{id}/links/export.csv", s.user(s.exportLinksCSV))
+	mux.HandleFunc("GET /api/workspaces/{id}/organization", s.user(s.organizationSnapshot))
+	mux.HandleFunc("POST /api/workspaces/{id}/campaigns", s.user(s.createCampaign))
+	mux.HandleFunc("PATCH /api/workspaces/{id}/campaigns/{campaign}", s.user(s.updateCampaign))
+	mux.HandleFunc("POST /api/public/campaigns/{campaign}/conversion", s.recordCampaignConversion)
+	mux.HandleFunc("POST /api/workspaces/{id}/folders", s.user(s.createFolder))
+	mux.HandleFunc("POST /api/workspaces/{id}/tags", s.user(s.createTag))
 	mux.HandleFunc("GET /api/workspaces/{id}/links/{link}/analytics", s.user(s.linkAnalytics))
 	mux.HandleFunc("GET /api/workspaces/{id}/domains", s.user(s.listDomains))
 	mux.HandleFunc("POST /api/workspaces/{id}/domains", s.user(s.createDomain))

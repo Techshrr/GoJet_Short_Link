@@ -101,7 +101,7 @@ func (s *server) adminWorkspaces(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) adminLinks(w http.ResponseWriter, r *http.Request) {
 	limit, offset := page(r)
-	rows, err := s.db.QueryContext(r.Context(), `SELECT l.id,l.code,l.destination,l.status,l.created_at,w.name,u.email FROM short_links l JOIN workspaces w ON w.id=l.workspace_id JOIN users u ON u.id=l.created_by ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	rows, err := s.db.QueryContext(r.Context(), `SELECT l.id,l.code,l.destination,l.status,l.created_at,w.name,u.email FROM short_links l JOIN workspaces w ON w.id=l.workspace_id JOIN users u ON u.id=l.created_by WHERE l.deleted_at IS NULL ORDER BY l.created_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "链接列表暂时不可用"})
 		return
