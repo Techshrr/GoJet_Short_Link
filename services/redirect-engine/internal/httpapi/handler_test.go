@@ -56,7 +56,11 @@ func TestRedirectImmediatelyUpdatesRealStats(t *testing.T) {
 func TestRejectsUnsafeDestination(t *testing.T) {
 	server := httptest.NewServer(httpapi.New(store.NewMemory(), "secret"))
 	defer server.Close()
-	res, _ := http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"1","code":"x","destination":"javascript:alert(1)"}`))
+	res, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"1","code":"x","destination":"javascript:alert(1)"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
 	if res.StatusCode != 400 {
 		t.Fatalf("status=%d, want 400", res.StatusCode)
 	}
@@ -66,16 +70,23 @@ func TestBotsAreCountedButExcludedFromUniqueVisitors(t *testing.T) {
 	s := store.NewMemory()
 	server := httptest.NewServer(httpapi.New(s, "test-secret"))
 	defer server.Close()
-	_, _ = http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"link-1","code":"go","destination":"https://example.com"}`))
+	createTestLink(t, server.URL)
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	req, _ := http.NewRequest("GET", server.URL+"/go", nil)
 	req.Header.Set("User-Agent", "Googlebot/2.1")
-	res, _ := client.Do(req)
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusFound {
 		t.Fatalf("status=%d", res.StatusCode)
 	}
-	statsRes, _ := http.Get(server.URL + "/api/links/link-1/stats")
+	statsRes, err := http.Get(server.URL + "/api/links/link-1/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer statsRes.Body.Close()
 	var stats struct{ Unique, Bots int64 }
 	var raw map[string]json.RawMessage
 	_ = json.NewDecoder(statsRes.Body).Decode(&raw)
@@ -90,10 +101,13 @@ func TestVisitRateLimitDoesNotPolluteAnalytics(t *testing.T) {
 	s := store.NewMemoryWithLimit(3)
 	server := httptest.NewServer(httpapi.New(s, "test-secret"))
 	defer server.Close()
-	_, _ = http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"link-1","code":"go","destination":"https://example.com"}`))
+	createTestLink(t, server.URL)
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for i := 0; i < 4; i++ {
-		res, _ := client.Get(server.URL + "/go")
+		res, err := client.Get(server.URL + "/go")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if i < 3 && res.StatusCode != 302 {
 			t.Fatalf("visit %d status=%d", i, res.StatusCode)
 		}
@@ -102,12 +116,28 @@ func TestVisitRateLimitDoesNotPolluteAnalytics(t *testing.T) {
 		}
 		res.Body.Close()
 	}
-	statsRes, _ := http.Get(server.URL + "/api/links/link-1/stats")
+	statsRes, err := http.Get(server.URL + "/api/links/link-1/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer statsRes.Body.Close()
 	var stats struct {
 		Clicks int64 `json:"clicks"`
 	}
 	_ = json.NewDecoder(statsRes.Body).Decode(&stats)
 	if stats.Clicks != 3 {
 		t.Fatalf("clicks=%d, want 3", stats.Clicks)
+	}
+}
+
+func createTestLink(t *testing.T, baseURL string) {
+	t.Helper()
+	res, err := http.Post(baseURL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"link-1","code":"go","destination":"https://example.com"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create status=%d", res.StatusCode)
 	}
 }
