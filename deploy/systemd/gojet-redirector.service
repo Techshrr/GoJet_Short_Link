@@ -1,0 +1,42 @@
+[Unit]
+Description=GoJet Go Redirect Plane
+After=network-online.target redis-server.service php8.4-fpm.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/gojet/current
+EnvironmentFile=/var/www/gojet/current/.env
+ExecStart=/var/www/gojet/current/bin/gojet-redirector
+Restart=always
+RestartSec=2
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Durable click spool. A redirect is never served by the Go plane unless the
+# event has first been fsynced here.
+ReadWritePaths=/var/lib/gojet/spool
+RuntimeDirectory=gojet
+RuntimeDirectoryMode=0750
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+StandardOutput=append:/var/www/gojet/current/storage/logs/redirector.log
+StandardError=append:/var/www/gojet/current/storage/logs/redirector-error.log
+
+[Install]
+WantedBy=multi-user.target

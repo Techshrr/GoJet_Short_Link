@@ -1,0 +1,16 @@
+@php($zh=app()->getLocale()==='zh_CN')
+<x-layouts.marketing :title="__('v3.public.developers_title')">
+  <section class="bg-slate-950 px-5 py-20 text-white lg:px-8"><div class="mx-auto max-w-6xl"><p class="text-xs font-bold uppercase tracking-[.2em] text-cyan-300">GoJet REST API v1</p><h1 class="mt-4 text-4xl font-black sm:text-6xl">{{ __('v3.public.developers_title') }}</h1><p class="mt-5 max-w-3xl text-lg leading-8 text-slate-400">{{ $zh?'使用可撤销、可到期、细粒度权限 Token 管理链接、分析、域名、文本、文件、主页和 Webhook。':'Manage links, analytics, domains, text, files, profiles, and webhooks with revocable, expiring, fine-grained tokens.' }}</p><div class="mt-8 flex flex-wrap gap-3"><a class="rounded-xl bg-white px-5 py-3 font-bold text-slate-950" href="{{ asset('openapi.yaml') }}">OpenAPI YAML ↓</a>@auth<a class="rounded-xl border border-white/20 px-5 py-3 font-bold" href="{{ route('tokens.index') }}">{{ __('v3.nav.api') }}</a>@endauth</div></div></section>
+  <section class="mx-auto grid max-w-7xl gap-8 px-5 py-16 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8"><aside class="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:sticky lg:top-6"><nav class="space-y-1 text-sm font-semibold">@foreach(['Authentication','Links','Smart routing','Analytics','Domains','Text sharing','File sharing','Profiles','Webhooks','Conversions'] as $item)<a class="block rounded-xl px-3 py-2 text-slate-600 hover:bg-slate-50 hover:text-slate-950" href="#{{ Str::slug($item) }}">{{ $item }}</a>@endforeach</nav></aside><div class="space-y-10"><section id="authentication"><h2 class="text-2xl font-black text-slate-950">Authentication</h2><p class="mt-3 leading-7 text-slate-600">{{ $zh?'在 Authorization 请求头发送 Bearer Token。Token 在控制台创建，并绑定当前工作区、权限范围和到期时间。':'Send a bearer token in the Authorization header. Tokens are created in the console and bound to the current workspace, abilities, and expiry.' }}</p><pre class="code-panel mt-4 overflow-x-auto">curl -H "Authorization: Bearer gjt_YOUR_TOKEN" \
+  {{ url('/api/v1/links') }}</pre></section>@foreach([
+['Links','GET /links · POST /links · GET/PATCH/DELETE /links/{id}'],
+['Smart routing','GET /links/{id}/routing · POST destinations · POST rules'],
+['Analytics','GET /analytics · GET /links/{id}/analytics'],
+['Domains','GET/POST /domains · verify · refresh · default · delete'],
+['Text sharing','GET/POST /texts · GET/PATCH/DELETE /texts/{id}'],
+['File sharing','GET/POST /files · GET/PATCH/DELETE /files/{id}'],
+['Profiles','GET/POST /profiles · blocks CRUD'],
+['Webhooks','GET/POST /webhooks · rotate · test · delivery retry'],
+['Conversions','GET/POST /links/{id}/conversions'],
+] as [$title,$summary])<section id="{{ Str::slug($title) }}" class="rounded-3xl border border-slate-200 bg-white p-6"><h2 class="text-2xl font-black text-slate-950">{{ $title }}</h2><p class="mt-3 font-mono text-sm text-cyan-700">{{ $summary }}</p><p class="mt-4 leading-7 text-slate-600">{{ $zh?'完整请求字段、响应和错误结构以 OpenAPI 文件为准。所有资源都会校验 Token 对应的工作区，跨工作区 ID 返回 404。':'Use the OpenAPI file for complete request fields, responses, and errors. Every resource is scoped to the token workspace; cross-workspace IDs return 404.' }}</p></section>@endforeach</div></section>
+</x-layouts.marketing>

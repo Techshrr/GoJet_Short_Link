@@ -1,0 +1,143 @@
+name: gojet
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    volumes:
+      - gojet_storage:/var/www/html/storage
+      - gojet_public:/var/www/html/public
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php-fpm", "-t"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    networks: [gojet]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    command: ["php", "artisan", "queue:work", "redis", "--queue=default", "--sleep=1", "--tries=3", "--timeout=60", "--max-time=3600"]
+    volumes:
+      - gojet_storage:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+    stop_grace_period: 75s
+    networks: [gojet]
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - gojet_storage:/var/www/html/storage
+    depends_on:
+      app:
+        condition: service_healthy
+    stop_grace_period: 30s
+    networks: [gojet]
+
+
+  redirector:
+    build:
+      context: ./redirector
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      REDIS_ADDR: redis:6379
+      GOJET_CONTROL_PLANE_URL: http://nginx
+      GOJET_REDIRECT_LISTEN: :8081
+      GOJET_REDIRECT_SPOOL_DIR: /var/lib/gojet/spool
+      GOJET_REDIRECT_CACHE_TTL_SECONDS: ${GOJET_REDIRECT_CACHE_TTL_SECONDS:-3600}
+    volumes:
+      - gojet_redirect_spool:/var/lib/gojet/spool
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [gojet]
+
+  nginx:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${GOJET_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - gojet_public:/var/www/html/public:ro
+      - gojet_storage:/var/www/html/storage:ro
+    depends_on:
+      app:
+        condition: service_healthy
+      redirector:
+        condition: service_started
+    stop_grace_period: 15s
+    networks: [gojet]
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: ["mysqld", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - gojet_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks: [gojet]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - gojet_redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    networks: [gojet]
+
+volumes:
+  gojet_storage:
+  gojet_public:
+  gojet_mysql:
+  gojet_redis:
+  gojet_redirect_spool:
+
+networks:
+  gojet:
+    driver: bridge

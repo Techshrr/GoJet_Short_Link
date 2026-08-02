@@ -1,0 +1,70 @@
+<?php
+
+$adminPath = trim((string) env('GOJET_ADMIN_PATH', 'manage'), '/');
+
+return [
+    'installed' => (bool) env('GOJET_INSTALLED', false),
+    'admin_path' => $adminPath !== '' ? $adminPath : 'manage',
+    'support_email' => env('GOJET_SUPPORT_EMAIL', env('MAIL_FROM_ADDRESS', 'support@example.com')),
+    'default_host' => env('GOJET_DEFAULT_HOST', parse_url((string) env('APP_URL'), PHP_URL_HOST)),
+    'short_code_length' => (int) env('GOJET_SHORT_CODE_LENGTH', 7),
+    'default_redirect_type' => (int) env('GOJET_REDIRECT_TYPE', 302),
+    'allow_registration' => (bool) env('GOJET_ALLOW_REGISTRATION', true),
+    'require_email_verification' => (bool) env('GOJET_REQUIRE_EMAIL_VERIFICATION', true),
+    'link_cache_ttl' => (int) env('GOJET_LINK_CACHE_TTL', 3600),
+    'click_retention_days' => (int) env('GOJET_CLICK_RETENTION_DAYS', 90),
+    'ip_hash_key' => env('GOJET_IP_HASH_KEY', env('APP_KEY')),
+    'block_private_targets' => (bool) env('GOJET_BLOCK_PRIVATE_TARGETS', true),
+    'domain_verification_prefix' => env('GOJET_DOMAIN_VERIFICATION_PREFIX', '_gojet-verification'),
+    'file_disk' => env('GOJET_FILE_DISK', env('FILESYSTEM_DISK', 'local')),
+    'max_upload_mb' => (int) env('GOJET_MAX_UPLOAD_MB', 1024),
+    'malware_scanner_enabled' => (bool) env('GOJET_MALWARE_SCANNER_ENABLED', false),
+    'billing_enabled' => (bool) env('GOJET_BILLING_ENABLED', false),
+    'billing_provider' => env('GOJET_BILLING_PROVIDER', 'manual'),
+    'manual_billing_enabled' => (bool) env('GOJET_MANUAL_BILLING_ENABLED', true),
+    'features' => [
+        'links' => (bool) env('GOJET_FEATURE_LINKS', true),
+        'smart_routing' => (bool) env('GOJET_FEATURE_SMART_ROUTING', true),
+        'texts' => (bool) env('GOJET_FEATURE_TEXTS', true),
+        'files' => (bool) env('GOJET_FEATURE_FILES', true),
+        'profiles' => (bool) env('GOJET_FEATURE_PROFILES', true),
+        'teams' => (bool) env('GOJET_FEATURE_TEAMS', true),
+        'webhooks' => (bool) env('GOJET_FEATURE_WEBHOOKS', true),
+        'sso' => (bool) env('GOJET_FEATURE_SSO', true),
+    ],
+    'reserved_slugs' => array_values(array_unique([
+        'about', 'admin', 'api', 'api-docs', 'api-tokens', 'app', 'blog', 'campaigns',
+        'changelog', 'contact', 'dashboard', 'domains', 'email', 'f', 'faq', 'features',
+        'files', 'folders', 'forgot-password', 'health', 'install', 'links', 'locale', 'login',
+        'logout', 'organization', 'plans', 'pricing', 'privacy', 'profiles', 'register',
+        'report-abuse', 'reset-password', 'robots.txt', 'solutions', 'sso', 'status', 'storage', 't',
+        'tags', 'teams', 'terms', 'texts', 'up', 'user', 'verify-email', 'webhooks', 'workspaces',
+        $adminPath,
+    ])),
+
+    'site' => [
+        'identity' => [],
+        'branding' => [],
+        'seo' => [],
+        'legal' => [],
+    ],
+    'auth' => [],
+    'links' => [],
+    'analytics' => [
+        'enabled' => (bool) env('GOJET_ANALYTICS_ENABLED', true),
+        'store_referrer_url' => (bool) env('GOJET_ANALYTICS_STORE_REFERRER_URL', true),
+    ],
+    'storage' => [],
+    'redirect_plane' => [
+        'enabled' => (bool) env('GOJET_REDIRECT_PLANE_ENABLED', false),
+        'internal_token' => env('GOJET_REDIRECT_INTERNAL_TOKEN'),
+        'internal_url' => env('GOJET_REDIRECT_INTERNAL_URL', 'http://app:9000'),
+        'health_url' => env('GOJET_REDIRECT_HEALTH_URL', 'http://127.0.0.1:8081/healthz'),
+    ],
+    'cloudflare' => [
+        'enabled' => (bool) env('GOJET_CLOUDFLARE_ENABLED', false),
+        'api_token' => env('GOJET_CLOUDFLARE_API_TOKEN'),
+        'zone_id' => env('GOJET_CLOUDFLARE_ZONE_ID'),
+        'fallback_origin' => env('GOJET_CLOUDFLARE_CUSTOM_HOSTNAME_FALLBACK_ORIGIN'),
+    ],
+];

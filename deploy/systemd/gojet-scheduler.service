@@ -1,0 +1,17 @@
+[Unit]
+Description=GoJet Laravel Scheduler
+After=network.target mysql.service redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/gojet/current
+ExecStart=/usr/bin/php artisan schedule:work
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/www/gojet/current/storage/logs/scheduler.log
+StandardError=append:/var/www/gojet/current/storage/logs/scheduler-error.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+<x-layouts.app :title="$fileShare->original_name">
+  <section class="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+    <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><a class="text-sm font-semibold text-slate-500" href="{{ route('files.index') }}">← {{ __('v3.files.title') }}</a><h1 class="mt-4 break-all text-3xl font-black text-slate-950">{{ $fileShare->original_name }}</h1><a class="mt-2 block break-all text-sm font-semibold text-cyan-700" href="{{ route('files.public',$fileShare->slug) }}" target="_blank">{{ route('files.public',$fileShare->slug) }} ↗</a></div><a class="btn-brand" href="{{ route('files.download',$fileShare->slug) }}">↓ {{ __('v3.files.download') }}</a></div>
+    <div class="mt-7 grid gap-6 lg:grid-cols-[1fr_320px]">
+      <form class="panel space-y-5" method="post" action="{{ route('files.update',$fileShare) }}">@csrf @method('patch')
+        <h2 class="text-xl font-bold text-slate-950">{{ __('v3.common.edit') }}</h2>
+        <div><label class="label">{{ __('v3.files.visibility') }}</label><select class="input" name="visibility">@foreach(['public','unlisted','private'] as $visibility)<option value="{{ $visibility }}" @selected($fileShare->visibility===$visibility)>{{ __('v3.texts.'.$visibility) }}</option>@endforeach</select></div>
+        <div><label class="label">{{ __('v3.files.password') }}</label><input class="input" type="password" name="password" autocomplete="new-password"></div>
+        @if($fileShare->password_hash)<label class="flex items-center gap-2 text-sm text-rose-700"><input type="checkbox" name="remove_password" value="1">{{ __('ui.link.remove_password') }}</label>@endif
+        <div class="grid gap-4 sm:grid-cols-2"><div><label class="label">{{ __('v3.files.expires_at') }}</label><input class="input" type="datetime-local" name="expires_at" value="{{ $fileShare->expires_at?->format('Y-m-d\TH:i') }}"></div><div><label class="label">{{ __('v3.files.max_downloads') }}</label><input class="input" type="number" min="1" name="max_downloads" value="{{ $fileShare->max_downloads }}"></div></div>
+        <button class="btn-brand w-full py-3">{{ __('v3.common.save') }}</button>
+      </form>
+      <aside class="space-y-5"><div class="panel"><h2 class="font-bold text-slate-950">{{ __('v3.common.status') }}</h2><dl class="mt-4 space-y-3 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-500">{{ __('v3.files.size') }}</dt><dd class="font-semibold">{{ Number::fileSize($fileShare->size_bytes) }}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-500">MIME</dt><dd class="truncate font-semibold">{{ $fileShare->mime_type }}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-500">{{ __('v3.files.downloads',['count'=>'']) }}</dt><dd class="font-semibold">{{ number_format($fileShare->downloads_count) }}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-500">{{ __('v3.files.scan') }}</dt><dd>{{ $fileShare->scan_status }}</dd></div></dl></div><div class="panel"><h2 class="font-bold text-slate-950">{{ __('v3.files.hash') }}</h2><code class="mt-3 block break-all rounded-xl bg-slate-950 p-3 text-xs text-cyan-300">{{ $fileShare->sha256 }}</code></div></aside>
+    </div>
+  </section>
+</x-layouts.app>

@@ -1,0 +1,6 @@
+<x-layouts.marketing :title="$share->title ?: __('v3.texts.title')">
+  <section class="mx-auto max-w-5xl px-5 py-12 lg:px-8 lg:py-20">
+    <div class="flex flex-col gap-5 border-b border-slate-200 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><div class="flex flex-wrap gap-2"><span class="badge-neutral">{{ $share->format }}</span><span class="badge-info">{{ __('v3.texts.'.$share->visibility) }}</span>@if($share->burn_after_read)<span class="badge-warning">🔥 Burn after read</span>@endif</div><h1 class="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">{{ $share->title ?: $share->slug }}</h1><p class="mt-3 text-sm text-slate-500">{{ $share->created_at->toDayDateTimeString() }} · {{ __('v3.texts.views',['count'=>number_format($share->views_count)]) }}</p></div><div class="flex gap-2"><a class="btn-secondary" href="{{ route('texts.raw',$share->slug) }}">{{ __('v3.texts.raw') }}</a><a class="btn-secondary" href="{{ route('texts.download',$share->slug) }}">{{ __('v3.common.download') }}</a></div></div>
+    <article class="mt-8 overflow-x-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10 prose-headings:font-black">{!! $rendered !!}</article>
+  </section>
+</x-layouts.marketing>

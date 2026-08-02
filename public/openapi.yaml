@@ -1,0 +1,201 @@
+openapi: 3.1.0
+info:
+  title: GoJet API
+  version: 1.0.0
+  description: Versioned API for links, routing, analytics, domains, text, files, profiles, webhooks, and conversion events.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /links:
+    get:
+      summary: List links
+      responses:
+        '200': { description: Paginated links }
+    post:
+      summary: Create a link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkInput' }
+      responses:
+        '201': { description: Link created }
+  /links/{link}:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get: { summary: Get a link, responses: { '200': { description: Link } } }
+    patch:
+      summary: Update a link
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkInput' }
+      responses: { '200': { description: Updated link } }
+    delete: { summary: Delete a link, responses: { '204': { description: Deleted } } }
+  /links/{link}/routing:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get: { summary: Get destinations and rules, responses: { '200': { description: Routing configuration } } }
+  /links/{link}/destinations:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    post:
+      summary: Create a routing destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_url]
+              properties:
+                name: { type: string }
+                target_url: { type: string, format: uri }
+                weight: { type: integer, minimum: 0 }
+                is_fallback: { type: boolean }
+      responses: { '201': { description: Destination created } }
+  /links/{link}/rules:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    post:
+      summary: Create a routing rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destination_id, type, operator, values]
+              properties:
+                destination_id: { type: integer }
+                type: { type: string, enum: [country, region, city, device, platform, browser, language, referrer, query, schedule] }
+                operator: { type: string, enum: [in, not_in, equals, contains, exists, missing] }
+                values: { type: object }
+                priority: { type: integer }
+      responses: { '201': { description: Rule created } }
+  /analytics:
+    get: { summary: Workspace analytics, responses: { '200': { description: Analytics summary } } }
+  /links/{link}/analytics:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get: { summary: Link analytics, responses: { '200': { description: Link analytics } } }
+  /links/{link}/conversions:
+    parameters:
+      - $ref: '#/components/parameters/LinkId'
+    get: { summary: List conversions, responses: { '200': { description: Conversions } } }
+    post:
+      summary: Create a conversion event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_name]
+              properties:
+                event_name: { type: string }
+                destination_id: { type: integer }
+                visitor_key: { type: string }
+                value: { type: number }
+                currency: { type: string, minLength: 3, maxLength: 3 }
+                metadata: { type: object }
+      responses: { '201': { description: Conversion created } }
+  /domains:
+    get: { summary: List domains, responses: { '200': { description: Domains } } }
+    post:
+      summary: Add a domain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname]
+              properties: { hostname: { type: string } }
+      responses: { '201': { description: Domain created } }
+  /texts:
+    get: { summary: List text shares, responses: { '200': { description: Text shares } } }
+    post:
+      summary: Create a text share
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TextInput' }
+      responses: { '201': { description: Text share created } }
+  /files:
+    get: { summary: List file shares, responses: { '200': { description: Files } } }
+    post:
+      summary: Upload a file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, visibility]
+              properties:
+                file: { type: string, format: binary }
+                visibility: { type: string, enum: [public, unlisted, private] }
+                expires_at: { type: string, format: date-time }
+                max_downloads: { type: integer }
+      responses: { '201': { description: File share created } }
+  /profiles:
+    get: { summary: List profile pages, responses: { '200': { description: Profiles } } }
+    post:
+      summary: Create a profile page
+      responses: { '201': { description: Profile created } }
+  /webhooks:
+    get: { summary: List webhooks, responses: { '200': { description: Webhooks } } }
+    post:
+      summary: Create a webhook
+      responses: { '201': { description: Webhook and one-time secret } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: GoJet token
+  parameters:
+    LinkId:
+      name: link
+      in: path
+      required: true
+      schema: { type: integer }
+  schemas:
+    LinkInput:
+      type: object
+      required: [target_url]
+      properties:
+        target_url: { type: string, format: uri }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: string }
+        notes: { type: string }
+        domain_id: { type: integer }
+        campaign_id: { type: integer }
+        folder_id: { type: integer }
+        tag_ids: { type: array, items: { type: integer } }
+        redirect_type: { type: integer, enum: [301, 302, 307, 308] }
+        starts_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        max_clicks: { type: integer }
+        password: { type: string }
+        utm: { type: object }
+        qr_settings: { type: object }
+    TextInput:
+      type: object
+      required: [content, format, visibility]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        content: { type: string }
+        format: { type: string, enum: [plain, markdown, code] }
+        syntax_language: { type: string }
+        visibility: { type: string, enum: [public, unlisted, private] }
+        password: { type: string }
+        expires_at: { type: string, format: date-time }
+        burn_after_read: { type: boolean }
+        max_views: { type: integer }
