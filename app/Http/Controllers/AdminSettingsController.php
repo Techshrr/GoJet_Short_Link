@@ -23,6 +23,7 @@ class AdminSettingsController extends Controller
         'install', 'links', 'locale', 'login', 'logout', 'privacy', 'register',
         'report-abuse', 'reset-password', 'storage', 'terms', 'up', 'verify-email',
     ];
+
     private const SECTIONS = [
         'general', 'branding', 'seo', 'mail', 'authentication', 'links', 'analytics', 'storage', 'maintenance', 'advanced',
     ];

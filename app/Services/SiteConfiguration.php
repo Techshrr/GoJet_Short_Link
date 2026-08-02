@@ -118,7 +118,7 @@ class SiteConfiguration
                 'mail.mailers.smtp.host' => $mail['host'],
                 'mail.mailers.smtp.port' => (int) $mail['port'],
                 'mail.mailers.smtp.scheme' => $implicitTls ? 'smtps' : 'smtp',
-                'mail.mailers.smtp.auto_tls' => !$plainText,
+                'mail.mailers.smtp.auto_tls' => ! $plainText,
                 'mail.mailers.smtp.require_tls' => in_array($encryption, ['tls', 'starttls'], true),
                 'mail.mailers.smtp.username' => $mail['username'] ?: null,
                 'mail.mailers.smtp.password' => $mail['password'] ?: null,
