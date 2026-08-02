@@ -113,7 +113,56 @@ func (s *server) invite(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 403, map[string]string{"error": "没有管理成员的权限"})
 		return
 	}
-	jsonResponse(w, 201, map[string]string{"invitation_token": token})
+	_, mailErr := s.mail.Queue(r.Context(), "workspace_invitation", in.Email, "邀请您加入 GoJet 工作区", "<p>您被邀请加入 GoJet 工作区。</p><p>邀请令牌：<strong>"+htmlEscape(token)+"</strong></p>")
+	if mailErr != nil {
+		jsonResponse(w, 503, map[string]string{"error": "邀请已创建，但邮件暂时无法入队"})
+		return
+	}
+	jsonResponse(w, 201, map[string]bool{"queued": true})
+}
+func (s *server) workspaceMembers(w http.ResponseWriter, r *http.Request) {
+	wid, err := pathID(r, "id")
+	if err != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid workspace"})
+		return
+	}
+	members, invitations, err := s.workspace.Members(r.Context(), currentUser(r).ID, wid)
+	if err != nil {
+		jsonResponse(w, 403, map[string]string{"error": "无法读取成员"})
+		return
+	}
+	jsonResponse(w, 200, map[string]any{"members": members, "invitations": invitations})
+}
+func (s *server) resendInvite(w http.ResponseWriter, r *http.Request) {
+	wid, e1 := pathID(r, "id")
+	iid, e2 := pathID(r, "invitation")
+	if e1 != nil || e2 != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid invitation"})
+		return
+	}
+	token, email, err := s.workspace.Resend(r.Context(), currentUser(r).ID, wid, iid)
+	if err != nil {
+		jsonResponse(w, 403, map[string]string{"error": "无法重新发送邀请"})
+		return
+	}
+	if _, err = s.mail.Queue(r.Context(), "workspace_invitation", email, "GoJet 工作区邀请已重新发送", "<p>新的邀请令牌：<strong>"+htmlEscape(token)+"</strong></p>"); err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "邮件暂时无法入队"})
+		return
+	}
+	jsonResponse(w, 202, map[string]bool{"queued": true})
+}
+func (s *server) rejectInvite(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Token string `json:"token"`
+	}
+	if decode(w, r, &in) != nil {
+		return
+	}
+	if s.workspace.Reject(r.Context(), in.Token) != nil {
+		jsonResponse(w, 422, map[string]string{"error": "邀请无效或已过期"})
+		return
+	}
+	jsonResponse(w, 200, map[string]bool{"rejected": true})
 }
 func (s *server) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Token string }

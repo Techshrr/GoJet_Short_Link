@@ -17,6 +17,15 @@ type Summary struct {
 	Type string `json:"type"`
 	Role string `json:"role"`
 }
+type Member struct {
+	UserID                           int64 `json:"user_id"`
+	Email, DisplayName, Role, Status string
+	JoinedAt                         string `json:"joined_at"`
+}
+type Invitation struct {
+	ID                                        int64 `json:"id"`
+	Email, Role, Status, ExpiresAt, CreatedAt string
+}
 
 func New(db *sql.DB) *Service { return &Service{db: db} }
 
@@ -82,6 +91,73 @@ func (s *Service) Invite(ctx context.Context, actor, workspaceID int64, email, r
 	id, _ := result.LastInsertId()
 	s.audit(ctx, actor, workspaceID, "invitation.created", "invitation", id, map[string]any{"email": email, "role": role})
 	return token, nil
+}
+func (s *Service) Members(ctx context.Context, actor, workspaceID int64) ([]Member, []Invitation, error) {
+	if _, err := s.Role(ctx, workspaceID, actor); err != nil {
+		return nil, nil, errors.New("forbidden")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT u.id,u.email,u.display_name,m.role,m.status,m.joined_at FROM workspace_members m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? ORDER BY FIELD(m.role,'owner','admin','editor','analyst','viewer'),m.joined_at`, workspaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	members := []Member{}
+	for rows.Next() {
+		var item Member
+		if err = rows.Scan(&item.UserID, &item.Email, &item.DisplayName, &item.Role, &item.Status, &item.JoinedAt); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		members = append(members, item)
+	}
+	rows.Close()
+	invites, err := s.db.QueryContext(ctx, `SELECT id,email,role,IF(status='pending' AND expires_at<=NOW(),'expired',status),expires_at,created_at FROM workspace_invitations WHERE workspace_id=? ORDER BY created_at DESC`, workspaceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer invites.Close()
+	items := []Invitation{}
+	for invites.Next() {
+		var item Invitation
+		if err = invites.Scan(&item.ID, &item.Email, &item.Role, &item.Status, &item.ExpiresAt, &item.CreatedAt); err != nil {
+			return nil, nil, err
+		}
+		items = append(items, item)
+	}
+	return members, items, invites.Err()
+}
+func (s *Service) Resend(ctx context.Context, actor, workspaceID, invitationID int64) (string, string, error) {
+	role, err := s.Role(ctx, workspaceID, actor)
+	if err != nil || !Allowed(role, "manage") {
+		return "", "", errors.New("forbidden")
+	}
+	raw := make([]byte, 32)
+	if _, err = rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	token := hex.EncodeToString(raw)
+	sum := sha256.Sum256([]byte(token))
+	var email string
+	err = s.db.QueryRowContext(ctx, `SELECT email FROM workspace_invitations WHERE id=? AND workspace_id=? AND status IN ('pending','expired')`, invitationID, workspaceID).Scan(&email)
+	if err != nil {
+		return "", "", err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE workspace_invitations SET token_hash=?,status='pending',expires_at=DATE_ADD(NOW(),INTERVAL 7 DAY) WHERE id=?`, hex.EncodeToString(sum[:]), invitationID)
+	if err == nil {
+		s.audit(ctx, actor, workspaceID, "invitation.resent", "invitation", invitationID, map[string]any{"email": email})
+	}
+	return token, email, err
+}
+func (s *Service) Reject(ctx context.Context, token string) error {
+	sum := sha256.Sum256([]byte(token))
+	result, err := s.db.ExecContext(ctx, `UPDATE workspace_invitations SET status='rejected',rejected_at=NOW() WHERE token_hash=? AND status='pending' AND expires_at>NOW()`, hex.EncodeToString(sum[:]))
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 func (s *Service) Accept(ctx context.Context, userID int64, token string) error {
 	sum := sha256.Sum256([]byte(token))
