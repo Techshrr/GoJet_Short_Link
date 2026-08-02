@@ -3,11 +3,14 @@ package domain
 import "time"
 
 type Link struct {
-	ID          string `json:"id"`
-	Code        string `json:"code"`
-	Destination string `json:"destination"`
-	StatusCode  int    `json:"status_code"`
-	Active      bool   `json:"active"`
+	ID          string     `json:"id"`
+	Code        string     `json:"code"`
+	Destination string     `json:"destination"`
+	StatusCode  int        `json:"status_code"`
+	Active      bool       `json:"active"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	MaxClicks   int64      `json:"max_clicks,omitempty"`
+	OneTime     bool       `json:"one_time,omitempty"`
 }
 
 type Visit struct {
@@ -17,6 +20,8 @@ type Visit struct {
 	UTMTerm, VisitType                                          string
 	Timestamp                                                   time.Time
 	IsBot                                                       bool
+	MaxClicks                                                   int64
+	OneTime                                                     bool
 }
 
 type Stats struct {

@@ -11,6 +11,7 @@ import (
 
 var ErrNotFound = errors.New("link not found")
 var ErrRateLimited = errors.New("visit rate limited")
+var ErrExhausted = errors.New("link visit policy exhausted")
 
 type Store interface {
 	SaveLink(context.Context, domain.Link) error
@@ -58,6 +59,9 @@ func (s *MemoryStore) FindLink(_ context.Context, code string) (domain.Link, err
 func (s *MemoryStore) RecordVisit(_ context.Context, v domain.Visit) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if (v.OneTime && s.clicks[v.LinkID] >= 1) || (v.MaxClicks > 0 && s.clicks[v.LinkID] >= v.MaxClicks) {
+		return ErrExhausted
+	}
 	rateKey := v.LinkID + ":" + v.VisitorHash
 	cutoff := v.Timestamp.Add(-time.Minute)
 	kept := s.rates[rateKey][:0]

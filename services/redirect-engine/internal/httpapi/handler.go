@@ -90,11 +90,19 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "redirect service temporarily unavailable"})
 		return
 	}
+	if l.ExpiresAt != nil && !l.ExpiresAt.After(time.Now()) {
+		writeJSON(w, http.StatusGone, map[string]string{"error": "short link has expired"})
+		return
+	}
 	v := h.visit(r, l)
 	if err := h.store.RecordVisit(r.Context(), v); err != nil {
 		if errors.Is(err, store.ErrRateLimited) {
 			w.Header().Set("Retry-After", "60")
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many visits; please retry shortly"})
+			return
+		}
+		if errors.Is(err, store.ErrExhausted) {
+			writeJSON(w, http.StatusGone, map[string]string{"error": "short link visit limit reached"})
 			return
 		}
 		writeJSON(w, 503, map[string]string{"error": "visit could not be recorded; please retry"})
@@ -149,5 +157,5 @@ func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {
 	sum := sha256.Sum256([]byte(h.hashKey + "|" + ip + "|" + r.UserAgent()))
 	q := r.URL.Query()
 	lang := strings.TrimSpace(strings.Split(r.Header.Get("Accept-Language"), ",")[0])
-	return domain.Visit{LinkID: l.ID, DestinationID: l.ID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: "redirect", IsBot: bot}
+	return domain.Visit{LinkID: l.ID, DestinationID: l.ID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: "redirect", IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
 }

@@ -130,6 +130,49 @@ func TestVisitRateLimitDoesNotPolluteAnalytics(t *testing.T) {
 	}
 }
 
+func TestOneTimeAndMaximumClickPoliciesAreEnforcedAtomically(t *testing.T) {
+	for name, payload := range map[string]string{"one-time": `{"id":"one","code":"once","destination":"https://example.com","one_time":true}`, "maximum": `{"id":"max","code":"twice","destination":"https://example.com","max_clicks":1}`} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(httpapi.New(store.NewMemory(), "secret"))
+			defer server.Close()
+			res, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(payload))
+			if err != nil || res.StatusCode != 201 {
+				t.Fatalf("create status=%v err=%v", res.StatusCode, err)
+			}
+			res.Body.Close()
+			client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+			first, _ := client.Get(server.URL + map[string]string{"one-time": "/once", "maximum": "/twice"}[name])
+			first.Body.Close()
+			if first.StatusCode != 302 {
+				t.Fatalf("first status=%d", first.StatusCode)
+			}
+			second, _ := client.Get(server.URL + map[string]string{"one-time": "/once", "maximum": "/twice"}[name])
+			second.Body.Close()
+			if second.StatusCode != http.StatusGone {
+				t.Fatalf("second status=%d", second.StatusCode)
+			}
+		})
+	}
+}
+func TestExpiredLinkReturnsGoneWithoutRecording(t *testing.T) {
+	server := httptest.NewServer(httpapi.New(store.NewMemory(), "secret"))
+	defer server.Close()
+	payload := `{"id":"expired","code":"old","destination":"https://example.com","expires_at":"2020-01-01T00:00:00Z"}`
+	res, err := http.Post(server.URL+"/api/links", "application/json", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	got, err := http.Get(server.URL + "/old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	if got.StatusCode != http.StatusGone {
+		t.Fatalf("status=%d", got.StatusCode)
+	}
+}
+
 func createTestLink(t *testing.T, baseURL string) {
 	t.Helper()
 	res, err := http.Post(baseURL+"/api/links", "application/json", bytes.NewBufferString(`{"id":"link-1","code":"go","destination":"https://example.com"}`))

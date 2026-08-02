@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type Service struct {
@@ -69,6 +70,17 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	if l.RedirectStatus != 301 && l.RedirectStatus != 302 && l.RedirectStatus != 307 && l.RedirectStatus != 308 {
 		return Link{}, errors.New("跳转状态码无效")
 	}
+	if l.ExpiresAt != nil && *l.ExpiresAt != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, *l.ExpiresAt)
+		if parseErr != nil {
+			parsed, parseErr = time.Parse("2006-01-02T15:04", *l.ExpiresAt)
+		}
+		if parseErr != nil {
+			return Link{}, errors.New("有效期格式无效")
+		}
+		normalized := parsed.UTC().Format(time.RFC3339)
+		l.ExpiresAt = &normalized
+	}
 	l.Status = "active"
 	result, err := s.db.ExecContext(ctx, `INSERT INTO short_links(workspace_id,created_by,code,domain,destination,title,status,redirect_status,expires_at,max_clicks,one_time,folder_id,campaign_id,utm,routing_rules,ab_destinations) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, workspaceID, userID, l.Code, l.Domain, l.Destination, l.Title, l.Status, l.RedirectStatus, l.ExpiresAt, l.MaxClicks, l.OneTime, l.FolderID, l.CampaignID, nullableJSON(l.UTM), nullableJSON(l.RoutingRules), nullableJSON(l.ABDestinations))
 	if err != nil {
@@ -84,7 +96,7 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	return l, nil
 }
 func (s *Service) syncRedis(ctx context.Context, l Link) error {
-	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active"})
+	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime})
 	return s.redis.Set(ctx, "gojet:link:"+l.Code, payload, 0).Err()
 }
 func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter) ([]Link, int64, error) {
