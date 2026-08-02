@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 )
@@ -53,19 +54,24 @@ func (s *Store) Get(ctx context.Context, key string) (string, bool, error) {
 	}
 	return value, true, nil
 }
-func (s *Store) Public(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT setting_key,setting_value FROM system_settings WHERE is_encrypted=FALSE AND setting_key IN ('site.name','site.short_name','site.tagline','site.description','site.language','site.timezone','site.contact_email','site.support_email','site.company_name','site.company_address','site.copyright','brand.primary_color','brand.logo_url','brand.logo_dark_url','brand.logo_light_url','brand.favicon_url','seo.default_title','seo.title_template','seo.meta_description','seo.meta_keywords','seo.canonical_url')`)
+func (s *Store) Public(ctx context.Context) (map[string]any, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT setting_key,setting_value FROM system_settings WHERE is_encrypted=FALSE AND setting_key IN ('site.name','site.short_name','site.tagline','site.description','site.language','site.timezone','site.contact_email','site.support_email','site.company_name','site.company_address','site.copyright','brand.primary_color','brand.logo_url','brand.logo_dark_url','brand.logo_light_url','brand.logo_square_url','brand.favicon_url','brand.apple_touch_icon_url','brand.pwa_icon_url','brand.share_image_url','brand.login_image_url','brand.mail_logo_url','seo.default_title','seo.title_template','seo.meta_description','seo.meta_keywords','seo.canonical_url','seo.open_graph','seo.twitter_card','seo.robots','seo.sitemap','seo.verification')`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]string{}
+	out := map[string]any{}
 	for rows.Next() {
 		var k, v string
 		if err = rows.Scan(&k, &v); err != nil {
 			return nil, err
 		}
-		out[k] = v
+		var decoded any
+		if json.Unmarshal([]byte(v), &decoded) == nil {
+			out[k] = decoded
+		} else {
+			out[k] = v
+		}
 	}
 	return out, rows.Err()
 }

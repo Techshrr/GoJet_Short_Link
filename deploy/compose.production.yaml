@@ -9,6 +9,7 @@ services:
       - ../frontend/user-console:/usr/share/nginx/html/app:ro
       - ../frontend/admin-console:/usr/share/nginx/html/admin:ro
       - ../frontend/marketing-site:/usr/share/nginx/html/site:ro
+      - uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
       redirect-engine:
         condition: service_healthy
@@ -62,6 +63,9 @@ services:
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN is required}
       REDIS_ADDRESS: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      UPLOAD_STORAGE_PATH: /data/uploads
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -114,3 +118,4 @@ services:
 volumes:
   redis-data:
   mysql-data:
+  uploads:

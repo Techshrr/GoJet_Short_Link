@@ -29,6 +29,9 @@ services:
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?Set SETTINGS_ENCRYPTION_KEY in .env}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?Set ADMIN_API_TOKEN in .env}
       REDIS_ADDRESS: redis:6379
+      UPLOAD_STORAGE_PATH: /data/uploads
+    volumes:
+      - uploads:/data/uploads
     ports: ["8090:8090"]
     depends_on:
       mysql:
@@ -73,3 +76,4 @@ services:
 volumes:
   redis-data:
   mysql-data:
+  uploads:
