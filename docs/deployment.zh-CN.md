@@ -42,3 +42,16 @@ git checkout <verified-release>
 
 示例 Nginx 只监听内部/源站 HTTP。公网部署必须使用 Cloudflare Full (strict)、负载均衡器证书，
 或用 Certbot/Caddy 提供 TLS。不得在未配置 HTTPS 的情况下启用账号、管理后台或 SMTP 密钥设置。
+
+## 生成生产交付包
+
+```sh
+make test
+make build
+./scripts/package-release.sh v4.0.0
+sha256sum -c dist/GoJet-V4-Production-v4.0.0.zip.sha256
+```
+
+交付 ZIP 同时包含规范化的 `source/`、`database/`、`docker/`、`nginx/`、`scripts/` 和
+`docs/`，以及可以直接运行的根目录布局、安装、升级、回滚脚本和环境示例。打包器明确排除
+真实 `.env`、生产 Secret、日志、缓存和 Python bytecode，并为 ZIP 生成 SHA-256 校验文件。
