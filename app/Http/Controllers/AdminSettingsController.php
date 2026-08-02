@@ -208,6 +208,7 @@ class AdminSettingsController extends Controller
         foreach (['logo', 'logo_dark', 'logo_mark', 'favicon', 'apple_touch_icon', 'og_image', 'mail_logo'] as $field) {
             if (! $request->hasFile($field)) {
                 $next[$field] = $current[$field] ?? null;
+
                 continue;
             }
 
@@ -395,5 +396,4 @@ class AdminSettingsController extends Controller
             'retry_after' => (int) $data['retry_after'],
         ]);
     }
-
 }

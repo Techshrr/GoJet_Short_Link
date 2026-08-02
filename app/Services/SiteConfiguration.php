@@ -44,12 +44,12 @@ class SiteConfiguration
 
     public function group(string $key, array $defaults = []): array
     {
-        if (!config('gojet.installed')) {
+        if (! config('gojet.installed')) {
             return $defaults;
         }
 
         try {
-            if (!Schema::hasTable('system_settings')) {
+            if (! Schema::hasTable('system_settings')) {
                 return $defaults;
             }
 
@@ -135,7 +135,7 @@ class SiteConfiguration
 
     public function assetUrl(?string $path, ?string $fallback = null): ?string
     {
-        if (!filled($path)) {
+        if (! filled($path)) {
             return $fallback;
         }
 
