@@ -36,7 +36,9 @@ type Link struct {
 	TagIDs                                   []int64         `json:"tag_ids,omitempty"`
 	FolderName, CampaignName                 string          `json:",omitempty"`
 	TagNames                                 []string        `json:",omitempty"`
-	UTM, RoutingRules, ABDestinations        json.RawMessage `json:",omitempty"`
+	UTM                                      json.RawMessage `json:"utm,omitempty"`
+	RoutingRules                             json.RawMessage `json:"routing_rules,omitempty"`
+	ABDestinations                           json.RawMessage `json:"ab_destinations,omitempty"`
 	CreatedAt                                string          `json:"created_at,omitempty"`
 	Clicks, Visitors                         int64           `json:",omitempty"`
 }
@@ -109,6 +111,9 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	if err = s.validateOrganization(ctx, workspaceID, l.FolderID, l.CampaignID, l.TagIDs); err != nil {
 		return Link{}, err
 	}
+	if err = validateRouting(l.RoutingRules, l.ABDestinations, l.UTM); err != nil {
+		return Link{}, err
+	}
 	l.Status = "active"
 	if l.Password != "" {
 		if len(l.Password) < 6 {
@@ -140,7 +145,7 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	return l, nil
 }
 func (s *Service) syncRedis(ctx context.Context, l Link) error {
-	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "domain": l.Domain, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash})
+	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "domain": l.Domain, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash, "utm": jsonValue(l.UTM, map[string]string{}), "routing_rules": jsonValue(l.RoutingRules, []any{}), "ab_destinations": jsonValue(l.ABDestinations, []any{})})
 	key := l.Code
 	if l.Domain != "" {
 		key = l.Domain + "|" + l.Code
@@ -149,7 +154,7 @@ func (s *Service) syncRedis(ctx context.Context, l Link) error {
 }
 func (s *Service) SyncByID(ctx context.Context, id int64) error {
 	var l Link
-	err := s.db.QueryRowContext(ctx, `SELECT id,code,domain,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time FROM short_links WHERE id=?`, id).Scan(&l.ID, &l.Code, &l.Domain, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime)
+	err := s.db.QueryRowContext(ctx, `SELECT id,code,domain,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time,COALESCE(utm,JSON_OBJECT()),COALESCE(routing_rules,JSON_ARRAY()),COALESCE(ab_destinations,JSON_ARRAY()) FROM short_links WHERE id=?`, id).Scan(&l.ID, &l.Code, &l.Domain, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime, &l.UTM, &l.RoutingRules, &l.ABDestinations)
 	if err != nil {
 		return err
 	}
@@ -460,6 +465,71 @@ func nullableJSON(v json.RawMessage) any {
 		return nil
 	}
 	return v
+}
+
+func jsonValue(raw json.RawMessage, fallback any) any {
+	if len(raw) == 0 {
+		return fallback
+	}
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return fallback
+	}
+	return value
+}
+
+type routingRule struct {
+	Dimension, Value, Destination string
+}
+type abDestination struct {
+	ID, Destination string
+	Weight          int
+}
+
+func validateRouting(rulesRaw, destinationsRaw, utmRaw json.RawMessage) error {
+	validURL := func(value string) bool {
+		u, err := url.ParseRequestURI(value)
+		return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
+	}
+	if len(rulesRaw) > 0 {
+		var rules []routingRule
+		if json.Unmarshal(rulesRaw, &rules) != nil || len(rules) > 20 {
+			return errors.New("路由规则格式无效或超过 20 条")
+		}
+		for _, rule := range rules {
+			if !map[string]bool{"device": true, "country": true, "language": true, "source": true}[rule.Dimension] || strings.TrimSpace(rule.Value) == "" || !validURL(rule.Destination) {
+				return errors.New("路由规则必须包含有效维度、匹配值和 HTTP(S) 目标地址")
+			}
+		}
+	}
+	if len(destinationsRaw) > 0 {
+		var destinations []abDestination
+		if json.Unmarshal(destinationsRaw, &destinations) != nil || len(destinations) < 2 || len(destinations) > 10 {
+			return errors.New("A/B 测试需要 2 到 10 个目标版本")
+		}
+		total, ids := 0, map[string]bool{}
+		for _, item := range destinations {
+			if item.ID == "" || ids[item.ID] || item.Weight < 1 || !validURL(item.Destination) {
+				return errors.New("A/B 版本必须具有唯一编号、正权重和 HTTP(S) 目标地址")
+			}
+			ids[item.ID], total = true, total+item.Weight
+		}
+		if total != 100 {
+			return errors.New("A/B 版本权重总和必须为 100")
+		}
+	}
+	if len(utmRaw) > 0 {
+		var values map[string]string
+		if json.Unmarshal(utmRaw, &values) != nil {
+			return errors.New("UTM 参数格式无效")
+		}
+		for key, value := range values {
+			if !map[string]bool{"utm_source": true, "utm_medium": true, "utm_campaign": true, "utm_content": true, "utm_term": true}[key] || len(value) > 255 {
+				return errors.New("UTM 参数名称或长度无效")
+			}
+		}
+	}
+	return nil
 }
 func nullable(value string) any {
 	if value == "" {

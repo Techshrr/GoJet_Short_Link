@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,12 +67,35 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "unsupported redirect status"})
 		return
 	}
+	for _, rule := range l.RoutingRules {
+		if !map[string]bool{"device": true, "country": true, "language": true, "source": true}[rule.Dimension] || rule.Value == "" || !safeDestination(rule.Destination) {
+			writeJSON(w, 400, map[string]string{"error": "routing rules require a supported dimension, value and safe destination"})
+			return
+		}
+	}
+	weight, ids := 0, map[string]bool{}
+	for _, item := range l.Destinations {
+		if item.ID == "" || ids[item.ID] || item.Weight < 1 || !safeDestination(item.Destination) {
+			writeJSON(w, 400, map[string]string{"error": "A/B destinations require unique ids, positive weights and safe destinations"})
+			return
+		}
+		ids[item.ID], weight = true, weight+item.Weight
+	}
+	if len(l.Destinations) > 0 && (len(l.Destinations) < 2 || weight != 100) {
+		writeJSON(w, 400, map[string]string{"error": "A/B destination weights must total 100"})
+		return
+	}
 	l.Active = true
 	if err := h.store.SaveLink(r.Context(), l); err != nil {
 		writeJSON(w, 503, map[string]string{"error": "link storage is temporarily unavailable"})
 		return
 	}
 	writeJSON(w, 201, l)
+}
+
+func safeDestination(value string) bool {
+	u, err := url.ParseRequestURI(value)
+	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
 func (h *Handler) stats(w http.ResponseWriter, r *http.Request) {
 	s, err := h.store.Stats(r.Context(), r.PathValue("id"))
@@ -111,7 +135,8 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 		h.passwordPage(w, l.Code, "")
 		return
 	}
-	v := h.visit(r, l)
+	destination, destinationID := h.destination(r, l)
+	v := h.visit(r, l, destinationID, destination)
 	if err := h.store.RecordVisit(r.Context(), v); err != nil {
 		if errors.Is(err, store.ErrRateLimited) {
 			w.Header().Set("Retry-After", "60")
@@ -125,7 +150,7 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "visit could not be recorded; please retry"})
 		return
 	}
-	http.Redirect(w, r, l.Destination, l.StatusCode)
+	http.Redirect(w, r, destination, l.StatusCode)
 }
 
 func (h *Handler) unlock(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +189,73 @@ func (h *Handler) passwordPage(w http.ResponseWriter, code, message string) {
 	_ = passwordTemplate.Execute(w, map[string]string{"Code": code, "Error": message})
 }
 
-func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {
+func (h *Handler) destination(r *http.Request, l domain.Link) (string, string) {
+	target, destinationID := l.Destination, l.ID
+	ua := strings.ToLower(r.UserAgent())
+	device := "desktop"
+	if strings.Contains(ua, "mobile") {
+		device = "mobile"
+	} else if strings.Contains(ua, "tablet") || strings.Contains(ua, "ipad") {
+		device = "tablet"
+	}
+	language := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Accept-Language"), ",")[0]))
+	country := strings.ToLower(r.Header.Get("CF-IPCountry"))
+	source := "direct"
+	if r.Referer() != "" {
+		source = "unknown"
+		if u, err := url.Parse(r.Referer()); err == nil && u.Hostname() != "" {
+			source = strings.ToLower(u.Hostname())
+		}
+	}
+	values := map[string]string{"device": device, "country": country, "language": language, "source": source}
+	for i, rule := range l.RoutingRules {
+		actual, ok := values[rule.Dimension]
+		want := strings.ToLower(strings.TrimSpace(rule.Value))
+		if ok && (actual == want || (rule.Dimension == "language" && strings.HasPrefix(actual, want+"-"))) {
+			target, destinationID = rule.Destination, "rule-"+strconv.Itoa(i+1)
+			break
+		}
+	}
+	if target == l.Destination && len(l.Destinations) > 0 {
+		total := 0
+		for _, item := range l.Destinations {
+			if item.Weight > 0 {
+				total += item.Weight
+			}
+		}
+		if total > 0 {
+			ip := clientIP(r)
+			sum := sha256.Sum256([]byte(h.hashKey + "|ab|" + l.ID + "|" + ip + "|" + r.UserAgent()))
+			bucket := ((int(sum[0]) << 8) | int(sum[1])) % total
+			for i, item := range l.Destinations {
+				if item.Weight <= 0 {
+					continue
+				}
+				if bucket < item.Weight {
+					target, destinationID = item.Destination, item.ID
+					if destinationID == "" {
+						destinationID = "variant-" + strconv.Itoa(i+1)
+					}
+					break
+				}
+				bucket -= item.Weight
+			}
+		}
+	}
+	if parsed, err := url.Parse(target); err == nil {
+		query := parsed.Query()
+		for key, value := range l.UTM {
+			if strings.HasPrefix(key, "utm_") && value != "" && query.Get(key) == "" {
+				query.Set(key, value)
+			}
+		}
+		parsed.RawQuery = query.Encode()
+		target = parsed.String()
+	}
+	return target, destinationID
+}
+
+func (h *Handler) visit(r *http.Request, l domain.Link, destinationID, destination string) domain.Visit {
 	ua := strings.ToLower(r.UserAgent())
 	bot := strings.Contains(ua, "bot") || strings.Contains(ua, "crawler") || strings.Contains(ua, "spider")
 	device := "desktop"
@@ -203,12 +294,16 @@ func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {
 			source = "referer"
 		}
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
+	ip := clientIP(r)
 	sum := sha256.Sum256([]byte(h.hashKey + "|" + ip + "|" + r.UserAgent()))
 	q := r.URL.Query()
+	if parsed, err := url.Parse(destination); err == nil {
+		for _, key := range []string{"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"} {
+			if value := parsed.Query().Get(key); value != "" {
+				q.Set(key, value)
+			}
+		}
+	}
 	lang := strings.TrimSpace(strings.Split(r.Header.Get("Accept-Language"), ",")[0])
 	visitType := "redirect"
 	mac := hmac.New(sha256.New, []byte(h.qrKey))
@@ -217,5 +312,19 @@ func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {
 	if signatureErr == nil && hmac.Equal(provided, mac.Sum(nil)) {
 		visitType = "qr"
 	}
-	return domain.Visit{LinkID: l.ID, DestinationID: l.ID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: visitType, IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
+	return domain.Visit{LinkID: l.ID, DestinationID: destinationID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: visitType, IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer := net.ParseIP(host)
+	if peer != nil && (peer.IsPrivate() || peer.IsLoopback()) {
+		if forwarded := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); forwarded != nil {
+			return forwarded.String()
+		}
+	}
+	return host
 }

@@ -30,3 +30,18 @@ func TestUniqueIDsDropsInvalidAndDuplicateValues(t *testing.T) {
 		t.Fatalf("unexpected IDs %#v", values)
 	}
 }
+
+func TestValidateRoutingRequiresSafeDestinationsAndExactWeights(t *testing.T) {
+	rules := json.RawMessage(`[{"dimension":"device","value":"mobile","destination":"https://m.example.com"}]`)
+	variants := json.RawMessage(`[{"id":"a","destination":"https://a.example.com","weight":40},{"id":"b","destination":"https://b.example.com","weight":60}]`)
+	utm := json.RawMessage(`{"utm_source":"newsletter"}`)
+	if err := validateRouting(rules, variants, utm); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRouting(nil, json.RawMessage(`[{"id":"a","destination":"https://a.example.com","weight":90},{"id":"b","destination":"javascript:alert(1)","weight":10}]`), nil); err == nil {
+		t.Fatal("unsafe A/B destination was accepted")
+	}
+	if err := validateRouting(nil, json.RawMessage(`[{"id":"a","destination":"https://a.example.com","weight":20},{"id":"b","destination":"https://b.example.com","weight":20}]`), nil); err == nil {
+		t.Fatal("invalid total weight was accepted")
+	}
+}

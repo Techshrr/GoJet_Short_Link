@@ -104,6 +104,34 @@ func TestBotsAreCountedButExcludedFromUniqueVisitors(t *testing.T) {
 	}
 }
 
+func TestTrustedReverseProxyClientIPSeparatesUniqueVisitors(t *testing.T) {
+	memory := store.NewMemory()
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	createTestLink(t, server.URL)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, ip := range []string{"203.0.113.10", "203.0.113.11"} {
+		request, _ := http.NewRequest("GET", server.URL+"/go", nil)
+		request.Header.Set("X-Real-IP", ip)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+	}
+	response, err := http.Get(server.URL + "/api/links/link-1/stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var stats struct {
+		Unique int64 `json:"unique_visitors"`
+	}
+	if json.NewDecoder(response.Body).Decode(&stats) != nil || stats.Unique != 2 {
+		t.Fatalf("unique=%d, want 2", stats.Unique)
+	}
+}
+
 func TestVisitRateLimitDoesNotPolluteAnalytics(t *testing.T) {
 	s := store.NewMemoryWithLimit(3)
 	server := httptest.NewServer(httpapi.New(s, "test-secret"))
@@ -274,6 +302,60 @@ func TestForgedQRMarkerRemainsNormalRedirect(t *testing.T) {
 	visits := memory.Visits()
 	if len(visits) != 1 || visits[0].VisitType != "redirect" {
 		t.Fatalf("forged marker accepted: %#v", visits)
+	}
+}
+
+func TestRoutingRuleSelectsDeviceDestinationAndRecordsIt(t *testing.T) {
+	memory := store.NewMemory()
+	_ = memory.SaveLink(context.Background(), domain.Link{ID: "routing", Code: "route", Destination: "https://example.com/default", StatusCode: 302, Active: true, RoutingRules: []domain.RoutingRule{{Dimension: "device", Value: "mobile", Destination: "https://m.example.com/offer"}}})
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	request, _ := http.NewRequest("GET", server.URL+"/route", nil)
+	request.Header.Set("User-Agent", "Mozilla/5.0 Mobile")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if got := response.Header.Get("Location"); got != "https://m.example.com/offer" {
+		t.Fatalf("location=%s", got)
+	}
+	if visits := memory.Visits(); len(visits) != 1 || visits[0].DestinationID != "rule-1" {
+		t.Fatalf("visits=%#v", visits)
+	}
+}
+
+func TestABAssignmentIsStableAndConfiguredUTMIsApplied(t *testing.T) {
+	memory := store.NewMemoryWithLimit(10)
+	link := domain.Link{ID: "experiment", Code: "experiment", Destination: "https://example.com/default", StatusCode: 302, Active: true, UTM: map[string]string{"utm_source": "gojet", "utm_campaign": "launch"}, Destinations: []domain.Destination{{ID: "a", Destination: "https://a.example/landing", Weight: 50}, {ID: "b", Destination: "https://b.example/landing", Weight: 50}}}
+	_ = memory.SaveLink(context.Background(), link)
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	locations := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		request, _ := http.NewRequest("GET", server.URL+"/experiment", nil)
+		request.Header.Set("User-Agent", "stable-browser")
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		locations[response.Header.Get("Location")] = true
+	}
+	if len(locations) != 1 {
+		t.Fatalf("assignment was not stable: %#v", locations)
+	}
+	for location := range locations {
+		parsed, _ := url.Parse(location)
+		if parsed.Query().Get("utm_source") != "gojet" || parsed.Query().Get("utm_campaign") != "launch" {
+			t.Fatalf("UTM missing from %s", location)
+		}
+	}
+	visits := memory.Visits()
+	if len(visits) != 2 || visits[0].DestinationID != visits[1].DestinationID || visits[0].UTMSource != "gojet" {
+		t.Fatalf("unexpected visits %#v", visits)
 	}
 }
 
