@@ -119,3 +119,9 @@ func (s *MemoryStore) Backlog(_ context.Context) (int64, error) {
 	defer s.mu.Unlock()
 	return int64(len(s.events)), nil
 }
+
+func (s *MemoryStore) Visits() []domain.Visit {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]domain.Visit(nil), s.events...)
+}

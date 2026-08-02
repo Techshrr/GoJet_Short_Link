@@ -2,7 +2,9 @@ package resources
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -27,10 +29,15 @@ type Service struct {
 	uploadPath string
 	filePath   string
 	publicURL  string
+	qrKey      string
 }
 
-func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL string) *Service {
-	return &Service{db: db, workspaces: w, uploadPath: uploadPath, filePath: filePath, publicURL: strings.TrimRight(publicURL, "/")}
+func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL string, qrKey ...string) *Service {
+	key := ""
+	if len(qrKey) > 0 {
+		key = qrKey[0]
+	}
+	return &Service{db: db, workspaces: w, uploadPath: uploadPath, filePath: filePath, publicURL: strings.TrimRight(publicURL, "/"), qrKey: key}
 }
 
 func NewFileWorker(db *sql.DB, path string) *Service {
@@ -38,22 +45,41 @@ func NewFileWorker(db *sql.DB, path string) *Service {
 }
 
 type TextShare struct {
-	ID                                   int64 `json:"id"`
-	Slug, Title, Content, Format, Status string
-	ExpiresAt                            *time.Time `json:"expires_at"`
-	OneTime                              bool       `json:"one_time"`
-	Views                                int64      `json:"views"`
+	ID        int64      `json:"id"`
+	Slug      string     `json:"slug"`
+	Title     string     `json:"title"`
+	Content   string     `json:"content,omitempty"`
+	Format    string     `json:"format"`
+	Status    string     `json:"status"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	OneTime   bool       `json:"one_time"`
+	Protected bool       `json:"protected"`
+	Views     int64      `json:"views"`
+	CreatedAt string     `json:"created_at,omitempty"`
 }
 type BioPage struct {
-	ID                       int64 `json:"id"`
-	Slug, Title, Bio, Status string
-	Theme, Blocks            json.RawMessage
-	Views                    int64 `json:"views"`
+	ID        int64           `json:"id"`
+	Slug      string          `json:"slug"`
+	Title     string          `json:"title"`
+	Bio       string          `json:"bio"`
+	Status    string          `json:"status"`
+	Theme     json.RawMessage `json:"theme"`
+	Blocks    json.RawMessage `json:"blocks"`
+	Views     int64           `json:"views"`
+	CreatedAt string          `json:"created_at,omitempty"`
 }
 type QRCode struct {
-	ID, LinkID                             int64 `json:",omitempty"`
-	Name, ImageURL, Foreground, Background string
-	Size                                   int
+	ID         int64  `json:"id"`
+	LinkID     int64  `json:"link_id"`
+	Name       string `json:"name"`
+	ImageURL   string `json:"image_url"`
+	Foreground string `json:"foreground"`
+	Background string `json:"background"`
+	Size       int    `json:"size"`
+	Code       string `json:"code,omitempty"`
+	Domain     string `json:"domain,omitempty"`
+	QRVisits   int64  `json:"qr_visits"`
+	CreatedAt  string `json:"created_at,omitempty"`
 }
 
 func (s *Service) canEdit(ctx context.Context, user, wid int64) error {
@@ -77,6 +103,9 @@ func (s *Service) CreateText(ctx context.Context, user, wid int64, item TextShar
 	if item.Format != "plain" && item.Format != "markdown" && item.Format != "code" {
 		return item, errors.New("文本格式无效")
 	}
+	if err := normalizeExpiry(item.ExpiresAt); err != nil {
+		return item, err
+	}
 	var hash any
 	if password != "" {
 		if len(password) < 6 {
@@ -94,6 +123,7 @@ func (s *Service) CreateText(ctx context.Context, user, wid int64, item TextShar
 		return item, err
 	}
 	item.ID, _ = result.LastInsertId()
+	s.auditResource(ctx, user, wid, "text.created", "text_share", item.ID)
 	return item, nil
 }
 func (s *Service) ReadText(ctx context.Context, slug, password string) (TextShare, error) {
@@ -104,7 +134,7 @@ func (s *Service) ReadText(ctx context.Context, slug, password string) (TextShar
 	defer tx.Rollback()
 	var item TextShare
 	var hash sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT id,slug,title,content,format,status,expires_at,one_time,views,password_hash FROM text_shares WHERE slug=? FOR UPDATE`, slug).Scan(&item.ID, &item.Slug, &item.Title, &item.Content, &item.Format, &item.Status, &item.ExpiresAt, &item.OneTime, &item.Views, &hash)
+	err = tx.QueryRowContext(ctx, `SELECT id,slug,title,content,format,status,expires_at,one_time,views,password_hash FROM text_shares WHERE slug=? AND deleted_at IS NULL FOR UPDATE`, slug).Scan(&item.ID, &item.Slug, &item.Title, &item.Content, &item.Format, &item.Status, &item.ExpiresAt, &item.OneTime, &item.Views, &hash)
 	if err != nil {
 		return item, err
 	}
@@ -139,8 +169,8 @@ func (s *Service) CreateBio(ctx context.Context, user, wid int64, item BioPage) 
 	if item.Slug == "" {
 		item.Slug = randomSlug()
 	}
-	if !json.Valid(item.Theme) || !json.Valid(item.Blocks) || len(item.Title) < 1 {
-		return item, errors.New("主页标题、主题和内容模块无效")
+	if err := validateBio(item); err != nil {
+		return item, err
 	}
 	if item.Status != "draft" && item.Status != "published" {
 		item.Status = "draft"
@@ -150,11 +180,12 @@ func (s *Service) CreateBio(ctx context.Context, user, wid int64, item BioPage) 
 		return item, err
 	}
 	item.ID, _ = result.LastInsertId()
+	s.auditResource(ctx, user, wid, "bio.created", "bio_page", item.ID)
 	return item, nil
 }
 func (s *Service) ReadBio(ctx context.Context, slug string) (BioPage, error) {
 	var item BioPage
-	err := s.db.QueryRowContext(ctx, `SELECT id,slug,title,COALESCE(bio,''),theme,blocks,status,views FROM bio_pages WHERE slug=? AND status='published'`, slug).Scan(&item.ID, &item.Slug, &item.Title, &item.Bio, &item.Theme, &item.Blocks, &item.Status, &item.Views)
+	err := s.db.QueryRowContext(ctx, `SELECT id,slug,title,COALESCE(bio,''),theme,blocks,status,views FROM bio_pages WHERE slug=? AND status='published' AND deleted_at IS NULL`, slug).Scan(&item.ID, &item.Slug, &item.Title, &item.Bio, &item.Theme, &item.Blocks, &item.Status, &item.Views)
 	if err != nil {
 		return item, err
 	}
@@ -187,12 +218,24 @@ func (s *Service) CreateQR(ctx context.Context, user, wid, linkID int64, name, f
 		return QRCode{}, err
 	}
 	var code, domain string
-	if err = s.db.QueryRowContext(ctx, `SELECT code,domain FROM short_links WHERE id=? AND workspace_id=?`, linkID, wid).Scan(&code, &domain); err != nil {
+	if err = s.db.QueryRowContext(ctx, `SELECT code,domain FROM short_links WHERE id=? AND workspace_id=? AND deleted_at IS NULL AND status='active'`, linkID, wid).Scan(&code, &domain); err != nil {
 		return QRCode{}, err
 	}
 	target := s.publicURL + "/" + code
 	if domain != "" {
 		target = "https://" + domain + "/" + code
+	}
+	if len(s.qrKey) < 32 {
+		return QRCode{}, errors.New("二维码追踪密钥未安全配置")
+	}
+	parsedTarget, parseErr := url.Parse(target)
+	if parseErr == nil {
+		query := parsedTarget.Query()
+		mac := hmac.New(sha256.New, []byte(s.qrKey))
+		_, _ = mac.Write([]byte(fmt.Sprintf("%d|%s|%s", linkID, domain, code)))
+		query.Set("_gojet_qr", hex.EncodeToString(mac.Sum(nil)))
+		parsedTarget.RawQuery = query.Encode()
+		target = parsedTarget.String()
 	}
 	if parsed, parseErr := url.ParseRequestURI(target); parseErr != nil || parsed.Host == "" || parsed.Scheme == "" {
 		return QRCode{}, errors.New("公开访问地址配置无效")
@@ -218,6 +261,7 @@ func (s *Service) CreateQR(ctx context.Context, user, wid, linkID int64, name, f
 		return QRCode{}, err
 	}
 	id, _ := result.LastInsertId()
+	s.auditResource(ctx, user, wid, "qr.created", "qr_code", id)
 	return QRCode{ID: id, LinkID: linkID, Name: name, ImageURL: url, Foreground: foreground, Background: background, Size: size}, nil
 }
 func cleanSlug(v string) string {

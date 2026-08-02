@@ -21,10 +21,15 @@ import (
 type Handler struct {
 	store   store.Store
 	hashKey string
+	qrKey   string
 }
 
-func New(s store.Store, hashKey string) http.Handler {
-	h := &Handler{store: s, hashKey: hashKey}
+func New(s store.Store, hashKey string, qrKey ...string) http.Handler {
+	trackingKey := hashKey
+	if len(qrKey) > 0 {
+		trackingKey = qrKey[0]
+	}
+	h := &Handler{store: s, hashKey: hashKey, qrKey: trackingKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("POST /api/links", h.create)
@@ -205,5 +210,12 @@ func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {
 	sum := sha256.Sum256([]byte(h.hashKey + "|" + ip + "|" + r.UserAgent()))
 	q := r.URL.Query()
 	lang := strings.TrimSpace(strings.Split(r.Header.Get("Accept-Language"), ",")[0])
-	return domain.Visit{LinkID: l.ID, DestinationID: l.ID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: "redirect", IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
+	visitType := "redirect"
+	mac := hmac.New(sha256.New, []byte(h.qrKey))
+	_, _ = mac.Write([]byte(l.ID + "|" + l.Domain + "|" + l.Code))
+	provided, signatureErr := hex.DecodeString(q.Get("_gojet_qr"))
+	if signatureErr == nil && hmac.Equal(provided, mac.Sum(nil)) {
+		visitType = "qr"
+	}
+	return domain.Visit{LinkID: l.ID, DestinationID: l.ID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: visitType, IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
 }

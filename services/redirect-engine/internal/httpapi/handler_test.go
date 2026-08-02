@@ -3,6 +3,9 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -235,6 +238,42 @@ func TestCustomDomainsResolveSameCodeIndependently(t *testing.T) {
 		if response.Header.Get("Location") != want {
 			t.Fatalf("host=%s location=%s want=%s", host, response.Header.Get("Location"), want)
 		}
+	}
+}
+
+func TestQRMarkerIsPersistedAsQRVisit(t *testing.T) {
+	memory := store.NewMemory()
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	createTestLink(t, server.URL)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	mac := hmac.New(sha256.New, []byte("secret"))
+	_, _ = mac.Write([]byte("link-1||go"))
+	response, err := client.Get(server.URL + "/go?_gojet_qr=" + hex.EncodeToString(mac.Sum(nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	visits := memory.Visits()
+	if len(visits) != 1 || visits[0].VisitType != "qr" {
+		t.Fatalf("unexpected visits %#v", visits)
+	}
+}
+
+func TestForgedQRMarkerRemainsNormalRedirect(t *testing.T) {
+	memory := store.NewMemory()
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	createTestLink(t, server.URL)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Get(server.URL + "/go?_gojet_qr=00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	visits := memory.Visits()
+	if len(visits) != 1 || visits[0].VisitType != "redirect" {
+		t.Fatalf("forged marker accepted: %#v", visits)
 	}
 }
 

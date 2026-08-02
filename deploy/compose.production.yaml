@@ -24,6 +24,7 @@ services:
       REDIS_ADDRESS: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       VISITOR_HASH_KEY: ${VISITOR_HASH_KEY:?VISITOR_HASH_KEY is required}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
       VISIT_RATE_LIMIT_PER_MINUTE: ${VISIT_RATE_LIMIT_PER_MINUTE:-60}
     healthcheck:
       test: ["CMD", "/redirect-engine", "healthcheck"]
@@ -66,6 +67,7 @@ services:
       UPLOAD_STORAGE_PATH: /data/uploads
       FILE_STORAGE_PATH: /data/files
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL is required}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
     volumes:
       - uploads:/data/uploads
       - files:/data/files

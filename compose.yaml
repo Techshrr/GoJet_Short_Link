@@ -4,6 +4,7 @@ services:
     environment:
       REDIS_ADDRESS: redis:6379
       VISITOR_HASH_KEY: ${VISITOR_HASH_KEY:?Set VISITOR_HASH_KEY in .env}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?Set QR_TRACKING_KEY in .env}
     ports: ["8080:8080"]
     depends_on:
       redis:
@@ -32,6 +33,7 @@ services:
       UPLOAD_STORAGE_PATH: /data/uploads
       FILE_STORAGE_PATH: /data/files
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?Set QR_TRACKING_KEY in .env}
     volumes:
       - uploads:/data/uploads
       - files:/data/files

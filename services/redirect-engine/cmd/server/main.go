@@ -28,7 +28,7 @@ func main() {
 		log.Fatal("VISIT_RATE_LIMIT_PER_MINUTE must be positive")
 	}
 	s := store.NewRedis(address, os.Getenv("REDIS_PASSWORD"), db, limit)
-	server := &http.Server{Addr: getenv("HTTP_ADDRESS", ":8080"), Handler: httpapi.New(s, required("VISITOR_HASH_KEY")), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: getenv("HTTP_ADDRESS", ":8080"), Handler: httpapi.New(s, required("VISITOR_HASH_KEY"), required("QR_TRACKING_KEY")), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("redirect engine listening on %s", server.Addr)
 	log.Fatal(server.ListenAndServe())
 }
