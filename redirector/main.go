@@ -25,7 +25,8 @@ import (
 
 type config struct {
 	listen, spoolDir, controlURL, token        string
-	redisAddr, redisPassword                   string
+	redisAddr, redisUsername, redisPassword    string
+	redisPrefix                                string
 	redisDB                                    int
 	cacheTTL, deliveryInterval, requestTimeout time.Duration
 }
@@ -37,7 +38,9 @@ func loadConfig() (config, error) {
 		controlURL:       strings.TrimRight(env("GOJET_CONTROL_PLANE_URL", env("GOJET_REDIRECT_INTERNAL_URL", "http://127.0.0.1")), "/"),
 		token:            os.Getenv("GOJET_REDIRECT_INTERNAL_TOKEN"),
 		redisAddr:        env("REDIS_ADDR", env("REDIS_HOST", "127.0.0.1")+":"+env("REDIS_PORT", "6379")),
-		redisPassword:    os.Getenv("REDIS_PASSWORD"),
+		redisUsername:    optionalEnv("REDIS_USERNAME"),
+		redisPassword:    optionalEnv("REDIS_PASSWORD"),
+		redisPrefix:      env("REDIS_PREFIX", "gojet-database-"),
 		redisDB:          integer("REDIS_DB", 0),
 		cacheTTL:         seconds("GOJET_REDIRECT_CACHE_TTL_SECONDS", 3600),
 		deliveryInterval: seconds("GOJET_REDIRECT_DELIVERY_INTERVAL_SECONDS", 2),
@@ -57,6 +60,13 @@ func env(k, fallback string) string {
 		return v
 	}
 	return fallback
+}
+func optionalEnv(k string) string {
+	v := strings.TrimSpace(os.Getenv(k))
+	if strings.EqualFold(v, "null") {
+		return ""
+	}
+	return v
 }
 func seconds(k string, fallback int) time.Duration {
 	v, e := strconv.Atoi(env(k, strconv.Itoa(fallback)))
@@ -114,6 +124,7 @@ type cachedResolver struct {
 	cache   *redisClient
 	control controlResolver
 	ttl     time.Duration
+	prefix  string
 }
 
 var errNotFound = errors.New("link not found")
@@ -138,14 +149,17 @@ func (r controlResolver) resolve(ctx context.Context, host, slug string) (linkPa
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&p); err != nil {
 		return p, err
 	}
+	if err := validatePayload(p); err != nil {
+		return linkPayload{}, fmt.Errorf("invalid resolve payload: %w", err)
+	}
 	return p, nil
 }
 
 func (r cachedResolver) resolve(ctx context.Context, host, slug string) (linkPayload, error) {
-	key := "gojet:redirect:" + strings.ToLower(host) + ":" + slug
+	key := r.prefix + "gojet:redirect:" + strings.ToLower(host) + ":" + slug
 	if data, err := r.cache.get(ctx, key); err == nil && data != "" {
 		var p linkPayload
-		if json.Unmarshal([]byte(data), &p) == nil {
+		if json.Unmarshal([]byte(data), &p) == nil && validatePayload(p) == nil {
 			return p, nil
 		}
 	}
@@ -160,9 +174,9 @@ func (r cachedResolver) resolve(ctx context.Context, host, slug string) (linkPay
 }
 
 type redisClient struct {
-	addr, password string
-	db             int
-	timeout        time.Duration
+	addr, username, password string
+	db                       int
+	timeout                  time.Duration
 }
 
 func (c *redisClient) command(ctx context.Context, args ...string) (string, error) {
@@ -175,7 +189,11 @@ func (c *redisClient) command(ctx context.Context, args ...string) (string, erro
 	_ = conn.SetDeadline(time.Now().Add(c.timeout))
 	commands := [][]string{}
 	if c.password != "" {
-		commands = append(commands, []string{"AUTH", c.password})
+		if c.username != "" {
+			commands = append(commands, []string{"AUTH", c.username, c.password})
+		} else {
+			commands = append(commands, []string{"AUTH", c.password})
+		}
 	}
 	if c.db != 0 {
 		commands = append(commands, []string{"SELECT", strconv.Itoa(c.db)})
@@ -357,18 +375,42 @@ func targetURL(raw string, utm map[string]string, incoming url.Values) (string, 
 		return "", errors.New("invalid target")
 	}
 	q := u.Query()
-	for k, v := range utm {
-		if v != "" {
-			q.Set(k, v)
+	utmAliases := map[string]string{
+		"utm_source":   "source",
+		"utm_medium":   "medium",
+		"utm_campaign": "campaign",
+		"utm_content":  "content",
+		"utm_term":     "term",
+	}
+	for key, alias := range utmAliases {
+		value := utm[key]
+		if value == "" {
+			value = utm[alias]
+		}
+		if value != "" && !q.Has(key) {
+			q.Set(key, value)
 		}
 	}
 	for k, values := range incoming {
-		for _, v := range values {
-			q.Add(k, v)
+		if k == "" || q.Has(k) {
+			continue
+		}
+		for _, value := range values {
+			q.Add(k, value)
 		}
 	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
+}
+
+func validatePayload(p linkPayload) error {
+	if p.ID < 1 {
+		return errors.New("id must be positive")
+	}
+	if _, err := targetURL(p.TargetURL, nil, nil); err != nil {
+		return errors.New("target_url must be an absolute HTTP(S) URL")
+	}
+	return nil
 }
 
 func eventFromRequest(r *http.Request, linkID int64, now time.Time) clickEvent {
@@ -500,12 +542,26 @@ func (s *server) deliverBatch(ctx context.Context) {
 		}
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
-		if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusConflict {
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices || resp.StatusCode == http.StatusConflict {
 			if os.Remove(name) == nil {
+				s.pending.Add(-1)
+			}
+		} else if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnprocessableEntity {
+			if err := quarantineSpool(s.cfg.spoolDir, name); err != nil {
+				log.Printf("failed to quarantine rejected event %s: %v", filepath.Base(name), err)
+			} else {
 				s.pending.Add(-1)
 			}
 		}
 	}
+}
+
+func quarantineSpool(spoolDir, name string) error {
+	failedDir := filepath.Join(spoolDir, "failed")
+	if err := os.MkdirAll(failedDir, 0750); err != nil {
+		return err
+	}
+	return os.Rename(name, filepath.Join(failedDir, filepath.Base(name)))
 }
 
 func main() {
@@ -519,7 +575,7 @@ func main() {
 	client := &http.Client{Timeout: cfg.requestTimeout}
 	s := &server{cfg: cfg, client: client}
 	control := controlResolver{base: cfg.controlURL, token: cfg.token, client: client}
-	s.resolver = cachedResolver{cache: &redisClient{addr: cfg.redisAddr, password: cfg.redisPassword, db: cfg.redisDB, timeout: cfg.requestTimeout}, control: control, ttl: cfg.cacheTTL}
+	s.resolver = cachedResolver{cache: &redisClient{addr: cfg.redisAddr, username: cfg.redisUsername, password: cfg.redisPassword, db: cfg.redisDB, timeout: cfg.requestTimeout}, control: control, ttl: cfg.cacheTTL, prefix: cfg.redisPrefix}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	s.ready.Store(true)

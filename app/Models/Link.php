@@ -142,5 +142,7 @@ class Link extends Model
     public function forgetRedirectCache(): void
     {
         Cache::forget($this->cacheKey());
+
+        app(\App\Services\RedirectPayloadService::class)->forget($this);
     }
 }

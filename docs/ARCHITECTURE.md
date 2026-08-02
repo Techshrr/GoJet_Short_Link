@@ -33,13 +33,13 @@ MySQL 是业务数据和统计事件的最终事实来源。
 
 Nginx 仅把根级短码交给 `gojet-redirector`：
 
-1. 从 Redis 缓存读取解析结果；未命中时请求 Laravel 内部解析端点。
+1. 从 Redis 缓存读取解析结果；未命中时请求 Laravel 内部解析端点。Go 与 Laravel 必须使用相同的 `REDIS_PREFIX`（默认 `gojet-database-`）和 `REDIS_DB`。
 2. 合并目标参数、存储 UTM 和访问者查询参数。
 3. 生成事件 UUID。
 4. 写入临时文件，`fsync` 文件，原子重命名并 `fsync` 目录。
 5. 只有持久化磁盘队列成功后才返回跳转。
 6. 后台投递器批量把事件发送到 Laravel 内部点击端点。
-7. 仅在 HTTP 2xx 或幂等冲突 409 后删除事件文件。
+7. 在 HTTP 2xx 或幂等冲突 409 后删除事件文件；Laravel 明确返回 400、404 或 422 的永久无效事件移入 `spool/failed` 隔离目录，其余错误继续重试。
 
 如果磁盘队列不可写，Go 返回 503，Nginx 自动回退 Laravel；系统不会用“成功跳转但永久丢统计”换取表面可用。
 
@@ -94,6 +94,7 @@ Nginx、Laravel App、默认队列 Worker、Scheduler、Go Redirector、MySQL �
 
 - Redis 故障：Go 缓存降级；Laravel/MySQL 可继续解析。
 - Laravel 暂时不可用：已进入 Go spool 的事件保留并重试。
+- 点击事件永久无效：事件移入 `spool/failed` 留待诊断，不堵塞正常投递队列。
 - Go spool 不可写：Nginx 回退 Laravel，不静默丢事件。
 - SMTP 故障：业务页面返回可理解错误，后台保留诊断和重试入口。
 - Worker 停止：邮件等默认队列任务延迟；短链接核心统计不依赖该 Worker。

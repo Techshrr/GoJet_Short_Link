@@ -53,6 +53,10 @@ class RedirectPayloadService
 
     public function forget(Link $link): void
     {
+        if (! config('gojet.redirect_plane.enabled', false)) {
+            return;
+        }
+
         try {
             Redis::del($link->cacheKey());
         } catch (Throwable $exception) {

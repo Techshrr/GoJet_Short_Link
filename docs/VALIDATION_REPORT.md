@@ -11,12 +11,13 @@ This report records only evidence that is reproducible from the current reposito
 - Production frontend build: **passed** with Vite 7.3.6 (692 modules transformed).
 - Shell syntax: **passed** for `scripts/*.sh`, `install.sh`, `upgrade.sh`, and `rollback.sh`.
 - JSON parsing: **passed** for `package.json` and `package-lock.json`.
+- Redirect-plane contract review: **passed statically** for Laravel/Go paths, bearer authentication, Redis prefix/DB configuration, query precedence, spool lifecycle, and Nginx 404/503 fallback.
 - Release archive defect confirmed: the received production package intentionally excluded `tests/`, `.github/`, and `redirector/`, while its validation script required those paths.
 
 ## Not executable in the current workspace
 
 - PHP syntax, Laravel routes, Blade compilation, PHPUnit, and Pint: **not run** because PHP is not installed in this workspace.
-- Go redirector source has now been independently rebuilt from the documented Laravel/Redis/spool contract. Formatting, tests, race detector, vet, and binary rebuild are **pending GitHub Actions** because Go is not installed in the current recovery container.
+- Go redirector source has now been independently rebuilt from the documented Laravel/Redis/spool contract. Tests, race detector, vet, and binary rebuild are **pending GitHub Actions** because Go is not installed in the current recovery container.
 - Database-backed flows: **not run** because the required PHP runtime and database drivers are unavailable.
 - Browser and responsive acceptance: **not run** pending an executable Laravel environment and stable fixture data.
 

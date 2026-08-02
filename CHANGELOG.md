@@ -4,8 +4,8 @@
 
 - Reconstructed the missing Go redirect-plane source with Redis lookup caching, control-plane fallback, fsync-backed durable click spooling, idempotent delivery, health reporting, graceful shutdown, and automated Go tests.
 - Restored repository-level tests, CI validation, and install/upgrade/rollback entrypoints that had been excluded from the received production archive.
-
-## [Unreleased]
+- Aligned Go and Laravel redirect query precedence and Redis key prefixes, including Redis ACL username support and Laravel-style `null` credentials.
+- Added invalid control-payload rejection and dead-letter isolation for permanently rejected click events.
 
 ### Added
 

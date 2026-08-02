@@ -44,6 +44,20 @@ func TestRedirectSpoolsBeforeResponse(t *testing.T) {
 	}
 }
 
+func TestTargetQueryPrecedenceMatchesLaravel(t *testing.T) {
+	target, err := targetURL(
+		"https://example.com/path?utm_source=owner&keep=target",
+		map[string]string{"source": "stored", "campaign": "launch"},
+		map[string][]string{"utm_source": {"visitor"}, "keep": {"visitor"}, "new": {"one", "two"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != "https://example.com/path?keep=target&new=one&new=two&utm_campaign=launch&utm_source=owner" {
+		t.Fatalf("target=%s", target)
+	}
+}
+
 func TestApplicationLinkFallsBackWithoutSpool(t *testing.T) {
 	dir := t.TempDir()
 	s := &server{cfg: config{spoolDir: dir}, resolver: fakeResolver{payload: linkPayload{ID: 8, TargetURL: "https://example.com", Status: "active", RequiresApplication: true, AnalyticsEnabled: true}}}
@@ -80,7 +94,7 @@ func TestSpoolFailureReturns503(t *testing.T) {
 }
 
 func TestDeliveryDeletesCreatedAndDuplicate(t *testing.T) {
-	for _, status := range []int{201, 409} {
+	for _, status := range []int{201, 204, 409} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			dir := t.TempDir()
 			e := clickEvent{EventUUID: uuid(), LinkID: 1, OccurredAt: time.Now().UTC()}
@@ -101,5 +115,49 @@ func TestDeliveryDeletesCreatedAndDuplicate(t *testing.T) {
 				t.Fatalf("remaining=%d", len(files))
 			}
 		})
+	}
+}
+
+func TestDeliveryQuarantinesPermanentlyRejectedEvent(t *testing.T) {
+	dir := t.TempDir()
+	e := clickEvent{EventUUID: uuid(), LinkID: 999, OccurredAt: time.Now().UTC()}
+	if err := writeSpool(dir, e); err != nil {
+		t.Fatal(err)
+	}
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer api.Close()
+	s := &server{cfg: config{spoolDir: dir, controlURL: api.URL, token: "secret"}, client: api.Client()}
+	s.deliverBatch(context.Background())
+	active, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	failed, _ := filepath.Glob(filepath.Join(dir, "failed", "*.json"))
+	if len(active) != 0 || len(failed) != 1 {
+		t.Fatalf("active=%d failed=%d", len(active), len(failed))
+	}
+}
+
+func TestControlResolverRejectsMalformedPayload(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":0,"target_url":"javascript:alert(1)","status":"active"}`))
+	}))
+	defer api.Close()
+	r := controlResolver{base: api.URL, token: "secret", client: api.Client()}
+	if _, err := r.resolve(context.Background(), "gojet.cc", "abc"); err == nil {
+		t.Fatal("expected malformed control-plane payload to be rejected")
+	}
+}
+
+func TestLoadConfigTreatsLaravelNullRedisCredentialsAsEmpty(t *testing.T) {
+	t.Setenv("GOJET_REDIRECT_INTERNAL_TOKEN", "secret")
+	t.Setenv("REDIS_USERNAME", "null")
+	t.Setenv("REDIS_PASSWORD", "NULL")
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.redisUsername != "" || cfg.redisPassword != "" {
+		t.Fatalf("username=%q password=%q", cfg.redisUsername, cfg.redisPassword)
 	}
 }
