@@ -1,7 +1,7 @@
 # 邮件中心
 
 邮件设置由 Platform API 管理，SMTP 密码使用 AES-256-GCM 加密后保存。管理员请求必须携带
-`Authorization: Bearer <ADMIN_API_TOKEN>`，API 永远只返回密码掩码。
+管理员密码及二次验证登录取得的 `Authorization: Bearer <admin_session>`，API 永远只返回密码掩码。
 
 ## 配置与测试
 

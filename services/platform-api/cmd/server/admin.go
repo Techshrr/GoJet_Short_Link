@@ -120,7 +120,11 @@ func (s *server) adminLinks(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) adminAudit(w http.ResponseWriter, r *http.Request) {
 	limit, offset := page(r)
-	rows, err := s.db.QueryContext(r.Context(), `SELECT id,COALESCE(actor_user_id,0),COALESCE(workspace_id,0),action,target_type,COALESCE(target_id,''),COALESCE(metadata,JSON_OBJECT()),created_at FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	rows, err := s.db.QueryContext(r.Context(), `SELECT id,actor,workspace_id,action,target_type,target_id,metadata,created_at FROM (
+        SELECT id,COALESCE(administrator_id,0) actor,0 workspace_id,action,'administrator_request' target_type,COALESCE(path,'') target_id,JSON_OBJECT('method',method,'outcome',outcome,'reason',reason,'ip',ip_address) metadata,created_at FROM administrator_audit_logs
+        UNION ALL
+        SELECT id,COALESCE(actor_user_id,0),COALESCE(workspace_id,0),action,target_type,COALESCE(target_id,''),COALESCE(metadata,JSON_OBJECT()),created_at FROM audit_logs
+        ) combined ORDER BY created_at DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "审计日志暂时不可用"})
 		return

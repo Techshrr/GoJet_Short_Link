@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"github.com/Techshrr/GoJet_Short_Link/app/adminauth"
 	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 	"github.com/Techshrr/GoJet_Short_Link/app/domains"
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
@@ -25,18 +25,18 @@ import (
 )
 
 type server struct {
-	db         *sql.DB
-	settings   *settings.Store
-	mail       *appmail.Service
-	identity   *identity.Service
-	workspace  *workspace.Service
-	links      *links.Service
-	domains    *domains.Service
-	redis      *redis.Client
-	resources  *appresources.Service
-	organizer  *organization.Service
-	billing    *billing.Service
-	adminToken string
+	db        *sql.DB
+	settings  *settings.Store
+	mail      *appmail.Service
+	identity  *identity.Service
+	workspace *workspace.Service
+	links     *links.Service
+	domains   *domains.Service
+	redis     *redis.Client
+	resources *appresources.Service
+	organizer *organization.Service
+	billing   *billing.Service
+	adminAuth *adminauth.Service
 }
 
 func main() {
@@ -63,34 +63,48 @@ func main() {
 	}
 	billingService := billing.New(db)
 	workspaceService := workspace.New(db, billingService)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminToken: required("ADMIN_API_TOKEN")}
+	adminAuth := adminauth.New(db, store)
+	if err = adminAuth.Bootstrap(context.Background(), required("ADMIN_BOOTSTRAP_EMAIL"), required("ADMIN_BOOTSTRAP_PASSWORD")); err != nil {
+		log.Fatal(err)
+	}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminAuth: adminAuth}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
 	mux.HandleFunc("GET /api/public/status", s.publicStatus)
-	mux.HandleFunc("PUT /api/admin/settings/mail", s.admin(s.saveMail))
-	mux.HandleFunc("POST /api/admin/mail/test", s.admin(s.testMail))
-	mux.HandleFunc("GET /api/admin/mail/logs", s.admin(s.mailLogs))
-	mux.HandleFunc("POST /api/admin/mail/{id}/retry", s.admin(s.retryMail))
-	mux.HandleFunc("GET /api/admin/settings", s.admin(s.getSettingsCenter))
-	mux.HandleFunc("PUT /api/admin/settings/{section}", s.admin(s.saveSettingsSection))
-	mux.HandleFunc("POST /api/admin/brand/{asset}", s.admin(s.uploadBrandAsset))
-	mux.HandleFunc("DELETE /api/admin/brand/{asset}", s.admin(s.deleteBrandAsset))
-	mux.HandleFunc("GET /api/admin/overview", s.admin(s.adminOverview))
-	mux.HandleFunc("GET /api/admin/users", s.admin(s.adminUsers))
-	mux.HandleFunc("PATCH /api/admin/users/{id}/status", s.admin(s.adminUserStatus))
-	mux.HandleFunc("GET /api/admin/workspaces", s.admin(s.adminWorkspaces))
-	mux.HandleFunc("GET /api/admin/links", s.admin(s.adminLinks))
-	mux.HandleFunc("GET /api/admin/audit", s.admin(s.adminAudit))
-	mux.HandleFunc("GET /api/admin/abuse", s.admin(s.adminAbuse))
-	mux.HandleFunc("PATCH /api/admin/abuse/{id}", s.admin(s.adminResolveAbuse))
-	mux.HandleFunc("GET /api/admin/domains", s.admin(s.adminDomains))
-	mux.HandleFunc("GET /api/admin/security", s.admin(s.adminSecurityEvents))
-	mux.HandleFunc("PATCH /api/admin/security/{id}", s.admin(s.adminResolveSecurity))
-	mux.HandleFunc("GET /api/admin/announcements", s.admin(s.adminAnnouncements))
-	mux.HandleFunc("POST /api/admin/announcements", s.admin(s.adminCreateAnnouncement))
-	mux.HandleFunc("GET /api/admin/files", s.admin(s.adminFiles))
-	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin(s.adminRetryFileScan))
+	mux.HandleFunc("POST /api/admin/auth/login", s.adminLogin)
+	mux.HandleFunc("GET /api/admin/auth/me", s.admin("platform.read", s.adminMe))
+	mux.HandleFunc("POST /api/admin/auth/logout", s.admin("platform.read", s.adminLogout))
+	mux.HandleFunc("POST /api/admin/auth/totp/begin", s.admin("platform.read", s.adminBeginTOTP))
+	mux.HandleFunc("POST /api/admin/auth/totp/confirm", s.admin("platform.read", s.adminConfirmTOTP))
+	mux.HandleFunc("POST /api/admin/auth/password", s.admin("platform.read", s.adminChangePassword))
+	mux.HandleFunc("DELETE /api/admin/administrators/{id}/sessions", s.admin("admins.manage", s.adminRevokeSessions))
+	mux.HandleFunc("GET /api/admin/administrators", s.admin("admins.manage", s.adminListAdministrators))
+	mux.HandleFunc("POST /api/admin/administrators", s.admin("admins.manage", s.adminCreateAdministrator))
+	mux.HandleFunc("PATCH /api/admin/administrators/{id}", s.admin("admins.manage", s.adminUpdateAdministrator))
+	mux.HandleFunc("PUT /api/admin/settings/mail", s.admin("settings.manage", s.saveMail))
+	mux.HandleFunc("POST /api/admin/mail/test", s.admin("settings.manage", s.testMail))
+	mux.HandleFunc("GET /api/admin/mail/logs", s.admin("settings.manage", s.mailLogs))
+	mux.HandleFunc("POST /api/admin/mail/{id}/retry", s.admin("settings.manage", s.retryMail))
+	mux.HandleFunc("GET /api/admin/settings", s.admin("settings.manage", s.getSettingsCenter))
+	mux.HandleFunc("PUT /api/admin/settings/{section}", s.admin("settings.manage", s.saveSettingsSection))
+	mux.HandleFunc("POST /api/admin/brand/{asset}", s.admin("settings.manage", s.uploadBrandAsset))
+	mux.HandleFunc("DELETE /api/admin/brand/{asset}", s.admin("settings.manage", s.deleteBrandAsset))
+	mux.HandleFunc("GET /api/admin/overview", s.admin("platform.read", s.adminOverview))
+	mux.HandleFunc("GET /api/admin/users", s.admin("platform.read", s.adminUsers))
+	mux.HandleFunc("PATCH /api/admin/users/{id}/status", s.admin("users.manage", s.adminUserStatus))
+	mux.HandleFunc("GET /api/admin/workspaces", s.admin("platform.read", s.adminWorkspaces))
+	mux.HandleFunc("GET /api/admin/links", s.admin("platform.read", s.adminLinks))
+	mux.HandleFunc("GET /api/admin/audit", s.admin("platform.read", s.adminAudit))
+	mux.HandleFunc("GET /api/admin/abuse", s.admin("security.manage", s.adminAbuse))
+	mux.HandleFunc("PATCH /api/admin/abuse/{id}", s.admin("security.manage", s.adminResolveAbuse))
+	mux.HandleFunc("GET /api/admin/domains", s.admin("security.manage", s.adminDomains))
+	mux.HandleFunc("GET /api/admin/security", s.admin("security.manage", s.adminSecurityEvents))
+	mux.HandleFunc("PATCH /api/admin/security/{id}", s.admin("security.manage", s.adminResolveSecurity))
+	mux.HandleFunc("GET /api/admin/announcements", s.admin("content.manage", s.adminAnnouncements))
+	mux.HandleFunc("POST /api/admin/announcements", s.admin("content.manage", s.adminCreateAnnouncement))
+	mux.HandleFunc("GET /api/admin/files", s.admin("security.manage", s.adminFiles))
+	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin("security.manage", s.adminRetryFileScan))
 	mux.HandleFunc("POST /api/mail/verification", s.user(s.queueVerification))
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)
@@ -148,16 +162,6 @@ func main() {
 	address := getenv("PLATFORM_HTTP_ADDRESS", ":8090")
 	log.Printf("platform API listening on %s", address)
 	log.Fatal((&http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())
-}
-func (s *server) admin(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if len(provided) != len(s.adminToken) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.adminToken)) != 1 {
-			jsonResponse(w, 401, map[string]string{"error": "unauthorized"})
-			return
-		}
-		next(w, r)
-	}
 }
 
 type mailInput struct {
