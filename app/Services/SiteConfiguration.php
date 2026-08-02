@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\SystemSetting;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -45,12 +44,12 @@ class SiteConfiguration
 
     public function group(string $key, array $defaults = []): array
     {
-        if (! config('gojet.installed')) {
+        if (!config('gojet.installed')) {
             return $defaults;
         }
 
         try {
-            if (! Schema::hasTable('system_settings')) {
+            if (!Schema::hasTable('system_settings')) {
                 return $defaults;
             }
 
@@ -119,7 +118,7 @@ class SiteConfiguration
                 'mail.mailers.smtp.host' => $mail['host'],
                 'mail.mailers.smtp.port' => (int) $mail['port'],
                 'mail.mailers.smtp.scheme' => $implicitTls ? 'smtps' : 'smtp',
-                'mail.mailers.smtp.auto_tls' => ! $plainText,
+                'mail.mailers.smtp.auto_tls' => !$plainText,
                 'mail.mailers.smtp.require_tls' => in_array($encryption, ['tls', 'starttls'], true),
                 'mail.mailers.smtp.username' => $mail['username'] ?: null,
                 'mail.mailers.smtp.password' => $mail['password'] ?: null,
@@ -136,7 +135,7 @@ class SiteConfiguration
 
     public function assetUrl(?string $path, ?string $fallback = null): ?string
     {
-        if (! filled($path)) {
+        if (!filled($path)) {
             return $fallback;
         }
 
