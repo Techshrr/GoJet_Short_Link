@@ -19,10 +19,11 @@ import (
 type RedisStore struct {
 	address, password string
 	db                int
+	limit             int
 }
 
-func NewRedis(address, password string, db int) *RedisStore {
-	return &RedisStore{address: address, password: password, db: db}
+func NewRedis(address, password string, db, limit int) *RedisStore {
+	return &RedisStore{address: address, password: password, db: db, limit: limit}
 }
 
 func (s *RedisStore) command(ctx context.Context, args ...string) (any, error) {
@@ -113,15 +114,45 @@ func (s *RedisStore) FindLink(ctx context.Context, code string) (domain.Link, er
 	return l, e
 }
 
-const recordScript = `redis.call('INCR',KEYS[1]); redis.call('PFADD',KEYS[2],ARGV[3]); return redis.call('XADD',KEYS[3],'*','link_id',ARGV[1],'destination_id',ARGV[2],'timestamp',ARGV[4],'visitor_hash',ARGV[3],'referer_url',ARGV[5],'referer_host',ARGV[6],'source_type',ARGV[7],'country',ARGV[8],'region',ARGV[9],'city',ARGV[10],'device',ARGV[11],'browser',ARGV[12],'operating_system',ARGV[13],'language',ARGV[14],'utm_source',ARGV[15],'utm_medium',ARGV[16],'utm_campaign',ARGV[17],'utm_content',ARGV[18],'utm_term',ARGV[19],'visit_type',ARGV[20],'is_bot',ARGV[21])`
+const recordScript = `
+local rate = redis.call('INCR', KEYS[4])
+if rate == 1 then redis.call('EXPIRE', KEYS[4], 60) end
+if rate > tonumber(ARGV[22]) then return redis.error_reply('RATE_LIMITED') end
+redis.call('INCR', KEYS[1])
+redis.call('INCR', KEYS[5])
+if ARGV[21] == 'true' then redis.call('INCR', KEYS[6]) else redis.call('PFADD', KEYS[2], ARGV[3]) end
+redis.call('INCR', KEYS[7]); redis.call('INCR', KEYS[8]); redis.call('INCR', KEYS[9])
+return redis.call('XADD',KEYS[3],'*','link_id',ARGV[1],'destination_id',ARGV[2],'timestamp',ARGV[4],'visitor_hash',ARGV[3],'referer_url',ARGV[5],'referer_host',ARGV[6],'source_type',ARGV[7],'country',ARGV[8],'region',ARGV[9],'city',ARGV[10],'device',ARGV[11],'browser',ARGV[12],'operating_system',ARGV[13],'language',ARGV[14],'utm_source',ARGV[15],'utm_medium',ARGV[16],'utm_campaign',ARGV[17],'utm_content',ARGV[18],'utm_term',ARGV[19],'visit_type',ARGV[20],'is_bot',ARGV[21])`
 
 func (s *RedisStore) RecordVisit(ctx context.Context, v domain.Visit) error {
-	args := []string{"EVAL", recordScript, "3", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", v.LinkID, v.DestinationID, v.VisitorHash, v.Timestamp.UTC().Format(time.RFC3339Nano), v.RefererURL, v.RefererHost, v.SourceType, v.Country, v.Region, v.City, v.Device, v.Browser, v.OS, v.Language, v.UTMSource, v.UTMMedium, v.UTMCampaign, v.UTMContent, v.UTMTerm, v.VisitType, strconv.FormatBool(v.IsBot)}
+	day := v.Timestamp.UTC().Format("2006-01-02")
+	args := []string{"EVAL", recordScript, "9", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", "gojet:rate:" + v.LinkID + ":" + v.VisitorHash, "gojet:daily:" + v.LinkID + ":" + day, "gojet:bots:" + v.LinkID, "gojet:source:" + v.LinkID + ":" + v.SourceType, "gojet:device:" + v.LinkID + ":" + v.Device, "gojet:browser:" + v.LinkID + ":" + v.Browser, v.LinkID, v.DestinationID, v.VisitorHash, v.Timestamp.UTC().Format(time.RFC3339Nano), v.RefererURL, v.RefererHost, v.SourceType, v.Country, v.Region, v.City, v.Device, v.Browser, v.OS, v.Language, v.UTMSource, v.UTMMedium, v.UTMCampaign, v.UTMContent, v.UTMTerm, v.VisitType, strconv.FormatBool(v.IsBot), strconv.Itoa(s.limit)}
 	_, e := s.command(ctx, args...)
+	if e != nil && strings.Contains(e.Error(), "RATE_LIMITED") {
+		return ErrRateLimited
+	}
 	return e
 }
 func (s *RedisStore) Stats(ctx context.Context, id string) (domain.Stats, error) {
-	cv, e := s.command(ctx, "GET", "gojet:clicks:"+id)
+	get := func(key string) (int64, error) {
+		v, e := s.command(ctx, "GET", key)
+		if e != nil {
+			return 0, e
+		}
+		if v == nil {
+			return 0, nil
+		}
+		return strconv.ParseInt(v.(string), 10, 64)
+	}
+	clicks, e := get("gojet:clicks:" + id)
+	if e != nil {
+		return domain.Stats{}, e
+	}
+	today, e := get("gojet:daily:" + id + ":" + time.Now().UTC().Format("2006-01-02"))
+	if e != nil {
+		return domain.Stats{}, e
+	}
+	bots, e := get("gojet:bots:" + id)
 	if e != nil {
 		return domain.Stats{}, e
 	}
@@ -129,11 +160,32 @@ func (s *RedisStore) Stats(ctx context.Context, id string) (domain.Stats, error)
 	if e != nil {
 		return domain.Stats{}, e
 	}
-	var c int64
-	if cv != nil {
-		c, _ = strconv.ParseInt(cv.(string), 10, 64)
+	readDims := func(prefix string, values []string) (map[string]int64, error) {
+		out := map[string]int64{}
+		for _, value := range values {
+			n, e := get("gojet:" + prefix + ":" + id + ":" + value)
+			if e != nil {
+				return nil, e
+			}
+			if n > 0 {
+				out[value] = n
+			}
+		}
+		return out, nil
 	}
-	return domain.Stats{Clicks: c, UniqueVisitors: uv.(int64)}, nil
+	sources, e := readDims("source", []string{"direct", "referer", "unknown"})
+	if e != nil {
+		return domain.Stats{}, e
+	}
+	devices, e := readDims("device", []string{"desktop", "mobile", "tablet"})
+	if e != nil {
+		return domain.Stats{}, e
+	}
+	browsers, e := readDims("browser", []string{"chrome", "edge", "firefox", "safari", "other"})
+	if e != nil {
+		return domain.Stats{}, e
+	}
+	return domain.Stats{Clicks: clicks, TodayClicks: today, UniqueVisitors: uv.(int64), BotVisits: bots, Sources: sources, Devices: devices, Browsers: browsers}, nil
 }
 func (s *RedisStore) Backlog(ctx context.Context) (int64, error) {
 	v, e := s.command(ctx, "XLEN", "gojet:analytics:events")

@@ -92,6 +92,11 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 	}
 	v := h.visit(r, l)
 	if err := h.store.RecordVisit(r.Context(), v); err != nil {
+		if errors.Is(err, store.ErrRateLimited) {
+			w.Header().Set("Retry-After", "60")
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many visits; please retry shortly"})
+			return
+		}
 		writeJSON(w, 503, map[string]string{"error": "visit could not be recorded; please retry"})
 		return
 	}

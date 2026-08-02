@@ -14,7 +14,11 @@ import (
 func main() {
 	address := getenv("REDIS_ADDRESS", "127.0.0.1:6379")
 	db, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
-	s := store.NewRedis(address, os.Getenv("REDIS_PASSWORD"), db)
+	limit, _ := strconv.Atoi(getenv("VISIT_RATE_LIMIT_PER_MINUTE", "60"))
+	if limit < 1 {
+		log.Fatal("VISIT_RATE_LIMIT_PER_MINUTE must be positive")
+	}
+	s := store.NewRedis(address, os.Getenv("REDIS_PASSWORD"), db, limit)
 	server := &http.Server{Addr: getenv("HTTP_ADDRESS", ":8080"), Handler: httpapi.New(s, required("VISITOR_HASH_KEY")), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("redirect engine listening on %s", server.Addr)
 	log.Fatal(server.ListenAndServe())

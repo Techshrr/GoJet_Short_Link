@@ -20,6 +20,11 @@ type Visit struct {
 }
 
 type Stats struct {
-	Clicks         int64 `json:"clicks"`
-	UniqueVisitors int64 `json:"unique_visitors"`
+	Clicks         int64            `json:"clicks"`
+	TodayClicks    int64            `json:"today_clicks"`
+	UniqueVisitors int64            `json:"unique_visitors"`
+	BotVisits      int64            `json:"bot_visits"`
+	Sources        map[string]int64 `json:"sources"`
+	Devices        map[string]int64 `json:"devices"`
+	Browsers       map[string]int64 `json:"browsers"`
 }

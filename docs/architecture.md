@@ -23,6 +23,12 @@ while deployable data-plane services belong in `services`.
 makes a visited link appear unused. `GET /api/system/analytics` exposes the
 stream length for operations monitoring and backlog alerts.
 
+The same atomic operation maintains UTC daily clicks and source, device, and
+browser dimensions. Bot traffic has its own counter and is deliberately
+excluded from unique visitors. A per-link/per-visitor minute window rejects
+excess traffic before it can pollute counters; its threshold is configured with
+`VISIT_RATE_LIMIT_PER_MINUTE`.
+
 ## Privacy and source semantics
 
 Visitor identifiers are SHA-256 hashes of a secret key, client address, and
