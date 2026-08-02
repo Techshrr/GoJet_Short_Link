@@ -1,0 +1,171 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/gojet.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/user-console:/usr/share/nginx/html/app:ro
+      - ../frontend/admin-console:/usr/share/nginx/html/admin:ro
+      - ../frontend/marketing-site:/usr/share/nginx/html/site:ro
+      - uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      redirect-engine:
+        condition: service_healthy
+
+  redirect-engine:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HTTP_ADDRESS: :8080
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      VISITOR_HASH_KEY: ${VISITOR_HASH_KEY:?VISITOR_HASH_KEY is required}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
+      VISIT_RATE_LIMIT_PER_MINUTE: ${VISIT_RATE_LIMIT_PER_MINUTE:-60}
+    healthcheck:
+      test: ["CMD", "/redirect-engine", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  analytics-worker:
+    build:
+      context: ..
+      dockerfile: services/analytics-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      ANALYTICS_GROUP: gojet-mysql
+      ANALYTICS_CONSUMER: ${HOSTNAME:-worker-1}
+      ANALYTICS_BATCH_SIZE: ${ANALYTICS_BATCH_SIZE:-100}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+  analytics-reconciler:
+    build:
+      context: ..
+      dockerfile: services/analytics-reconciler/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      ANALYTICS_RECONCILE_BATCH: ${ANALYTICS_RECONCILE_BATCH:-500}
+      ANALYTICS_RECONCILE_INTERVAL_SECONDS: ${ANALYTICS_RECONCILE_INTERVAL_SECONDS:-60}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+  platform-api:
+    build:
+      context: ..
+      dockerfile: services/platform-api/Dockerfile
+    restart: unless-stopped
+    environment:
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:?ADMIN_BOOTSTRAP_EMAIL is required}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?ADMIN_BOOTSTRAP_PASSWORD is required}
+      REDIS_ADDRESS: redis:6379
+      ANALYTICS_GROUP: gojet-mysql
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      UPLOAD_STORAGE_PATH: /data/uploads
+      FILE_STORAGE_PATH: /data/files
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL is required}
+      QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
+    volumes:
+      - uploads:/data/uploads
+      - files:/data/files
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mail-worker:
+    build:
+      context: ..
+      dockerfile: services/platform-api/Dockerfile
+    entrypoint: ["/mail-worker"]
+    restart: unless-stopped
+    environment:
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  file-worker:
+    build:
+      context: ..
+      dockerfile: services/platform-api/Dockerfile
+    entrypoint: ["/file-worker"]
+    restart: unless-stopped
+    environment:
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      FILE_STORAGE_PATH: /data/files
+      CLAMAV_ADDRESS: clamav:3310
+    volumes:
+      - files:/data/files
+    depends_on:
+      mysql:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+
+  clamav:
+    image: clamav/clamav:1.4.5
+    restart: unless-stopped
+    volumes:
+      - clamav-data:/var/lib/clamav
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: gojet
+      MYSQL_USER: gojet
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  redis-data:
+  mysql-data:
+  uploads:
+  files:
+  clamav-data:

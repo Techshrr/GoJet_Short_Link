@@ -1,0 +1,12 @@
+.env
+deploy/.env.production
+backups/
+/server
+/analytics-worker
+*.log
+__pycache__/
+*.pyc
+node_modules/
+test-results/
+playwright-report/
+dist/
