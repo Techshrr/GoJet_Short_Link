@@ -7,7 +7,7 @@ import (
 )
 
 func (s *server) adminOverview(w http.ResponseWriter, r *http.Request) {
-	queries := map[string]string{"users": `SELECT COUNT(*) FROM users`, "workspaces": `SELECT COUNT(*) FROM workspaces`, "active_links": `SELECT COUNT(*) FROM short_links WHERE status='active'`, "today_clicks": `SELECT COALESCE(SUM(clicks),0) FROM analytics_daily WHERE metric_date=CURDATE()`, "mail_failures": `SELECT COUNT(*) FROM mail_messages WHERE status='failed'`, "abuse_reports": `SELECT COUNT(*) FROM abuse_reports WHERE status IN ('open','investigating')`, "domain_errors": `SELECT COUNT(*) FROM custom_domains WHERE status='error' OR https_status='error'`, "security_events": `SELECT COUNT(*) FROM security_events WHERE status='open' AND severity IN ('high','critical')`}
+	queries := map[string]string{"users": `SELECT COUNT(*) FROM users`, "workspaces": `SELECT COUNT(*) FROM workspaces`, "active_links": `SELECT COUNT(*) FROM short_links WHERE status='active'`, "today_clicks": `SELECT COALESCE(SUM(clicks),0) FROM analytics_daily WHERE metric_date=CURDATE()`, "mail_failures": `SELECT COUNT(*) FROM mail_messages WHERE status='failed'`, "abuse_reports": `SELECT COUNT(*) FROM abuse_reports WHERE status IN ('open','investigating')`, "domain_errors": `SELECT COUNT(*) FROM custom_domains WHERE status='error' OR https_status='error'`, "security_events": `SELECT COUNT(*) FROM security_events WHERE status='open' AND severity IN ('high','critical')`, "file_scan_backlog": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('pending','scanning')`, "file_scan_failures": `SELECT COUNT(*) FROM file_shares WHERE scan_status IN ('infected','error')`}
 	data := map[string]int64{}
 	for key, query := range queries {
 		var value int64

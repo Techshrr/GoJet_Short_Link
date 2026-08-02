@@ -30,9 +30,11 @@ services:
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?Set ADMIN_API_TOKEN in .env}
       REDIS_ADDRESS: redis:6379
       UPLOAD_STORAGE_PATH: /data/uploads
+      FILE_STORAGE_PATH: /data/files
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
     volumes:
       - uploads:/data/uploads
+      - files:/data/files
     ports: ["8090:8090"]
     depends_on:
       mysql:
@@ -50,6 +52,26 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+  file-worker:
+    build:
+      context: .
+      dockerfile: services/platform-api/Dockerfile
+    entrypoint: ["/file-worker"]
+    environment:
+      MYSQL_DSN: gojet:gojet@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      FILE_STORAGE_PATH: /data/files
+      CLAMAV_ADDRESS: clamav:3310
+    volumes:
+      - files:/data/files
+    depends_on:
+      mysql:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+  clamav:
+    image: clamav/clamav:1.4.5
+    volumes:
+      - clamav-data:/var/lib/clamav
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
@@ -78,3 +100,5 @@ volumes:
   redis-data:
   mysql-data:
   uploads:
+  files:
+  clamav-data:

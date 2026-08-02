@@ -6,6 +6,50 @@ import (
 	"time"
 )
 
+func (s *server) adminFiles(w http.ResponseWriter, r *http.Request) {
+	limit, offset := page(r)
+	status := r.URL.Query().Get("scan_status")
+	if status == "" {
+		status = "%"
+	}
+	rows, err := s.db.QueryContext(r.Context(), `SELECT f.id,f.slug,f.original_name,f.mime_type,f.size_bytes,f.scan_status,COALESCE(f.scan_result,''),f.scan_attempts,f.status,f.downloads,f.created_at,w.name,u.email FROM file_shares f JOIN workspaces w ON w.id=f.workspace_id JOIN users u ON u.id=f.created_by WHERE f.scan_status LIKE ? ORDER BY f.created_at DESC LIMIT ? OFFSET ?`, status, limit, offset)
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "文件安全队列暂时不可用"})
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id, size, attempts, downloads int64
+		var slug, name, mime, scanStatus, result, status, workspaceName, creator string
+		var created time.Time
+		if rows.Scan(&id, &slug, &name, &mime, &size, &scanStatus, &result, &attempts, &status, &downloads, &created, &workspaceName, &creator) == nil {
+			items = append(items, map[string]any{"id": id, "slug": slug, "name": name, "mime": mime, "size": size, "scan_status": scanStatus, "scan_result": result, "scan_attempts": attempts, "status": status, "downloads": downloads, "workspace": workspaceName, "creator": creator, "created_at": created})
+		}
+	}
+	jsonResponse(w, 200, map[string]any{"data": items})
+}
+
+func (s *server) adminRetryFileScan(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		jsonResponse(w, 400, map[string]string{"error": "文件编号无效"})
+		return
+	}
+	result, err := s.db.ExecContext(r.Context(), `UPDATE file_shares SET scan_status='pending',scan_result=NULL,next_scan_at=NOW() WHERE id=? AND scan_status='error'`, id)
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "重新扫描操作失败"})
+		return
+	}
+	changed, _ := result.RowsAffected()
+	if changed != 1 {
+		jsonResponse(w, 409, map[string]string{"error": "只有扫描异常的文件可以重试；病毒文件不能恢复"})
+		return
+	}
+	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id,metadata) VALUES('admin.file_scan_retried','file',?,JSON_OBJECT())`, id)
+	jsonResponse(w, 202, map[string]bool{"queued": true})
+}
+
 func (s *server) createAbuseReport(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		LinkID                 *int64 `json:"link_id"`

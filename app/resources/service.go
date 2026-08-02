@@ -25,11 +25,16 @@ type Service struct {
 	db         *sql.DB
 	workspaces *workspace.Service
 	uploadPath string
+	filePath   string
 	publicURL  string
 }
 
-func New(db *sql.DB, w *workspace.Service, path, publicURL string) *Service {
-	return &Service{db: db, workspaces: w, uploadPath: path, publicURL: strings.TrimRight(publicURL, "/")}
+func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL string) *Service {
+	return &Service{db: db, workspaces: w, uploadPath: uploadPath, filePath: filePath, publicURL: strings.TrimRight(publicURL, "/")}
+}
+
+func NewFileWorker(db *sql.DB, path string) *Service {
+	return &Service{db: db, filePath: path}
 }
 
 type TextShare struct {

@@ -18,6 +18,11 @@ cp deploy/.env.production.example deploy/.env.production
 安装器会拒绝占位密码，限制环境文件权限，构建镜像，启动 Redis/MySQL，逐个登记并执行数据库
 迁移，启动服务，并等待 `/health` 真实通过。生产环境文件不得提交 Git。
 
+生产 Compose 同时启动文件扫描 Worker 和固定版本的 ClamAV。隔离文件卷 `files` 只挂载到平台
+API 与扫描 Worker，绝不挂载到 Nginx；不要把它与公开的 `uploads` 品牌/二维码卷合并。ClamAV
+首次启动下载特征库期间，文件保持等待扫描或按退避规则重试，不会被错误地标记为安全。扫描
+积压、异常、检测结果与重试次数可在独立管理后台的“文件扫描”页面诊断。
+
 ## 升级
 
 ```sh

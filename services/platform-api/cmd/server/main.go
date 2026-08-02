@@ -58,7 +58,7 @@ func main() {
 		log.Fatal(err)
 	}
 	workspaceService := workspace.New(db)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("PUBLIC_BASE_URL", "http://localhost:8080")), adminToken: required("ADMIN_API_TOKEN")}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080")), adminToken: required("ADMIN_API_TOKEN")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
@@ -84,6 +84,8 @@ func main() {
 	mux.HandleFunc("PATCH /api/admin/security/{id}", s.admin(s.adminResolveSecurity))
 	mux.HandleFunc("GET /api/admin/announcements", s.admin(s.adminAnnouncements))
 	mux.HandleFunc("POST /api/admin/announcements", s.admin(s.adminCreateAnnouncement))
+	mux.HandleFunc("GET /api/admin/files", s.admin(s.adminFiles))
+	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin(s.adminRetryFileScan))
 	mux.HandleFunc("POST /api/mail/verification", s.user(s.queueVerification))
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)
@@ -112,6 +114,9 @@ func main() {
 	mux.HandleFunc("POST /api/workspaces/{id}/bio-pages", s.user(s.createBioPage))
 	mux.HandleFunc("GET /api/public/bio/{slug}", s.readBioPage)
 	mux.HandleFunc("POST /api/workspaces/{id}/qr-codes", s.user(s.createQRCode))
+	mux.HandleFunc("POST /api/workspaces/{id}/file-shares", s.user(s.createFileShare))
+	mux.HandleFunc("GET /api/workspaces/{id}/file-shares", s.user(s.listFileShares))
+	mux.HandleFunc("GET /api/public/files/{slug}", s.downloadFileShare)
 	address := getenv("PLATFORM_HTTP_ADDRESS", ":8090")
 	log.Printf("platform API listening on %s", address)
 	log.Fatal((&http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())
