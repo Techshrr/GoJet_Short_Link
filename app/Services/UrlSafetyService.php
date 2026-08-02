@@ -29,18 +29,18 @@ class UrlSafetyService
             throw new InvalidArgumentException('URLs containing embedded credentials are not allowed.');
         }
 
+        if (config('gojet.links.safety_check', true)
+            && config('gojet.block_private_targets')
+            && $this->isPrivateHost($host)) {
+            throw new InvalidArgumentException('Private, local, and reserved destinations are not allowed.');
+        }
+
         if ($this->isGoJetHost($host)) {
             throw new InvalidArgumentException('A short link cannot redirect back to a GoJet host.');
         }
 
-        if (config('gojet.links.safety_check', true)) {
-            if (config('gojet.block_private_targets') && $this->isPrivateHost($host)) {
-                throw new InvalidArgumentException('Private, local, and reserved destinations are not allowed.');
-            }
-
-            if ($this->isBlocked($host, $value)) {
-                throw new InvalidArgumentException('This destination is blocked by the platform safety policy.');
-            }
+        if (config('gojet.links.safety_check', true) && $this->isBlocked($host, $value)) {
+            throw new InvalidArgumentException('This destination is blocked by the platform safety policy.');
         }
 
         return $this->replaceHost($value, $host);
