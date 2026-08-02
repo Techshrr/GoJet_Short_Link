@@ -45,3 +45,29 @@ func TestValidateRoutingRequiresSafeDestinationsAndExactWeights(t *testing.T) {
 		t.Fatal("invalid total weight was accepted")
 	}
 }
+
+func TestSnapshotExcludesPasswordHashAndPreservesPolicies(t *testing.T) {
+	link := Link{Destination: "https://example.com", Title: "campaign", Status: "active", RedirectStatus: 302, PasswordHash: "secret-hash", TagIDs: []int64{3, 3, 8}, UTM: json.RawMessage(`{"utm_source":"email"}`), RoutingRules: json.RawMessage(`[{"dimension":"country","value":"CN","destination":"https://cn.example.com"}]`)}
+	raw := snapshot(link)
+	if strings.Contains(string(raw), "secret-hash") {
+		t.Fatal("password hash leaked into immutable version")
+	}
+	var decoded map[string]any
+	if json.Unmarshal(raw, &decoded) != nil || decoded["password_protected"] != true {
+		t.Fatalf("invalid snapshot %s", raw)
+	}
+	if tags, ok := decoded["tag_ids"].([]any); !ok || len(tags) != 2 {
+		t.Fatalf("tags were not normalized: %#v", decoded["tag_ids"])
+	}
+}
+
+func TestValidateEditableLinkRejectsUnsafeState(t *testing.T) {
+	link := Link{Destination: "javascript:alert(1)", Status: "active", RedirectStatus: 302}
+	if validateEditableLink(&link) == nil {
+		t.Fatal("unsafe destination accepted")
+	}
+	link = Link{Destination: "https://example.com", Status: "deleted", RedirectStatus: 302}
+	if validateEditableLink(&link) == nil {
+		t.Fatal("unsupported state accepted")
+	}
+}

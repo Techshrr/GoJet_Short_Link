@@ -146,6 +146,76 @@ func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 201, created)
 }
+func (s *server) getLink(w http.ResponseWriter, r *http.Request) {
+	wid, e1 := pathID(r, "id")
+	id, e2 := pathID(r, "link")
+	if e1 != nil || e2 != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid link"})
+		return
+	}
+	item, err := s.links.Get(r.Context(), currentUser(r).ID, wid, id)
+	if err != nil {
+		jsonResponse(w, 404, map[string]string{"error": "链接不存在或无权访问"})
+		return
+	}
+	jsonResponse(w, 200, item)
+}
+func (s *server) updateLink(w http.ResponseWriter, r *http.Request) {
+	wid, e1 := pathID(r, "id")
+	id, e2 := pathID(r, "link")
+	var input struct {
+		Link   links.Link `json:"link"`
+		Reason string     `json:"reason"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	if e1 != nil || e2 != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid link"})
+		return
+	}
+	item, err := s.links.Update(r.Context(), currentUser(r).ID, wid, id, input.Link, input.Reason)
+	if err != nil {
+		jsonResponse(w, 422, map[string]string{"error": err.Error()})
+		return
+	}
+	jsonResponse(w, 200, item)
+}
+func (s *server) linkVersions(w http.ResponseWriter, r *http.Request) {
+	wid, e1 := pathID(r, "id")
+	id, e2 := pathID(r, "link")
+	if e1 != nil || e2 != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid link"})
+		return
+	}
+	items, err := s.links.Versions(r.Context(), currentUser(r).ID, wid, id)
+	if err != nil {
+		jsonResponse(w, 403, map[string]string{"error": "无法读取版本历史"})
+		return
+	}
+	jsonResponse(w, 200, map[string]any{"data": items})
+}
+func (s *server) restoreLinkVersion(w http.ResponseWriter, r *http.Request) {
+	wid, e1 := pathID(r, "id")
+	id, e2 := pathID(r, "link")
+	revision, e3 := strconv.Atoi(r.PathValue("revision"))
+	var input struct {
+		Reason string `json:"reason"`
+	}
+	if decode(w, r, &input) != nil {
+		return
+	}
+	if e1 != nil || e2 != nil || e3 != nil {
+		jsonResponse(w, 400, map[string]string{"error": "invalid revision"})
+		return
+	}
+	item, err := s.links.Restore(r.Context(), currentUser(r).ID, wid, id, revision, input.Reason)
+	if err != nil {
+		jsonResponse(w, 422, map[string]string{"error": err.Error()})
+		return
+	}
+	jsonResponse(w, 200, item)
+}
 func (s *server) bulkLinkStatus(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")
 	if err != nil {

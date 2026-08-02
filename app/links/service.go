@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +29,7 @@ type Link struct {
 	RedirectStatus                           int
 	Password                                 string          `json:"password,omitempty"`
 	PasswordHash                             string          `json:"-"`
+	ClearPassword                            bool            `json:"clear_password,omitempty"`
 	ExpiresAt                                *string         `json:"expires_at,omitempty"`
 	MaxClicks                                *int64          `json:"max_clicks,omitempty"`
 	OneTime                                  bool            `json:"one_time"`
@@ -55,6 +57,15 @@ type Analytics struct {
 	Clicks, UniqueVisitors, BotVisits                                                                             int64 `json:",omitempty"`
 	Sources, Countries, Regions, Cities, Devices, Browsers, OperatingSystems, Languages, UTMSources, Destinations []Dimension
 	Recent                                                                                                        []map[string]any
+}
+type Version struct {
+	ID           int64           `json:"id"`
+	LinkID       int64           `json:"link_id"`
+	CreatedBy    int64           `json:"created_by"`
+	Revision     int             `json:"revision"`
+	Snapshot     json.RawMessage `json:"snapshot"`
+	ChangeReason string          `json:"change_reason"`
+	CreatedAt    string          `json:"created_at"`
 }
 
 func New(db *sql.DB, r *redis.Client, w *workspace.Service, quotas ...*billing.Service) *Service {
@@ -124,6 +135,7 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 			return Link{}, hashErr
 		}
 		l.PasswordHash = string(hash)
+		l.Password = ""
 	}
 	result, err := s.db.ExecContext(ctx, `INSERT INTO short_links(workspace_id,created_by,code,domain,destination,title,status,redirect_status,password_hash,expires_at,max_clicks,one_time,folder_id,campaign_id,utm,routing_rules,ab_destinations) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, workspaceID, userID, l.Code, l.Domain, l.Destination, l.Title, l.Status, l.RedirectStatus, nullable(l.PasswordHash), l.ExpiresAt, l.MaxClicks, l.OneTime, l.FolderID, l.CampaignID, nullableJSON(l.UTM), nullableJSON(l.RoutingRules), nullableJSON(l.ABDestinations))
 	if err != nil {
@@ -138,11 +150,179 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	}
 	l.WorkspaceID = workspaceID
 	l.CreatedBy = userID
+	if _, err = s.db.ExecContext(ctx, `INSERT INTO link_versions(link_id,revision,snapshot,change_reason,created_by) VALUES(?,1,?,'创建链接',?)`, l.ID, snapshot(l), userID); err != nil {
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM short_links WHERE id=?`, l.ID)
+		return Link{}, err
+	}
 	if err = s.syncRedis(ctx, l); err != nil {
 		_, _ = s.db.ExecContext(ctx, `DELETE FROM short_links WHERE id=?`, l.ID)
 		return Link{}, fmt.Errorf("redirect plane unavailable: %w", err)
 	}
 	return l, nil
+}
+
+func (s *Service) Get(ctx context.Context, userID, workspaceID, id int64) (Link, error) {
+	if _, err := s.workspaces.Role(ctx, workspaceID, userID); err != nil {
+		return Link{}, errors.New("forbidden")
+	}
+	var l Link
+	err := s.db.QueryRowContext(ctx, `SELECT id,workspace_id,created_by,code,domain,destination,title,status,redirect_status,COALESCE(password_hash,''),expires_at,max_clicks,one_time,folder_id,campaign_id,COALESCE(utm,JSON_OBJECT()),COALESCE(routing_rules,JSON_ARRAY()),COALESCE(ab_destinations,JSON_ARRAY()),created_at FROM short_links WHERE id=? AND workspace_id=? AND deleted_at IS NULL`, id, workspaceID).Scan(&l.ID, &l.WorkspaceID, &l.CreatedBy, &l.Code, &l.Domain, &l.Destination, &l.Title, &l.Status, &l.RedirectStatus, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime, &l.FolderID, &l.CampaignID, &l.UTM, &l.RoutingRules, &l.ABDestinations, &l.CreatedAt)
+	if err != nil {
+		return l, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT tag_id FROM link_tags WHERE link_id=? ORDER BY tag_id`, id)
+	if err != nil {
+		return l, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag int64
+		if rows.Scan(&tag) == nil {
+			l.TagIDs = append(l.TagIDs, tag)
+		}
+	}
+	l.Password = ""
+	return l, rows.Err()
+}
+
+func (s *Service) Versions(ctx context.Context, userID, workspaceID, id int64) ([]Version, error) {
+	if _, err := s.workspaces.Role(ctx, workspaceID, userID); err != nil {
+		return nil, errors.New("forbidden")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT v.id,v.link_id,v.revision,v.snapshot,v.change_reason,v.created_by,v.created_at FROM link_versions v JOIN short_links l ON l.id=v.link_id WHERE v.link_id=? AND l.workspace_id=? ORDER BY v.revision DESC`, id, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Version{}
+	for rows.Next() {
+		var item Version
+		if err = rows.Scan(&item.ID, &item.LinkID, &item.Revision, &item.Snapshot, &item.ChangeReason, &item.CreatedBy, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Service) Update(ctx context.Context, userID, workspaceID, id int64, next Link, reason string) (Link, error) {
+	role, err := s.workspaces.Role(ctx, workspaceID, userID)
+	if err != nil || !workspace.Allowed(role, "edit") {
+		return Link{}, errors.New("forbidden")
+	}
+	if strings.TrimSpace(reason) == "" || len(reason) > 255 {
+		return Link{}, errors.New("请填写不超过 255 字的变更原因")
+	}
+	if err = validateEditableLink(&next); err != nil {
+		return Link{}, err
+	}
+	if err = s.validateOrganization(ctx, workspaceID, next.FolderID, next.CampaignID, next.TagIDs); err != nil {
+		return Link{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Link{}, err
+	}
+	defer tx.Rollback()
+	var current Link
+	err = tx.QueryRowContext(ctx, `SELECT id,workspace_id,created_by,code,domain,destination,title,status,redirect_status,COALESCE(password_hash,''),expires_at,max_clicks,one_time,folder_id,campaign_id,COALESCE(utm,JSON_OBJECT()),COALESCE(routing_rules,JSON_ARRAY()),COALESCE(ab_destinations,JSON_ARRAY()) FROM short_links WHERE id=? AND workspace_id=? AND deleted_at IS NULL FOR UPDATE`, id, workspaceID).Scan(&current.ID, &current.WorkspaceID, &current.CreatedBy, &current.Code, &current.Domain, &current.Destination, &current.Title, &current.Status, &current.RedirectStatus, &current.PasswordHash, &current.ExpiresAt, &current.MaxClicks, &current.OneTime, &current.FolderID, &current.CampaignID, &current.UTM, &current.RoutingRules, &current.ABDestinations)
+	if err != nil {
+		return Link{}, err
+	}
+	next.ID, next.WorkspaceID, next.CreatedBy, next.Code, next.Domain = id, workspaceID, current.CreatedBy, current.Code, current.Domain
+	next.PasswordHash = current.PasswordHash
+	if next.ClearPassword {
+		next.PasswordHash = ""
+	}
+	if next.Password != "" {
+		if len(next.Password) < 6 {
+			return Link{}, errors.New("访问密码至少需要 6 位")
+		}
+		hash, e := bcrypt.GenerateFromPassword([]byte(next.Password), 12)
+		if e != nil {
+			return Link{}, e
+		}
+		next.PasswordHash = string(hash)
+		next.Password = ""
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE short_links SET destination=?,title=?,status=?,redirect_status=?,password_hash=?,expires_at=?,max_clicks=?,one_time=?,folder_id=?,campaign_id=?,utm=?,routing_rules=?,ab_destinations=? WHERE id=?`, next.Destination, next.Title, next.Status, next.RedirectStatus, nullable(next.PasswordHash), next.ExpiresAt, next.MaxClicks, next.OneTime, next.FolderID, next.CampaignID, nullableJSON(next.UTM), nullableJSON(next.RoutingRules), nullableJSON(next.ABDestinations), id); err != nil {
+		return Link{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM link_tags WHERE link_id=?`, id); err != nil {
+		return Link{}, err
+	}
+	for _, tagID := range uniqueIDs(next.TagIDs) {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO link_tags(link_id,tag_id) VALUES(?,?)`, id, tagID); err != nil {
+			return Link{}, err
+		}
+	}
+	var revision int
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(revision),0)+1 FROM link_versions WHERE link_id=?`, id).Scan(&revision); err != nil {
+		return Link{}, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO link_versions(link_id,revision,snapshot,change_reason,created_by) VALUES(?,?,?,?,?)`, id, revision, snapshot(next), reason, userID); err != nil {
+		return Link{}, err
+	}
+	if err = s.syncRedis(ctx, next); err != nil {
+		return Link{}, fmt.Errorf("redirect plane unavailable: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		_ = s.syncRedis(ctx, current)
+		return Link{}, err
+	}
+	return next, nil
+}
+
+func (s *Service) Restore(ctx context.Context, userID, workspaceID, id int64, revision int, reason string) (Link, error) {
+	if strings.TrimSpace(reason) == "" {
+		return Link{}, errors.New("恢复版本前必须填写原因")
+	}
+	var raw json.RawMessage
+	if err := s.db.QueryRowContext(ctx, `SELECT v.snapshot FROM link_versions v JOIN short_links l ON l.id=v.link_id WHERE v.link_id=? AND v.revision=? AND l.workspace_id=?`, id, revision, workspaceID).Scan(&raw); err != nil {
+		return Link{}, err
+	}
+	var next Link
+	if err := json.Unmarshal(raw, &next); err != nil {
+		return Link{}, err
+	}
+	return s.Update(ctx, userID, workspaceID, id, next, "恢复版本 "+strconv.Itoa(revision)+"："+reason)
+}
+
+func validateEditableLink(l *Link) error {
+	u, err := url.ParseRequestURI(l.Destination)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("目标地址必须是完整的 HTTP(S) URL")
+	}
+	if l.Status != "active" && l.Status != "paused" && l.Status != "expired" {
+		return errors.New("链接状态无效")
+	}
+	if l.RedirectStatus == 0 {
+		l.RedirectStatus = 302
+	}
+	if l.MaxClicks != nil && *l.MaxClicks < 1 {
+		return errors.New("最大点击量必须大于零")
+	}
+	if l.RedirectStatus != 301 && l.RedirectStatus != 302 && l.RedirectStatus != 307 && l.RedirectStatus != 308 {
+		return errors.New("跳转状态码无效")
+	}
+	if l.ExpiresAt != nil && *l.ExpiresAt != "" {
+		parsed, e := time.Parse(time.RFC3339, *l.ExpiresAt)
+		if e != nil {
+			parsed, e = time.Parse("2006-01-02T15:04", *l.ExpiresAt)
+		}
+		if e != nil {
+			return errors.New("有效期格式无效")
+		}
+		normalized := parsed.UTC().Format(time.RFC3339)
+		l.ExpiresAt = &normalized
+	}
+	return validateRouting(l.RoutingRules, l.ABDestinations, l.UTM)
+}
+
+func snapshot(l Link) []byte {
+	value := map[string]any{"destination": l.Destination, "title": l.Title, "status": l.Status, "redirect_status": l.RedirectStatus, "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "folder_id": l.FolderID, "campaign_id": l.CampaignID, "tag_ids": uniqueIDs(l.TagIDs), "utm": jsonValue(l.UTM, map[string]string{}), "routing_rules": jsonValue(l.RoutingRules, []any{}), "ab_destinations": jsonValue(l.ABDestinations, []any{}), "password_protected": l.PasswordHash != ""}
+	encoded, _ := json.Marshal(value)
+	return encoded
 }
 func (s *Service) syncRedis(ctx context.Context, l Link) error {
 	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "domain": l.Domain, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash, "utm": jsonValue(l.UTM, map[string]string{}), "routing_rules": jsonValue(l.RoutingRules, []any{}), "ab_destinations": jsonValue(l.ABDestinations, []any{})})
