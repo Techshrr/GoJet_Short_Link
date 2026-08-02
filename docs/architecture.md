@@ -15,9 +15,10 @@ while deployable data-plane services belong in `services`.
 3. A redirect is returned only after Redis acknowledges the durable stream
    append. An unavailable analytics store produces a recoverable 503 rather
    than silently losing the visit or displaying a false zero.
-4. The analytics worker (next delivery slice) consumes the stream with a
-   consumer group, writes batches to MySQL, acknowledges successful rows, and
-   reconciles MySQL aggregates against the Redis counters.
+4. The analytics worker consumes the stream with a consumer group, writes
+   idempotent events and daily aggregates to MySQL, and acknowledges only
+   successful transactions. Parsing and database failures remain pending and
+   are recorded in `analytics_worker_failures` for diagnosis.
 
 `GET /api/links/{id}/stats` reads live Redis values, so a delayed worker never
 makes a visited link appear unused. `GET /api/system/analytics` exposes the

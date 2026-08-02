@@ -8,6 +8,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+  analytics-worker:
+    build:
+      context: .
+      dockerfile: services/analytics-worker/Dockerfile
+    environment:
+      REDIS_ADDRESS: redis:6379
+      MYSQL_DSN: gojet:gojet@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+    depends_on:
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
@@ -17,5 +29,21 @@ services:
       interval: 2s
       timeout: 1s
       retries: 10
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: gojet
+      MYSQL_USER: gojet
+      MYSQL_PASSWORD: gojet
+      MYSQL_ROOT_PASSWORD: local-root-password
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-plocal-root-password"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
 volumes:
   redis-data:
+  mysql-data:
