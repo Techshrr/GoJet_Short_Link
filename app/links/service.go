@@ -72,6 +72,13 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	if l.RedirectStatus != 301 && l.RedirectStatus != 302 && l.RedirectStatus != 307 && l.RedirectStatus != 308 {
 		return Link{}, errors.New("跳转状态码无效")
 	}
+	if l.Domain != "" {
+		l.Domain = strings.ToLower(strings.TrimSuffix(l.Domain, "."))
+		var count int
+		if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM custom_domains WHERE workspace_id=? AND hostname=? AND status='active' AND https_status='active'`, workspaceID, l.Domain).Scan(&count); err != nil || count == 0 {
+			return Link{}, errors.New("自定义域名尚未完成 DNS 与 HTTPS 验证")
+		}
+	}
 	if l.ExpiresAt != nil && *l.ExpiresAt != "" {
 		parsed, parseErr := time.Parse(time.RFC3339, *l.ExpiresAt)
 		if parseErr != nil {
@@ -108,8 +115,20 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	return l, nil
 }
 func (s *Service) syncRedis(ctx context.Context, l Link) error {
-	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash})
-	return s.redis.Set(ctx, "gojet:link:"+l.Code, payload, 0).Err()
+	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "domain": l.Domain, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash})
+	key := l.Code
+	if l.Domain != "" {
+		key = l.Domain + "|" + l.Code
+	}
+	return s.redis.Set(ctx, "gojet:link:"+key, payload, 0).Err()
+}
+func (s *Service) SyncByID(ctx context.Context, id int64) error {
+	var l Link
+	err := s.db.QueryRowContext(ctx, `SELECT id,code,domain,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time FROM short_links WHERE id=?`, id).Scan(&l.ID, &l.Code, &l.Domain, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime)
+	if err != nil {
+		return err
+	}
+	return s.syncRedis(ctx, l)
 }
 func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter) ([]Link, int64, error) {
 	if _, err := s.workspaces.Role(ctx, workspaceID, userID); err != nil {
@@ -180,12 +199,12 @@ func (s *Service) BulkStatus(ctx context.Context, userID, workspaceID int64, ids
 	if err = tx.Commit(); err != nil {
 		return 0, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,code,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time FROM short_links WHERE workspace_id=?`, workspaceID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,code,domain,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time FROM short_links WHERE workspace_id=?`, workspaceID)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var l Link
-			_ = rows.Scan(&l.ID, &l.Code, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime)
+			_ = rows.Scan(&l.ID, &l.Code, &l.Domain, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime)
 			_ = s.syncRedis(ctx, l)
 		}
 	}

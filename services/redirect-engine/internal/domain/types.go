@@ -5,6 +5,7 @@ import "time"
 type Link struct {
 	ID           string     `json:"id"`
 	Code         string     `json:"code"`
+	Domain       string     `json:"domain,omitempty"`
 	Destination  string     `json:"destination"`
 	StatusCode   int        `json:"status_code"`
 	Active       bool       `json:"active"`

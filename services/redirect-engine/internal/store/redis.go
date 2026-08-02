@@ -98,14 +98,24 @@ func readRESP(r *bufio.Reader) (any, error) {
 
 func (s *RedisStore) SaveLink(ctx context.Context, l domain.Link) error {
 	b, _ := json.Marshal(l)
-	_, e := s.command(ctx, "SET", "gojet:link:"+l.Code, string(b))
+	key := l.Code
+	if l.Domain != "" {
+		key = l.Domain + "|" + l.Code
+	}
+	_, e := s.command(ctx, "SET", "gojet:link:"+key, string(b))
 	return e
 }
-func (s *RedisStore) FindLink(ctx context.Context, code string) (domain.Link, error) {
+func (s *RedisStore) FindLink(ctx context.Context, host, code string) (domain.Link, error) {
 	var l domain.Link
-	v, e := s.command(ctx, "GET", "gojet:link:"+code)
+	v, e := s.command(ctx, "GET", "gojet:link:"+host+"|"+code)
 	if e != nil {
 		return l, e
+	}
+	if v == nil {
+		v, e = s.command(ctx, "GET", "gojet:link:"+code)
+		if e != nil {
+			return l, e
+		}
 	}
 	if v == nil {
 		return l, ErrNotFound

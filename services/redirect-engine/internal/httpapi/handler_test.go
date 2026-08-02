@@ -217,6 +217,26 @@ func TestPasswordProtectedLinkUsesHttpOnlyUnlockCookie(t *testing.T) {
 		t.Fatalf("redirect status=%d", redirected.StatusCode)
 	}
 }
+func TestCustomDomainsResolveSameCodeIndependently(t *testing.T) {
+	memory := store.NewMemory()
+	_ = memory.SaveLink(context.Background(), domain.Link{ID: "a", Code: "go", Domain: "a.example", Destination: "https://destination.example/a", StatusCode: 302, Active: true})
+	_ = memory.SaveLink(context.Background(), domain.Link{ID: "b", Code: "go", Domain: "b.example", Destination: "https://destination.example/b", StatusCode: 302, Active: true})
+	server := httptest.NewServer(httpapi.New(memory, "secret"))
+	defer server.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for host, want := range map[string]string{"a.example": "https://destination.example/a", "b.example": "https://destination.example/b"} {
+		request, _ := http.NewRequest("GET", server.URL+"/go", nil)
+		request.Host = host
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.Header.Get("Location") != want {
+			t.Fatalf("host=%s location=%s want=%s", host, response.Header.Get("Location"), want)
+		}
+	}
+}
 
 func createTestLink(t *testing.T, baseURL string) {
 	t.Helper()

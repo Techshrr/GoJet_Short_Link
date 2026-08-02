@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"github.com/Techshrr/GoJet_Short_Link/app/domains"
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 	"github.com/Techshrr/GoJet_Short_Link/app/links"
 	appmail "github.com/Techshrr/GoJet_Short_Link/app/mail"
@@ -27,6 +28,7 @@ type server struct {
 	identity   *identity.Service
 	workspace  *workspace.Service
 	links      *links.Service
+	domains    *domains.Service
 	adminToken string
 }
 
@@ -53,7 +55,7 @@ func main() {
 		log.Fatal(err)
 	}
 	workspaceService := workspace.New(db)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), adminToken: required("ADMIN_API_TOKEN")}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), adminToken: required("ADMIN_API_TOKEN")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
@@ -71,6 +73,13 @@ func main() {
 	mux.HandleFunc("GET /api/admin/workspaces", s.admin(s.adminWorkspaces))
 	mux.HandleFunc("GET /api/admin/links", s.admin(s.adminLinks))
 	mux.HandleFunc("GET /api/admin/audit", s.admin(s.adminAudit))
+	mux.HandleFunc("GET /api/admin/abuse", s.admin(s.adminAbuse))
+	mux.HandleFunc("PATCH /api/admin/abuse/{id}", s.admin(s.adminResolveAbuse))
+	mux.HandleFunc("GET /api/admin/domains", s.admin(s.adminDomains))
+	mux.HandleFunc("GET /api/admin/security", s.admin(s.adminSecurityEvents))
+	mux.HandleFunc("PATCH /api/admin/security/{id}", s.admin(s.adminResolveSecurity))
+	mux.HandleFunc("GET /api/admin/announcements", s.admin(s.adminAnnouncements))
+	mux.HandleFunc("POST /api/admin/announcements", s.admin(s.adminCreateAnnouncement))
 	mux.HandleFunc("POST /api/mail/verification", s.user(s.queueVerification))
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)
@@ -90,6 +99,10 @@ func main() {
 	mux.HandleFunc("POST /api/workspaces/{id}/links", s.user(s.createLink))
 	mux.HandleFunc("PATCH /api/workspaces/{id}/links/bulk-status", s.user(s.bulkLinkStatus))
 	mux.HandleFunc("GET /api/workspaces/{id}/links/{link}/analytics", s.user(s.linkAnalytics))
+	mux.HandleFunc("GET /api/workspaces/{id}/domains", s.user(s.listDomains))
+	mux.HandleFunc("POST /api/workspaces/{id}/domains", s.user(s.createDomain))
+	mux.HandleFunc("POST /api/workspaces/{id}/domains/{domain}/verify", s.user(s.verifyDomain))
+	mux.HandleFunc("POST /api/abuse-reports", s.createAbuseReport)
 	address := getenv("PLATFORM_HTTP_ADDRESS", ":8090")
 	log.Printf("platform API listening on %s", address)
 	log.Fatal((&http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())

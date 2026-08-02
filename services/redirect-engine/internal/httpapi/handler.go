@@ -85,7 +85,11 @@ func (h *Handler) analytics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]int64{"stream_backlog": n})
 }
 func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
-	l, err := h.store.FindLink(r.Context(), r.PathValue("code"))
+	host, _, splitErr := net.SplitHostPort(r.Host)
+	if splitErr != nil {
+		host = r.Host
+	}
+	l, err := h.store.FindLink(r.Context(), strings.ToLower(host), r.PathValue("code"))
 	if errors.Is(err, store.ErrNotFound) || !l.Active {
 		writeJSON(w, 404, map[string]string{"error": "short link not found"})
 		return
@@ -120,7 +124,11 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) unlock(w http.ResponseWriter, r *http.Request) {
-	l, err := h.store.FindLink(r.Context(), r.PathValue("code"))
+	host, _, splitErr := net.SplitHostPort(r.Host)
+	if splitErr != nil {
+		host = r.Host
+	}
+	l, err := h.store.FindLink(r.Context(), strings.ToLower(host), r.PathValue("code"))
 	if err != nil || !l.Active {
 		writeJSON(w, 404, map[string]string{"error": "short link not found"})
 		return

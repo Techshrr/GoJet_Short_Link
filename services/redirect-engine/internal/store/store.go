@@ -15,7 +15,7 @@ var ErrExhausted = errors.New("link visit policy exhausted")
 
 type Store interface {
 	SaveLink(context.Context, domain.Link) error
-	FindLink(context.Context, string) (domain.Link, error)
+	FindLink(context.Context, string, string) (domain.Link, error)
 	RecordVisit(context.Context, domain.Visit) error
 	Stats(context.Context, string) (domain.Stats, error)
 	Backlog(context.Context) (int64, error)
@@ -44,13 +44,20 @@ func NewMemoryWithLimit(limit int) *MemoryStore {
 func (s *MemoryStore) SaveLink(_ context.Context, l domain.Link) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.links[l.Code] = l
+	key := l.Code
+	if l.Domain != "" {
+		key = l.Domain + "|" + l.Code
+	}
+	s.links[key] = l
 	return nil
 }
-func (s *MemoryStore) FindLink(_ context.Context, code string) (domain.Link, error) {
+func (s *MemoryStore) FindLink(_ context.Context, host, code string) (domain.Link, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	l, ok := s.links[code]
+	l, ok := s.links[host+"|"+code]
+	if !ok {
+		l, ok = s.links[code]
+	}
 	if !ok {
 		return l, ErrNotFound
 	}
