@@ -26,6 +26,9 @@ type Service struct {
 
 func New(db *sql.DB) *Service { return &Service{db: db, sessionTTL: 30 * 24 * time.Hour} }
 func (s *Service) Register(ctx context.Context, email, password, name string) (User, string, error) {
+	return s.RegisterWithMetadata(ctx, email, password, name, "", "")
+}
+func (s *Service) RegisterWithMetadata(ctx context.Context, email, password, name, ip, userAgent string) (User, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !strings.Contains(email, "@") || len(password) < 10 || name == "" {
 		return User{}, "", errors.New("邮箱、显示名称和至少 10 位密码为必填项")
@@ -56,7 +59,7 @@ func (s *Service) Register(ctx context.Context, email, password, name string) (U
 	if err != nil {
 		return User{}, "", err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,expires_at) VALUES(?,?,?)`, tokenHash, id, time.Now().Add(s.sessionTTL)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, id, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL)); err != nil {
 		return User{}, "", err
 	}
 	if err = tx.Commit(); err != nil {
@@ -65,6 +68,9 @@ func (s *Service) Register(ctx context.Context, email, password, name string) (U
 	return User{ID: id, Email: email, DisplayName: name, Status: "active"}, token, nil
 }
 func (s *Service) Login(ctx context.Context, email, password string) (User, string, error) {
+	return s.LoginWithMetadata(ctx, email, password, "", "")
+}
+func (s *Service) LoginWithMetadata(ctx context.Context, email, password, ip, userAgent string) (User, string, error) {
 	var user User
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name,status,password_hash,email_verified_at IS NOT NULL FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Status, &hash, &user.EmailVerified)
@@ -75,13 +81,17 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, stri
 	if err != nil {
 		return User{}, "", err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,expires_at) VALUES(?,?,?)`, tokenHash, user.ID, time.Now().Add(s.sessionTTL))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL))
 	return user, token, err
 }
 func (s *Service) Authenticate(ctx context.Context, token string) (User, error) {
 	sum := sha256.Sum256([]byte(token))
 	var u User
-	err := s.db.QueryRowContext(ctx, `SELECT u.id,u.email,u.display_name,u.status,u.email_verified_at IS NOT NULL FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.expires_at>NOW() AND u.status='active'`, hex.EncodeToString(sum[:])).Scan(&u.ID, &u.Email, &u.DisplayName, &u.Status, &u.EmailVerified)
+	id := hex.EncodeToString(sum[:])
+	err := s.db.QueryRowContext(ctx, `SELECT u.id,u.email,u.display_name,u.status,u.email_verified_at IS NOT NULL FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.expires_at>NOW() AND s.revoked_at IS NULL AND u.status='active'`, id).Scan(&u.ID, &u.Email, &u.DisplayName, &u.Status, &u.EmailVerified)
+	if err == nil {
+		_, _ = s.db.ExecContext(ctx, `UPDATE user_sessions SET last_seen_at=NOW() WHERE id=? AND last_seen_at<DATE_SUB(NOW(),INTERVAL 5 MINUTE)`, id)
+	}
 	return u, err
 }
 func (s *Service) CreateVerification(ctx context.Context, userID int64) (string, error) {
@@ -120,4 +130,17 @@ func newToken() (string, string, error) {
 	token := hex.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(token))
 	return token, hex.EncodeToString(sum[:]), nil
+}
+
+func nullable(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+func truncate(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
 }

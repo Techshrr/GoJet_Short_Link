@@ -25,18 +25,19 @@ import (
 )
 
 type server struct {
-	db        *sql.DB
-	settings  *settings.Store
-	mail      *appmail.Service
-	identity  *identity.Service
-	workspace *workspace.Service
-	links     *links.Service
-	domains   *domains.Service
-	redis     *redis.Client
-	resources *appresources.Service
-	organizer *organization.Service
-	billing   *billing.Service
-	adminAuth *adminauth.Service
+	db             *sql.DB
+	settings       *settings.Store
+	mail           *appmail.Service
+	identity       *identity.Service
+	workspace      *workspace.Service
+	links          *links.Service
+	domains        *domains.Service
+	redis          *redis.Client
+	resources      *appresources.Service
+	organizer      *organization.Service
+	billing        *billing.Service
+	adminAuth      *adminauth.Service
+	analyticsGroup string
 }
 
 func main() {
@@ -67,7 +68,7 @@ func main() {
 	if err = adminAuth.Bootstrap(context.Background(), required("ADMIN_BOOTSTRAP_EMAIL"), required("ADMIN_BOOTSTRAP_PASSWORD")); err != nil {
 		log.Fatal(err)
 	}
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminAuth: adminAuth}
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminAuth: adminAuth, analyticsGroup: getenv("ANALYTICS_GROUP", "gojet-mysql")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
@@ -109,6 +110,16 @@ func main() {
 	mux.HandleFunc("POST /api/admin/announcements", s.admin("content.manage", s.adminCreateAnnouncement))
 	mux.HandleFunc("GET /api/admin/files", s.admin("security.manage", s.adminFiles))
 	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin("security.manage", s.adminRetryFileScan))
+	mux.HandleFunc("GET /api/admin/users/{id}/sessions", s.admin("users.manage", s.adminUserSessions))
+	mux.HandleFunc("DELETE /api/admin/users/{id}/sessions/{session}", s.admin("users.manage", s.adminRevokeUserSession))
+	mux.HandleFunc("GET /api/admin/resources", s.admin("security.manage", s.adminResources))
+	mux.HandleFunc("GET /api/admin/resource-inventory", s.admin("security.manage", s.adminResourceInventory))
+	mux.HandleFunc("POST /api/admin/resources/{type}/{id}/quarantine", s.admin("security.manage", s.adminQuarantineResource))
+	mux.HandleFunc("POST /api/admin/quarantine/{id}/restore", s.admin("security.manage", s.adminRestoreResource))
+	mux.HandleFunc("GET /api/admin/diagnostics", s.admin("settings.manage", s.adminDiagnostics))
+	mux.HandleFunc("POST /api/admin/diagnostics/reconcile", s.admin("settings.manage", s.adminRunReconciliation))
+	mux.HandleFunc("POST /api/admin/diagnostics/cache/flush", s.admin("settings.manage", s.adminFlushCache))
+	mux.HandleFunc("PUT /api/admin/diagnostics/maintenance", s.admin("settings.manage", s.adminMaintenance))
 	mux.HandleFunc("POST /api/mail/verification", s.user(s.queueVerification))
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)
@@ -172,7 +183,26 @@ func main() {
 	mux.HandleFunc("GET /api/public/files/{slug}", s.downloadFileShare)
 	address := getenv("PLATFORM_HTTP_ADDRESS", ":8090")
 	log.Printf("platform API listening on %s", address)
-	log.Fatal((&http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())
+	log.Fatal((&http.Server{Addr: address, Handler: s.maintenance(mux), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())
+}
+
+func (s *server) maintenance(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || strings.HasPrefix(r.URL.Path, "/api/admin/")
+		if !allowed {
+			value, exists, err := s.settings.Get(r.Context(), "system.maintenance_mode")
+			if err != nil {
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统状态暂时无法确认"})
+				return
+			}
+			if exists && value == "true" {
+				w.Header().Set("Retry-After", "300")
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "GoJet 正在维护，请稍后重试"})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type mailInput struct {

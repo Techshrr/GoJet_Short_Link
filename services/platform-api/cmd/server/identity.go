@@ -35,7 +35,7 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 403, map[string]string{"error": "当前未开放注册"})
 		return
 	}
-	u, token, err := s.identity.Register(r.Context(), in.Email, in.Password, in.DisplayName)
+	u, token, err := s.identity.RegisterWithMetadata(r.Context(), in.Email, in.Password, in.DisplayName, clientIP(r), r.UserAgent())
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
@@ -50,7 +50,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &in) != nil {
 		return
 	}
-	u, token, err := s.identity.Login(r.Context(), in.Email, in.Password)
+	u, token, err := s.identity.LoginWithMetadata(r.Context(), in.Email, in.Password, clientIP(r), r.UserAgent())
 	if err != nil {
 		jsonResponse(w, 401, map[string]string{"error": "邮箱或密码错误"})
 		return
