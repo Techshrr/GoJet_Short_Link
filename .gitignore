@@ -4,3 +4,5 @@ backups/
 server
 analytics-worker
 *.log
+__pycache__/
+*.pyc
