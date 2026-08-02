@@ -48,6 +48,32 @@ services:
       mysql:
         condition: service_healthy
 
+  platform-api:
+    build:
+      context: ..
+      dockerfile: services/platform-api/Dockerfile
+    restart: unless-stopped
+    environment:
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN is required}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mail-worker:
+    build:
+      context: ..
+      dockerfile: services/platform-api/Dockerfile
+    entrypoint: ["/mail-worker"]
+    restart: unless-stopped
+    environment:
+      MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped

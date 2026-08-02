@@ -20,6 +20,29 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+  platform-api:
+    build:
+      context: .
+      dockerfile: services/platform-api/Dockerfile
+    environment:
+      MYSQL_DSN: gojet:gojet@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?Set SETTINGS_ENCRYPTION_KEY in .env}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?Set ADMIN_API_TOKEN in .env}
+    ports: ["8090:8090"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mail-worker:
+    build:
+      context: .
+      dockerfile: services/platform-api/Dockerfile
+    entrypoint: ["/mail-worker"]
+    environment:
+      MYSQL_DSN: gojet:gojet@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?Set SETTINGS_ENCRYPTION_KEY in .env}
+    depends_on:
+      mysql:
+        condition: service_healthy
   redis:
     image: redis:7.4-alpine
     command: redis-server --appendonly yes
