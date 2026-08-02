@@ -12,6 +12,7 @@ use App\Services\ShortCodeGenerator;
 use App\Services\UrlSafetyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -249,7 +250,7 @@ class LinkController extends Controller
         return ['dark' => $data['qr_dark'] ?? '#0f172a', 'light' => $data['qr_light'] ?? '#ffffff', 'level' => $data['qr_level'] ?? 'M'];
     }
 
-    private function defaultExpiration(): ?\Illuminate\Support\Carbon
+    private function defaultExpiration(): ?Carbon
     {
         $days = config('gojet.links.default_expiration_days');
 

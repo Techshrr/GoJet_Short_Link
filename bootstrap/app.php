@@ -1,11 +1,11 @@
 <?php
 
 use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\EnforceSiteMaintenance;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureFeatureEnabled;
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureWorkspaceAccess;
-use App\Http\Middleware\EnforceSiteMaintenance;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;

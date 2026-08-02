@@ -11,6 +11,7 @@ use App\Services\ShortCodeGenerator;
 use App\Services\UrlSafetyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -159,7 +160,7 @@ class LinkController extends Controller
         abort_unless($link->workspace_id === $request->attributes->get('workspace')?->id, 404);
     }
 
-    private function defaultExpiration(): ?\Illuminate\Support\Carbon
+    private function defaultExpiration(): ?Carbon
     {
         $days = config('gojet.links.default_expiration_days');
 

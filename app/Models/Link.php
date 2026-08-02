@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\RedirectPayloadService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -124,7 +125,6 @@ class Link extends Model
             && (! $this->max_clicks || $this->clicks_count < $this->max_clicks);
     }
 
-
     public function shortUrl(): string
     {
         $scheme = config('gojet.links.force_https', true)
@@ -143,6 +143,6 @@ class Link extends Model
     {
         Cache::forget($this->cacheKey());
 
-        app(\App\Services\RedirectPayloadService::class)->forget($this);
+        app(RedirectPayloadService::class)->forget($this);
     }
 }

@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\EnvironmentWriter;
 use App\Services\MailDeliveryService;
 use App\Services\SiteConfiguration;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -120,7 +121,7 @@ class AdminSettingsController extends Controller
         $data = $request->validate([
             'admin_path' => [
                 'required', 'string', 'min:4', 'max:40', 'regex:/^[a-z0-9][a-z0-9-]+$/',
-                function (string $attribute, mixed $value, \Closure $fail): void {
+                function (string $attribute, mixed $value, Closure $fail): void {
                     if (in_array($value, self::RESERVED, true)) {
                         $fail('该路径属于系统保留路径。');
                     }

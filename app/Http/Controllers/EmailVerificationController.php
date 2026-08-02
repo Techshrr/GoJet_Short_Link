@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\MailDeliveryService;
+use App\Services\SiteConfiguration;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class EmailVerificationController extends Controller
 
         return view('account-access', [
             'mode' => 'verify',
-            'mailReady' => app(\App\Services\SiteConfiguration::class)->isMailReady(),
+            'mailReady' => app(SiteConfiguration::class)->isMailReady(),
         ]);
     }
 

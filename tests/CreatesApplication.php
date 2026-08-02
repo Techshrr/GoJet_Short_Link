@@ -2,7 +2,7 @@
 
 namespace Tests;
 
-use IlluminateFoundationApplication;
+use Illuminate\Foundation\Application;
 
 trait CreatesApplication
 {

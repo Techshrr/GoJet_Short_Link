@@ -303,7 +303,6 @@ class SiteConfiguration
         ];
     }
 
-
     private function maintenanceDefaults(): array
     {
         return [

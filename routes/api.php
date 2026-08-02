@@ -12,7 +12,6 @@ use App\Http\Controllers\Api\WebhookController;
 use App\Http\Controllers\InternalRedirectController;
 use Illuminate\Support\Facades\Route;
 
-
 Route::prefix('internal/v1')->middleware('throttle:1200,1')->group(function (): void {
     Route::post('/click', [InternalRedirectController::class, 'click']);
 });
