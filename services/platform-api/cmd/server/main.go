@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 	"github.com/Techshrr/GoJet_Short_Link/app/domains"
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 	"github.com/Techshrr/GoJet_Short_Link/app/links"
@@ -34,6 +35,7 @@ type server struct {
 	redis      *redis.Client
 	resources  *appresources.Service
 	organizer  *organization.Service
+	billing    *billing.Service
 	adminToken string
 }
 
@@ -59,8 +61,9 @@ func main() {
 	if err = rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatal(err)
 	}
-	workspaceService := workspace.New(db)
-	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")), organizer: organization.New(db, rdb, workspaceService), adminToken: required("ADMIN_API_TOKEN")}
+	billingService := billing.New(db)
+	workspaceService := workspace.New(db, billingService)
+	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminToken: required("ADMIN_API_TOKEN")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
@@ -95,6 +98,7 @@ func main() {
 	mux.HandleFunc("GET /api/me", s.user(s.me))
 	mux.HandleFunc("POST /api/workspaces", s.user(s.createWorkspace))
 	mux.HandleFunc("GET /api/workspaces", s.user(s.listWorkspaces))
+	mux.HandleFunc("GET /api/workspaces/{id}/overview", s.user(s.workspaceOverview))
 	mux.HandleFunc("POST /api/workspaces/{id}/invitations", s.user(s.invite))
 	mux.HandleFunc("GET /api/workspaces/{id}/members", s.user(s.workspaceMembers))
 	mux.HandleFunc("POST /api/workspaces/{id}/invitations/{invitation}/resend", s.user(s.resendInvite))

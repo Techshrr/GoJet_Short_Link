@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 	"github.com/Techshrr/GoJet_Short_Link/app/workspace"
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/crypto/bcrypt"
@@ -30,6 +31,12 @@ type Service struct {
 	filePath   string
 	publicURL  string
 	qrKey      string
+	billing    *billing.Service
+}
+
+func (s *Service) WithBilling(quotas *billing.Service) *Service {
+	s.billing = quotas
+	return s
 }
 
 func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL string, qrKey ...string) *Service {
@@ -92,6 +99,11 @@ func (s *Service) canEdit(ctx context.Context, user, wid int64) error {
 func (s *Service) CreateText(ctx context.Context, user, wid int64, item TextShare, password string) (TextShare, error) {
 	if err := s.canEdit(ctx, user, wid); err != nil {
 		return item, err
+	}
+	if s.billing != nil {
+		if err := s.billing.Check(ctx, wid, "texts", 1); err != nil {
+			return item, err
+		}
 	}
 	item.Slug = cleanSlug(item.Slug)
 	if item.Slug == "" {
@@ -165,6 +177,11 @@ func (s *Service) CreateBio(ctx context.Context, user, wid int64, item BioPage) 
 	if err := s.canEdit(ctx, user, wid); err != nil {
 		return item, err
 	}
+	if s.billing != nil {
+		if err := s.billing.Check(ctx, wid, "bios", 1); err != nil {
+			return item, err
+		}
+	}
 	item.Slug = cleanSlug(item.Slug)
 	if item.Slug == "" {
 		item.Slug = randomSlug()
@@ -196,6 +213,11 @@ func (s *Service) ReadBio(ctx context.Context, slug string) (BioPage, error) {
 func (s *Service) CreateQR(ctx context.Context, user, wid, linkID int64, name, foreground, background string, size int) (QRCode, error) {
 	if err := s.canEdit(ctx, user, wid); err != nil {
 		return QRCode{}, err
+	}
+	if s.billing != nil {
+		if err := s.billing.Check(ctx, wid, "qr", 1); err != nil {
+			return QRCode{}, err
+		}
 	}
 	if size < 256 || size > 2048 {
 		size = 1024

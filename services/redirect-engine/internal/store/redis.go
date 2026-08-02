@@ -132,13 +132,14 @@ if rate == 1 then redis.call('EXPIRE', KEYS[4], 60) end
 if rate > tonumber(ARGV[22]) then return redis.error_reply('RATE_LIMITED') end
 redis.call('INCR', KEYS[1])
 redis.call('INCR', KEYS[5])
-if ARGV[21] == 'true' then redis.call('INCR', KEYS[6]) else redis.call('PFADD', KEYS[2], ARGV[3]) end
+if ARGV[21] == 'true' then redis.call('INCR', KEYS[6]) else redis.call('PFADD', KEYS[2], ARGV[3]); redis.call('PFADD', KEYS[10], ARGV[3]) end
 redis.call('INCR', KEYS[7]); redis.call('INCR', KEYS[8]); redis.call('INCR', KEYS[9])
 return redis.call('XADD',KEYS[3],'*','link_id',ARGV[1],'destination_id',ARGV[2],'timestamp',ARGV[4],'visitor_hash',ARGV[3],'referer_url',ARGV[5],'referer_host',ARGV[6],'source_type',ARGV[7],'country',ARGV[8],'region',ARGV[9],'city',ARGV[10],'device',ARGV[11],'browser',ARGV[12],'operating_system',ARGV[13],'language',ARGV[14],'utm_source',ARGV[15],'utm_medium',ARGV[16],'utm_campaign',ARGV[17],'utm_content',ARGV[18],'utm_term',ARGV[19],'visit_type',ARGV[20],'is_bot',ARGV[21])`
 
 func (s *RedisStore) RecordVisit(ctx context.Context, v domain.Visit) error {
 	day := v.Timestamp.UTC().Format("2006-01-02")
-	args := []string{"EVAL", recordScript, "9", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", "gojet:rate:" + v.LinkID + ":" + v.VisitorHash, "gojet:daily:" + v.LinkID + ":" + day, "gojet:bots:" + v.LinkID, "gojet:source:" + v.LinkID + ":" + v.SourceType, "gojet:device:" + v.LinkID + ":" + v.Device, "gojet:browser:" + v.LinkID + ":" + v.Browser, v.LinkID, v.DestinationID, v.VisitorHash, v.Timestamp.UTC().Format(time.RFC3339Nano), v.RefererURL, v.RefererHost, v.SourceType, v.Country, v.Region, v.City, v.Device, v.Browser, v.OS, v.Language, v.UTMSource, v.UTMMedium, v.UTMCampaign, v.UTMContent, v.UTMTerm, v.VisitType, strconv.FormatBool(v.IsBot), strconv.Itoa(s.limit), strconv.FormatInt(v.MaxClicks, 10), strconv.FormatBool(v.OneTime)}
+	month := v.Timestamp.UTC().Format("2006-01")
+	args := []string{"EVAL", recordScript, "10", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", "gojet:rate:" + v.LinkID + ":" + v.VisitorHash, "gojet:daily:" + v.LinkID + ":" + day, "gojet:bots:" + v.LinkID, "gojet:source:" + v.LinkID + ":" + v.SourceType, "gojet:device:" + v.LinkID + ":" + v.Device, "gojet:browser:" + v.LinkID + ":" + v.Browser, "gojet:visitors-month:" + v.LinkID + ":" + month, v.LinkID, v.DestinationID, v.VisitorHash, v.Timestamp.UTC().Format(time.RFC3339Nano), v.RefererURL, v.RefererHost, v.SourceType, v.Country, v.Region, v.City, v.Device, v.Browser, v.OS, v.Language, v.UTMSource, v.UTMMedium, v.UTMCampaign, v.UTMContent, v.UTMTerm, v.VisitType, strconv.FormatBool(v.IsBot), strconv.Itoa(s.limit), strconv.FormatInt(v.MaxClicks, 10), strconv.FormatBool(v.OneTime)}
 	_, e := s.command(ctx, args...)
 	if e != nil && strings.Contains(e.Error(), "RATE_LIMITED") {
 		return ErrRateLimited

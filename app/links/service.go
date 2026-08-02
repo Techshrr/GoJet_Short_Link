@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 	"github.com/Techshrr/GoJet_Short_Link/app/workspace"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -19,6 +20,7 @@ type Service struct {
 	db         *sql.DB
 	redis      *redis.Client
 	workspaces *workspace.Service
+	billing    *billing.Service
 }
 type Link struct {
 	ID, WorkspaceID, CreatedBy               int64 `json:",omitempty"`
@@ -53,13 +55,22 @@ type Analytics struct {
 	Recent                                                                                                        []map[string]any
 }
 
-func New(db *sql.DB, r *redis.Client, w *workspace.Service) *Service {
-	return &Service{db: db, redis: r, workspaces: w}
+func New(db *sql.DB, r *redis.Client, w *workspace.Service, quotas ...*billing.Service) *Service {
+	s := &Service{db: db, redis: r, workspaces: w}
+	if len(quotas) > 0 {
+		s.billing = quotas[0]
+	}
+	return s
 }
 func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link) (Link, error) {
 	role, err := s.workspaces.Role(ctx, workspaceID, userID)
 	if err != nil || !workspace.Allowed(role, "edit") {
 		return Link{}, errors.New("forbidden")
+	}
+	if s.billing != nil {
+		if err = s.billing.Check(ctx, workspaceID, "links", 1); err != nil {
+			return Link{}, err
+		}
 	}
 	u, err := url.ParseRequestURI(l.Destination)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {

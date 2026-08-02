@@ -95,6 +95,11 @@ func (s *Service) CreateFile(ctx context.Context, user, workspaceID int64, origi
 	if written == 0 || written > MaxFileSize {
 		return FileShare{}, errors.New("文件必须大于零且不超过 100MB")
 	}
+	if s.billing != nil {
+		if err = s.billing.Check(ctx, workspaceID, "files", written); err != nil {
+			return FileShare{}, err
+		}
+	}
 	finalPath := filepath.Join(storageDir, storageName)
 	if err = os.Rename(temporaryName, finalPath); err != nil {
 		return FileShare{}, err

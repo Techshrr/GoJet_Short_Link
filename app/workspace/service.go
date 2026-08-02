@@ -8,9 +8,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 )
 
-type Service struct{ db *sql.DB }
+type Service struct {
+	db      *sql.DB
+	billing *billing.Service
+}
 type Summary struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -27,7 +31,13 @@ type Invitation struct {
 	Email, Role, Status, ExpiresAt, CreatedAt string
 }
 
-func New(db *sql.DB) *Service { return &Service{db: db} }
+func New(db *sql.DB, quotas ...*billing.Service) *Service {
+	s := &Service{db: db}
+	if len(quotas) > 0 {
+		s.billing = quotas[0]
+	}
+	return s
+}
 
 var permissions = map[string]map[string]bool{"owner": {"manage": true, "edit": true, "analytics": true, "view": true}, "admin": {"manage": true, "edit": true, "analytics": true, "view": true}, "editor": {"edit": true, "analytics": true, "view": true}, "analyst": {"analytics": true, "view": true}, "viewer": {"view": true}}
 
@@ -70,6 +80,11 @@ func (s *Service) Create(ctx context.Context, userID int64, name, kind string) (
 	if _, err = tx.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,'owner')`, id, userID); err != nil {
 		return 0, err
 	}
+	if s.billing != nil {
+		if err = s.billing.AssignStarter(ctx, tx, id); err != nil {
+			return 0, err
+		}
+	}
 	s.auditTx(ctx, tx, userID, id, "workspace.created", "workspace", id, map[string]any{"name": name})
 	return id, tx.Commit()
 }
@@ -77,6 +92,11 @@ func (s *Service) Invite(ctx context.Context, actor, workspaceID int64, email, r
 	actorRole, err := s.Role(ctx, workspaceID, actor)
 	if err != nil || !Allowed(actorRole, "manage") || role == "owner" || !Allowed(role, "view") {
 		return "", errors.New("forbidden")
+	}
+	if s.billing != nil {
+		if err = s.billing.Check(ctx, workspaceID, "members", 1); err != nil {
+			return "", err
+		}
 	}
 	raw := make([]byte, 32)
 	if _, err = rand.Read(raw); err != nil {
@@ -171,6 +191,11 @@ func (s *Service) Accept(ctx context.Context, userID int64, token string) error 
 	err = tx.QueryRowContext(ctx, `SELECT i.id,i.workspace_id,i.email,i.role FROM workspace_invitations i JOIN users u ON u.id=? AND u.email=i.email WHERE i.token_hash=? AND i.status='pending' AND i.expires_at>NOW() FOR UPDATE`, userID, hex.EncodeToString(sum[:])).Scan(&id, &wid, &email, &role)
 	if err != nil {
 		return err
+	}
+	if s.billing != nil {
+		if err = s.billing.Check(ctx, wid, "members", 1); err != nil {
+			return err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO workspace_members(workspace_id,user_id,role,status) VALUES(?,?,?,'active') ON DUPLICATE KEY UPDATE role=VALUES(role),status='active'`, wid, userID, role); err != nil {
 		return err
