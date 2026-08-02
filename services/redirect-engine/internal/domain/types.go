@@ -3,14 +3,15 @@ package domain
 import "time"
 
 type Link struct {
-	ID          string     `json:"id"`
-	Code        string     `json:"code"`
-	Destination string     `json:"destination"`
-	StatusCode  int        `json:"status_code"`
-	Active      bool       `json:"active"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	MaxClicks   int64      `json:"max_clicks,omitempty"`
-	OneTime     bool       `json:"one_time,omitempty"`
+	ID           string     `json:"id"`
+	Code         string     `json:"code"`
+	Destination  string     `json:"destination"`
+	StatusCode   int        `json:"status_code"`
+	Active       bool       `json:"active"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	MaxClicks    int64      `json:"max_clicks,omitempty"`
+	OneTime      bool       `json:"one_time,omitempty"`
+	PasswordHash string     `json:"password_hash,omitempty"`
 }
 
 type Visit struct {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/Techshrr/GoJet_Short_Link/app/workspace"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 	"net/url"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type Link struct {
 	Code, Domain, Destination, Title, Status string
 	RedirectStatus                           int
 	Password                                 string          `json:"password,omitempty"`
+	PasswordHash                             string          `json:"-"`
 	ExpiresAt                                *string         `json:"expires_at,omitempty"`
 	MaxClicks                                *int64          `json:"max_clicks,omitempty"`
 	OneTime                                  bool            `json:"one_time"`
@@ -82,7 +84,17 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 		l.ExpiresAt = &normalized
 	}
 	l.Status = "active"
-	result, err := s.db.ExecContext(ctx, `INSERT INTO short_links(workspace_id,created_by,code,domain,destination,title,status,redirect_status,expires_at,max_clicks,one_time,folder_id,campaign_id,utm,routing_rules,ab_destinations) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, workspaceID, userID, l.Code, l.Domain, l.Destination, l.Title, l.Status, l.RedirectStatus, l.ExpiresAt, l.MaxClicks, l.OneTime, l.FolderID, l.CampaignID, nullableJSON(l.UTM), nullableJSON(l.RoutingRules), nullableJSON(l.ABDestinations))
+	if l.Password != "" {
+		if len(l.Password) < 6 {
+			return Link{}, errors.New("访问密码至少需要 6 位")
+		}
+		hash, hashErr := bcrypt.GenerateFromPassword([]byte(l.Password), 12)
+		if hashErr != nil {
+			return Link{}, hashErr
+		}
+		l.PasswordHash = string(hash)
+	}
+	result, err := s.db.ExecContext(ctx, `INSERT INTO short_links(workspace_id,created_by,code,domain,destination,title,status,redirect_status,password_hash,expires_at,max_clicks,one_time,folder_id,campaign_id,utm,routing_rules,ab_destinations) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, workspaceID, userID, l.Code, l.Domain, l.Destination, l.Title, l.Status, l.RedirectStatus, nullable(l.PasswordHash), l.ExpiresAt, l.MaxClicks, l.OneTime, l.FolderID, l.CampaignID, nullableJSON(l.UTM), nullableJSON(l.RoutingRules), nullableJSON(l.ABDestinations))
 	if err != nil {
 		return Link{}, err
 	}
@@ -96,7 +108,7 @@ func (s *Service) Create(ctx context.Context, userID, workspaceID int64, l Link)
 	return l, nil
 }
 func (s *Service) syncRedis(ctx context.Context, l Link) error {
-	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime})
+	payload, _ := json.Marshal(map[string]any{"id": fmt.Sprint(l.ID), "code": l.Code, "destination": l.Destination, "status_code": l.RedirectStatus, "active": l.Status == "active", "expires_at": l.ExpiresAt, "max_clicks": l.MaxClicks, "one_time": l.OneTime, "password_hash": l.PasswordHash})
 	return s.redis.Set(ctx, "gojet:link:"+l.Code, payload, 0).Err()
 }
 func (s *Service) List(ctx context.Context, userID, workspaceID int64, f Filter) ([]Link, int64, error) {
@@ -168,12 +180,12 @@ func (s *Service) BulkStatus(ctx context.Context, userID, workspaceID int64, ids
 	if err = tx.Commit(); err != nil {
 		return 0, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,code,destination,redirect_status,status FROM short_links WHERE workspace_id=?`, workspaceID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,code,destination,redirect_status,status,COALESCE(password_hash,''),expires_at,max_clicks,one_time FROM short_links WHERE workspace_id=?`, workspaceID)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var l Link
-			_ = rows.Scan(&l.ID, &l.Code, &l.Destination, &l.RedirectStatus, &l.Status)
+			_ = rows.Scan(&l.ID, &l.Code, &l.Destination, &l.RedirectStatus, &l.Status, &l.PasswordHash, &l.ExpiresAt, &l.MaxClicks, &l.OneTime)
 			_ = s.syncRedis(ctx, l)
 		}
 	}
@@ -238,6 +250,12 @@ func nullableJSON(v json.RawMessage) any {
 		return nil
 	}
 	return v
+}
+func nullable(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"

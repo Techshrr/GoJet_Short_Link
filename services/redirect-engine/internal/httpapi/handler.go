@@ -1,10 +1,13 @@
 package httpapi
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"golang.org/x/crypto/bcrypt"
+	"html/template"
 	"net"
 	"net/http"
 	"net/url"
@@ -28,6 +31,7 @@ func New(s store.Store, hashKey string) http.Handler {
 	mux.HandleFunc("GET /api/links/{id}/stats", h.stats)
 	mux.HandleFunc("GET /api/system/analytics", h.analytics)
 	mux.HandleFunc("GET /{code}", h.redirect)
+	mux.HandleFunc("POST /{code}/unlock", h.unlock)
 	return mux
 }
 
@@ -94,6 +98,10 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusGone, map[string]string{"error": "short link has expired"})
 		return
 	}
+	if l.PasswordHash != "" && !h.unlocked(r, l) {
+		h.passwordPage(w, l.Code, "")
+		return
+	}
 	v := h.visit(r, l)
 	if err := h.store.RecordVisit(r.Context(), v); err != nil {
 		if errors.Is(err, store.ErrRateLimited) {
@@ -109,6 +117,38 @@ func (h *Handler) redirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, l.Destination, l.StatusCode)
+}
+
+func (h *Handler) unlock(w http.ResponseWriter, r *http.Request) {
+	l, err := h.store.FindLink(r.Context(), r.PathValue("code"))
+	if err != nil || !l.Active {
+		writeJSON(w, 404, map[string]string{"error": "short link not found"})
+		return
+	}
+	if err = r.ParseForm(); err != nil || bcrypt.CompareHashAndPassword([]byte(l.PasswordHash), []byte(r.FormValue("password"))) != nil {
+		h.passwordPage(w, l.Code, "密码错误，请重试。")
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: "gojet_unlock_" + l.Code, Value: h.unlockSignature(l), Path: "/" + l.Code, HttpOnly: true, Secure: r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil, SameSite: http.SameSiteLaxMode, MaxAge: 3600})
+	http.Redirect(w, r, "/"+l.Code, http.StatusSeeOther)
+}
+func (h *Handler) unlocked(r *http.Request, l domain.Link) bool {
+	cookie, err := r.Cookie("gojet_unlock_" + l.Code)
+	return err == nil && hmac.Equal([]byte(cookie.Value), []byte(h.unlockSignature(l)))
+}
+func (h *Handler) unlockSignature(l domain.Link) string {
+	mac := hmac.New(sha256.New, []byte(h.hashKey))
+	_, _ = mac.Write([]byte(l.Code + "|" + l.PasswordHash))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+var passwordTemplate = template.Must(template.New("password").Parse(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>受保护的 GoJet 链接</title><style>body{margin:0;background:#f4f8fc;color:#10233f;font:15px system-ui;min-height:100vh;display:grid;place-items:center}form{width:min(390px,calc(100% - 32px));background:#fff;border:1px solid #dce6ef;border-radius:12px;padding:32px;box-sizing:border-box}h1{font-size:24px}input,button{width:100%;height:42px;box-sizing:border-box;margin-top:12px;border:1px solid #c9d6e2;border-radius:7px;padding:0 10px}button{background:#1769e0;color:white;font-weight:700}.error{color:#b42318}</style></head><body><form method="post" action="/{{.Code}}/unlock"><b>GoJet.</b><h1>此链接受密码保护</h1><p>输入访问密码后继续前往目标页面。</p><input name="password" type="password" required autofocus autocomplete="current-password"><button>验证并继续</button>{{if .Error}}<p class="error">{{.Error}}</p>{{end}}</form></body></html>`))
+
+func (h *Handler) passwordPage(w http.ResponseWriter, code, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = passwordTemplate.Execute(w, map[string]string{"Code": code, "Error": message})
 }
 
 func (h *Handler) visit(r *http.Request, l domain.Link) domain.Visit {

@@ -2,13 +2,17 @@ package httpapi_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
+	"github.com/Techshrr/GoJet_Short_Link/services/redirect-engine/internal/domain"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirect-engine/internal/httpapi"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirect-engine/internal/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestRedirectImmediatelyUpdatesRealStats(t *testing.T) {
@@ -170,6 +174,47 @@ func TestExpiredLinkReturnsGoneWithoutRecording(t *testing.T) {
 	defer got.Body.Close()
 	if got.StatusCode != http.StatusGone {
 		t.Fatalf("status=%d", got.StatusCode)
+	}
+}
+func TestPasswordProtectedLinkUsesHttpOnlyUnlockCookie(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memory := store.NewMemory()
+	_ = memory.SaveLink(context.Background(), domain.Link{ID: "protected", Code: "secret", Destination: "https://example.com", StatusCode: 302, Active: true, PasswordHash: string(hash)})
+	server := httptest.NewServer(httpapi.New(memory, "signing-secret"))
+	defer server.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	locked, err := client.Get(server.URL + "/secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked.Body.Close()
+	if locked.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("locked status=%d", locked.StatusCode)
+	}
+	response, err := client.PostForm(server.URL+"/secret/unlock", url.Values{"password": {"correct-password"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("unlock status=%d", response.StatusCode)
+	}
+	cookies := response.Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly {
+		t.Fatal("unlock cookie must be HttpOnly")
+	}
+	request, _ := http.NewRequest("GET", server.URL+"/secret", nil)
+	request.AddCookie(cookies[0])
+	redirected, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redirected.Body.Close()
+	if redirected.StatusCode != http.StatusFound {
+		t.Fatalf("redirect status=%d", redirected.StatusCode)
 	}
 }
 
