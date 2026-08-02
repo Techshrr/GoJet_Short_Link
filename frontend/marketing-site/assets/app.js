@@ -1,0 +1,1 @@
+const trigger=document.querySelector('[data-mega]'),mega=document.querySelector('.mega');if(trigger&&mega){trigger.onclick=e=>{e.stopPropagation();mega.classList.toggle('open')};document.addEventListener('click',()=>mega.classList.remove('open'))}document.querySelector('.mobileMenu')?.addEventListener('click',()=>document.querySelector('.mega')?.classList.toggle('open'));
