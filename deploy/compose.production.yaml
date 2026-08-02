@@ -6,6 +6,7 @@ services:
       - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/gojet.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/user-console:/usr/share/nginx/html/app:ro
     depends_on:
       redirect-engine:
         condition: service_healthy
@@ -57,8 +58,12 @@ services:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?ADMIN_API_TOKEN is required}
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   mail-worker:

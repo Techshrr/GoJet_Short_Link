@@ -11,6 +11,12 @@ import (
 )
 
 type Service struct{ db *sql.DB }
+type Summary struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Role string `json:"role"`
+}
 
 func New(db *sql.DB) *Service { return &Service{db: db} }
 
@@ -21,6 +27,22 @@ func (s *Service) Role(ctx context.Context, workspaceID, userID int64) (string, 
 	var role string
 	err := s.db.QueryRowContext(ctx, `SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=? AND status='active'`, workspaceID, userID).Scan(&role)
 	return role, err
+}
+func (s *Service) List(ctx context.Context, userID int64) ([]Summary, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.workspace_type,m.role FROM workspaces w JOIN workspace_members m ON m.workspace_id=w.id WHERE m.user_id=? AND m.status='active' ORDER BY w.created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Summary{}
+	for rows.Next() {
+		var item Summary
+		if err = rows.Scan(&item.ID, &item.Name, &item.Type, &item.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 func (s *Service) Create(ctx context.Context, userID int64, name, kind string) (int64, error) {
 	if name == "" || (kind != "personal" && kind != "company") {
