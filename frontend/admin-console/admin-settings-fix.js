@@ -104,7 +104,8 @@
   let hydrationRunning = false;
   async function patchSettingsView() {
     const mailForm = document.querySelector('#mailSettings');
-    if (!mailForm || hydrationRunning) return;
+    if (!mailForm || mailForm.dataset.gojetHotfixBound === '1' || hydrationRunning) return;
+    mailForm.dataset.gojetHotfixBound = '1';
     hydrationRunning = true;
     try {
       const current = await api('/api/admin/settings');
@@ -115,6 +116,7 @@
       const runtimeButton = document.querySelector('#runtimeSettings button');
       if (runtimeButton) runtimeButton.textContent = '保存运行时设置';
     } catch (error) {
+      mailForm.dataset.gojetHotfixBound = '';
       console.error('GoJet settings hydration failed', error);
     } finally {
       hydrationRunning = false;
