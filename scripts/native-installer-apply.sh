@@ -53,8 +53,11 @@ chmod 0600 "$PROCESSING"
 status validate 5 '正在验证安装请求'
 
 declare -A cfg
-while IFS='=' read -r key encoded; do
-  [[ -n "$key" ]] || continue
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -n "$line" ]] || continue
+  [[ "$line" == *=* ]] || fail '安装请求格式无效'
+  key=${line%%=*}
+  encoded=${line#*=}
   case "$key" in
     MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_PORT|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)
       cfg[$key]=$(printf '%s' "$encoded" | base64 -d 2>/dev/null) || fail "安装请求字段 $key 无效" ;;
