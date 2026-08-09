@@ -34,13 +34,13 @@ cp "$ROOT/deploy/nginx/gojet-host.conf" "$TARGET/deploy/nginx/gojet-host.conf"
 cp "$ROOT/deploy/nginx/gojet-native.conf" "$TARGET/deploy/nginx/gojet-native.conf"
 cp "$ROOT/deploy/nginx/gojet-installer.conf" "$TARGET/deploy/nginx/gojet-installer.conf"
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" "$TARGET/deploy/native/"
-cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$TARGET/scripts/"
+cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$ROOT/scripts/verify-published-release.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zh-CN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/object-storage.zh-CN.md" "$ROOT/docs/operations-alerting.zh-CN.md" "$TARGET/docs/"
 cp "$ROOT/go.mod" "$ROOT/go.sum" "$ROOT/Dockerfile" "$ROOT/install.sh" "$ROOT/install-host-nginx.sh" "$ROOT/install-native-lemp.sh" "$ROOT/launch-web-installer.sh" "$ROOT/upgrade.sh" "$ROOT/rollback.sh" "$ROOT/LICENSE" "$TARGET/"
 cp "$ROOT/deploy/INSTALL.zh-CN.md" "$TARGET/INSTALL.md"
 printf '%s\n' "$VERSION" > "$TARGET/VERSION"
 
-chmod 0755 "$TARGET/install.sh" "$TARGET/install-host-nginx.sh" "$TARGET/install-native-lemp.sh" "$TARGET/launch-web-installer.sh" "$TARGET/upgrade.sh" "$TARGET/rollback.sh" "$TARGET/scripts/verify-release.sh" "$TARGET"/bin/*
+chmod 0755 "$TARGET/install.sh" "$TARGET/install-host-nginx.sh" "$TARGET/install-native-lemp.sh" "$TARGET/launch-web-installer.sh" "$TARGET/upgrade.sh" "$TARGET/rollback.sh" "$TARGET/scripts/verify-release.sh" "$TARGET/scripts/verify-published-release.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type f \( -name '*_test.go' -o -name '*_integration_test.go' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'test-results' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +

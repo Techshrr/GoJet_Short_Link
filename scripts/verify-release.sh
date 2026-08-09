@@ -9,7 +9,7 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM
 unzip -q "$ARCHIVE" -d "$TMP"
 ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
 [ -n "$ROOT" ] || { echo "release root is missing" >&2; exit 1; }
-for path in INSTALL.md VERSION MANIFEST.sha256 install.sh install-host-nginx.sh install-native-lemp.sh launch-web-installer.sh installer/index.php upgrade.sh rollback.sh deploy/compose.production.yaml deploy/compose.host-nginx.yaml deploy/.env.production.example deploy/nginx/gojet.conf deploy/nginx/gojet-host.conf deploy/nginx/gojet-native.conf deploy/nginx/gojet-installer.conf deploy/native/gojet.env.example deploy/native/gojet@.service database/migrations app frontend services go.mod go.sum; do
+for path in INSTALL.md VERSION MANIFEST.sha256 install.sh install-host-nginx.sh install-native-lemp.sh launch-web-installer.sh installer/index.php scripts/verify-published-release.sh upgrade.sh rollback.sh deploy/compose.production.yaml deploy/compose.host-nginx.yaml deploy/.env.production.example deploy/nginx/gojet.conf deploy/nginx/gojet-host.conf deploy/nginx/gojet-native.conf deploy/nginx/gojet-installer.conf deploy/native/gojet.env.example deploy/native/gojet@.service database/migrations app frontend services go.mod go.sum; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
 for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do

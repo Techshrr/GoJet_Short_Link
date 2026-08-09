@@ -205,3 +205,9 @@ sudo ./rollback.sh ../gojet-新版本-linux-production/backups/gojet-20260809T12
 - **误关 API/维护模式**：管理员入口仍保留，从 `/admin/` 的系统诊断或设置中心恢复。
 
 不要执行 `docker compose down -v`，该命令会删除数据库、Redis、上传和文件 volumes。
+
+## 9. 下载地址自检
+
+发行链接发布后必须从未登录 GitHub 的公开 HTTP 客户端完整下载并核对 SHA-256，不能只检查仓库内
+是否存在文件。维护者使用 `./scripts/verify-published-release.sh v4.0.0-rc.4` 验证标签指向、公开下载、
+校验文件和 ZIP 结构；任一项失败都不得向用户提供该链接。
