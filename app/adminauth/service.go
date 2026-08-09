@@ -49,22 +49,25 @@ func New(db *sql.DB, store *settings.Store) *Service {
 }
 
 var permissionCatalog = map[string]bool{
-	"platform.read":     true,
-	"users.manage":      true,
-	"links.manage":      true,
-	"content.manage":    true,
-	"mail.manage":       true,
-	"security.manage":   true,
-	"settings.manage":   true,
-	"billing.manage":    true,
-	"operations.manage": true,
-	"admins.manage":     true,
+	"platform.read":      true,
+	"users.manage":       true,
+	"workspaces.manage":  true,
+	"links.manage":       true,
+	"content.manage":     true,
+	"mail.manage":        true,
+	"files.manage":       true,
+	"domains.manage":     true,
+	"security.manage":    true,
+	"settings.manage":    true,
+	"billing.manage":     true,
+	"operations.manage":  true,
+	"admins.manage":      true,
 }
 
 var roleTemplates = map[string][]string{
 	"super_admin": {"*"},
-	"operator":    {"platform.read", "users.manage", "links.manage", "content.manage", "mail.manage", "operations.manage"},
-	"security":    {"platform.read", "users.manage", "security.manage"},
+	"operator":    {"platform.read", "users.manage", "workspaces.manage", "links.manage", "content.manage", "mail.manage", "operations.manage"},
+	"security":    {"platform.read", "users.manage", "files.manage", "domains.manage", "security.manage"},
 	"support":     {"platform.read", "users.manage", "mail.manage"},
 	"analyst":     {"platform.read"},
 	"custom":      {},
@@ -87,7 +90,7 @@ func TemplatePermissions(role string) []string {
 	return append([]string(nil), items...)
 }
 
-// Allowed remains for compatibility with older tests and template checks.
+// Allowed remains for compatibility with role-template tests.
 func Allowed(role, permission string) bool {
 	if role == "super_admin" {
 		return true
