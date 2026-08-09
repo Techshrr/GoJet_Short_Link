@@ -12,11 +12,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/Techshrr/GoJet_Short_Link/app/observability"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/observability"
 	"github.com/Techshrr/GoJet_Short_Link/app/settings"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,11 +29,12 @@ type Service struct {
 }
 
 type Administrator struct {
-	ID          int64  `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
-	TOTPEnabled bool   `json:"totp_enabled"`
+	ID          int64    `json:"id"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"display_name"`
+	Role        string   `json:"role"`
+	TOTPEnabled bool     `json:"totp_enabled"`
+	Permissions []string `json:"permissions"`
 }
 
 type AdministratorRecord struct {
@@ -42,21 +44,141 @@ type AdministratorRecord struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
-const stepUpTTL = 10 * time.Minute
-
 func New(db *sql.DB, store *settings.Store) *Service {
 	return &Service{db: db, settings: store, now: time.Now}
 }
 
-var permissions = map[string]map[string]bool{
-	"super_admin": {"platform.read": true, "users.manage": true, "content.manage": true, "security.manage": true, "settings.manage": true, "admins.manage": true},
-	"operator":    {"platform.read": true, "users.manage": true, "content.manage": true},
-	"security":    {"platform.read": true, "content.manage": true, "security.manage": true},
-	"support":     {"platform.read": true, "users.manage": true},
-	"analyst":     {"platform.read": true},
+var permissionCatalog = map[string]bool{
+	"platform.read":     true,
+	"users.manage":      true,
+	"links.manage":      true,
+	"content.manage":    true,
+	"mail.manage":       true,
+	"security.manage":   true,
+	"settings.manage":   true,
+	"billing.manage":    true,
+	"operations.manage": true,
+	"admins.manage":     true,
 }
 
-func Allowed(role, permission string) bool { return permissions[role][permission] }
+var roleTemplates = map[string][]string{
+	"super_admin": {"*"},
+	"operator":    {"platform.read", "users.manage", "links.manage", "content.manage", "mail.manage", "operations.manage"},
+	"security":    {"platform.read", "users.manage", "security.manage"},
+	"support":     {"platform.read", "users.manage", "mail.manage"},
+	"analyst":     {"platform.read"},
+	"custom":      {},
+}
+
+func PermissionCatalog() []string {
+	items := make([]string, 0, len(permissionCatalog))
+	for permission := range permissionCatalog {
+		items = append(items, permission)
+	}
+	sort.Strings(items)
+	return items
+}
+
+func TemplatePermissions(role string) []string {
+	items, ok := roleTemplates[role]
+	if !ok {
+		return nil
+	}
+	return append([]string(nil), items...)
+}
+
+// Allowed remains for compatibility with older tests and template checks.
+func Allowed(role, permission string) bool {
+	if role == "super_admin" {
+		return true
+	}
+	for _, item := range roleTemplates[role] {
+		if item == permission {
+			return true
+		}
+	}
+	return false
+}
+
+func AllowedAdministrator(a Administrator, permission string) bool {
+	if a.Role == "super_admin" {
+		return true
+	}
+	for _, item := range a.Permissions {
+		if item == permission || item == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizePermissions(role string, requested []string) ([]string, error) {
+	if _, ok := roleTemplates[role]; !ok {
+		return nil, errors.New("管理员角色无效")
+	}
+	if role == "super_admin" {
+		return []string{"*"}, nil
+	}
+	if len(requested) == 0 && role != "custom" {
+		requested = roleTemplates[role]
+	}
+	seen := map[string]bool{}
+	items := make([]string, 0, len(requested))
+	for _, permission := range requested {
+		permission = strings.TrimSpace(permission)
+		if !permissionCatalog[permission] {
+			return nil, fmt.Errorf("未知管理员权限：%s", permission)
+		}
+		if !seen[permission] {
+			seen[permission] = true
+			items = append(items, permission)
+		}
+	}
+	sort.Strings(items)
+	return items, nil
+}
+
+func (s *Service) loadPermissions(ctx context.Context, administratorID int64, role string) ([]string, error) {
+	if role == "super_admin" {
+		return []string{"*"}, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT permission FROM administrator_permissions WHERE administrator_id=? ORDER BY permission`, administratorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var permission string
+		if err = rows.Scan(&permission); err != nil {
+			return nil, err
+		}
+		items = append(items, permission)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func savePermissions(ctx context.Context, tx *sql.Tx, administratorID int64, role string, requested []string) error {
+	items, err := normalizePermissions(role, requested)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM administrator_permissions WHERE administrator_id=?`, administratorID); err != nil {
+		return err
+	}
+	if role == "super_admin" {
+		return nil
+	}
+	for _, permission := range items {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO administrator_permissions(administrator_id,permission) VALUES(?,?)`, administratorID, permission); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (s *Service) Bootstrap(ctx context.Context, email, password string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
@@ -71,7 +193,7 @@ func (s *Service) Bootstrap(ctx context.Context, email, password string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO administrators(email,display_name,password_hash,role) VALUES(?,? ,?,'super_admin')`, email, "平台所有者", hash)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO administrators(email,display_name,password_hash,role) VALUES(?,?,?,'super_admin')`, email, "平台所有者", hash)
 	return err
 }
 
@@ -95,8 +217,12 @@ func (s *Service) Login(ctx context.Context, email, password, code, ip, ua strin
 		secret, ok, getErr := s.settings.Get(ctx, fmt.Sprintf("admin.totp.%d", a.ID))
 		if getErr != nil || !ok || !verifyTOTP(secret, code, s.now()) {
 			s.audit(ctx, a.ID, "admin.login", "POST", "/api/admin/auth/login", ip, ua, "failure", "two-factor code required or invalid")
-			return a, "", true, errors.New("请输入有效的二次验证码")
+			return a, "", true, errors.New("请输入有效的双因素验证码")
 		}
+	}
+	a.Permissions, err = s.loadPermissions(ctx, a.ID, a.Role)
+	if err != nil {
+		return a, "", false, err
 	}
 	raw := make([]byte, 32)
 	if _, err = rand.Read(raw); err != nil {
@@ -104,11 +230,7 @@ func (s *Service) Login(ctx context.Context, email, password, code, ip, ua strin
 	}
 	token := hex.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(token))
-	var stepUpUntil any
-	if a.TOTPEnabled {
-		stepUpUntil = s.now().UTC().Add(stepUpTTL)
-	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO administrator_sessions(administrator_id,token_hash,ip_address,user_agent,expires_at,last_seen_at,step_up_until) VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 12 HOUR),UTC_TIMESTAMP(),?)`, a.ID, hex.EncodeToString(sum[:]), ip, truncate(ua, 500), stepUpUntil)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO administrator_sessions(administrator_id,token_hash,ip_address,user_agent,expires_at,last_seen_at) VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 12 HOUR),UTC_TIMESTAMP())`, a.ID, hex.EncodeToString(sum[:]), ip, truncate(ua, 500))
 	if err != nil {
 		return a, "", false, err
 	}
@@ -125,10 +247,15 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Administrator
 	}
 	sum := sha256.Sum256([]byte(token))
 	err := s.db.QueryRowContext(ctx, `SELECT a.id,a.email,a.display_name,a.role,a.totp_enabled,s.id FROM administrator_sessions s JOIN administrators a ON a.id=s.administrator_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP() AND a.status='active'`, hex.EncodeToString(sum[:])).Scan(&a.ID, &a.Email, &a.DisplayName, &a.Role, &a.TOTPEnabled, &sessionID)
-	if err == nil {
-		_, _ = s.db.ExecContext(ctx, `UPDATE administrator_sessions SET last_seen_at=UTC_TIMESTAMP() WHERE id=? AND last_seen_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE)`, sessionID)
+	if err != nil {
+		return a, 0, err
 	}
-	return a, sessionID, err
+	a.Permissions, err = s.loadPermissions(ctx, a.ID, a.Role)
+	if err != nil {
+		return a, 0, err
+	}
+	_, _ = s.db.ExecContext(ctx, `UPDATE administrator_sessions SET last_seen_at=UTC_TIMESTAMP() WHERE id=? AND last_seen_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE)`, sessionID)
+	return a, sessionID, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sessionID int64) error {
@@ -164,6 +291,7 @@ func (s *Service) ChangePassword(ctx context.Context, administratorID, currentSe
 	}
 	return tx.Commit()
 }
+
 func (s *Service) RevokeAll(ctx context.Context, administratorID int64) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM administrator_sessions WHERE administrator_id=?`, administratorID)
 	return err
@@ -181,31 +309,56 @@ func (s *Service) List(ctx context.Context) ([]AdministratorRecord, error) {
 		if err = rows.Scan(&item.ID, &item.Email, &item.DisplayName, &item.Role, &item.Status, &item.TOTPEnabled, &item.LastLoginAt, &item.CreatedAt); err != nil {
 			return nil, err
 		}
+		item.Permissions, err = s.loadPermissions(ctx, item.ID, item.Role)
+		if err != nil {
+			return nil, err
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
 }
 
-func (s *Service) Create(ctx context.Context, email, name, password, role string) (int64, error) {
+func (s *Service) Create(ctx context.Context, email, name, password, role string, requestedPermissions []string) (int64, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	name = strings.TrimSpace(name)
-	if !strings.Contains(email, "@") || name == "" || len(password) < 12 || permissions[role] == nil {
-		return 0, errors.New("管理员邮箱、名称、12 位以上密码和有效角色为必填项")
+	if role == "" {
+		role = "custom"
+	}
+	if !strings.Contains(email, "@") || name == "" || len(password) < 12 {
+		return 0, errors.New("管理员邮箱、名称和 12 位以上密码为必填项")
+	}
+	if _, err := normalizePermissions(role, requestedPermissions); err != nil {
+		return 0, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return 0, err
 	}
-	result, err := s.db.ExecContext(ctx, `INSERT INTO administrators(email,display_name,password_hash,role) VALUES(?,?,?,?)`, email, name, hash, role)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `INSERT INTO administrators(email,display_name,password_hash,role) VALUES(?,?,?,?)`, email, name, hash, role)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := result.LastInsertId()
+	if err = savePermissions(ctx, tx, id, role, requestedPermissions); err != nil {
+		return 0, err
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
-func (s *Service) Update(ctx context.Context, actorID, id int64, role, status string) error {
-	if permissions[role] == nil || (status != "active" && status != "suspended") {
-		return errors.New("管理员角色或状态无效")
+func (s *Service) Update(ctx context.Context, actorID, id int64, role, status string, requestedPermissions []string) error {
+	if _, err := normalizePermissions(role, requestedPermissions); err != nil {
+		return err
+	}
+	if status != "active" && status != "suspended" {
+		return errors.New("管理员状态无效")
 	}
 	if actorID == id && status != "active" {
 		return errors.New("不能停用当前登录的管理员")
@@ -229,6 +382,9 @@ func (s *Service) Update(ctx context.Context, actorID, id int64, role, status st
 		}
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE administrators SET role=?,status=? WHERE id=?`, role, status, id); err != nil {
+		return err
+	}
+	if err = savePermissions(ctx, tx, id, role, requestedPermissions); err != nil {
 		return err
 	}
 	if status == "suspended" {
@@ -256,41 +412,13 @@ func (s *Service) ConfirmTOTP(ctx context.Context, a Administrator, code string)
 	pendingKey := fmt.Sprintf("admin.totp.pending.%d", a.ID)
 	secret, ok, err := s.settings.Get(ctx, pendingKey)
 	if err != nil || !ok || !verifyTOTP(secret, code, s.now()) {
-		return errors.New("二次验证码无效")
+		return errors.New("双因素验证码无效")
 	}
 	if err = s.settings.Set(ctx, fmt.Sprintf("admin.totp.%d", a.ID), secret, true); err != nil {
 		return err
 	}
 	_, err = s.db.ExecContext(ctx, `UPDATE administrators SET totp_enabled=TRUE WHERE id=?`, a.ID)
 	return err
-}
-
-// VerifyStepUp permits high-risk administrator mutations for a short window
-// after a successful TOTP proof. The grant is tied to the current session only.
-func (s *Service) VerifyStepUp(ctx context.Context, a Administrator, sessionID int64, code string) error {
-	var elevatedUntil sql.NullTime
-	if err := s.db.QueryRowContext(ctx, `SELECT step_up_until FROM administrator_sessions WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID).Scan(&elevatedUntil); err != nil {
-		return errors.New("管理员会话无效或已过期")
-	}
-	if elevatedUntil.Valid && elevatedUntil.Time.After(s.now().UTC()) {
-		return nil
-	}
-	if !a.TOTPEnabled {
-		return errors.New("请先启用管理员二次验证")
-	}
-	secret, ok, err := s.settings.Get(ctx, fmt.Sprintf("admin.totp.%d", a.ID))
-	if err != nil || !ok || !verifyTOTP(secret, code, s.now()) {
-		return errors.New("敏感操作需要有效的二次验证码")
-	}
-	until := s.now().UTC().Add(stepUpTTL)
-	result, err := s.db.ExecContext(ctx, `UPDATE administrator_sessions SET step_up_until=? WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, until, sessionID, a.ID)
-	if err != nil {
-		return err
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return errors.New("管理员会话无效或已过期")
-	}
-	return nil
 }
 
 func verifyTOTP(secret, code string, now time.Time) bool {
