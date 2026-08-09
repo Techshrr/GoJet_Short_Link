@@ -27,6 +27,17 @@ jobs:
           bash -n scripts/native-installer-apply.sh
           bash -n scripts/install-docker.sh
           sh -n scripts/package-release.sh
+      - name: Installer request encoding
+        run: |
+          encoded=$(php -r 'echo base64_encode("https://test.san6.cn");')
+          line="PUBLIC_BASE_URL=$encoded"
+          key=${line%%=*}
+          payload=${line#*=}
+          test "$key" = "PUBLIC_BASE_URL"
+          test "$payload" = "$encoded"
+          test "$(printf '%s' "$payload" | base64 -d)" = "https://test.san6.cn"
+          ! grep -Fq "while IFS='=' read -r key encoded" scripts/native-installer-apply.sh
+          grep -Fq 'encoded=${line#*=}' scripts/native-installer-apply.sh
       - name: Go test and vet
         run: |
           go test ./...
