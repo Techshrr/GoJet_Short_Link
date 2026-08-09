@@ -1,0 +1,45 @@
+name: Mark V4 candidate ready
+
+on:
+  workflow_run:
+    workflows:
+      - 'V4 fresh-install candidate gate'
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  mark:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'rebuild/v4-product' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-product
+          fetch-depth: 0
+      - name: Persist candidate qualification
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch origin rebuild/v4-product
+          git reset --hard origin/rebuild/v4-product
+          cat > docs/v4-candidate-status.md <<EOF
+          # GoJet V4 Candidate Status
+
+          - Candidate: 4.0.0-rc.8
+          - Installation model: fresh install only
+          - Qualification: PASSED
+          - Gate workflow run: ${RUN_ID}
+          - Gate event SHA: ${HEAD_SHA}
+          - Qualified at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          This marker is written only after the complete fresh-install candidate gate succeeds.
+          It does not replace the final real aaPanel fresh-install acceptance required for V4.0.0 Final.
+          EOF
+          git config user.name 'gojet-ci'
+          git config user.email 'gojet-ci@users.noreply.github.com'
+          git add docs/v4-candidate-status.md
+          git commit -m 'release: mark RC8 fresh-install candidate qualified'
+          git push origin HEAD:rebuild/v4-product
