@@ -33,7 +33,7 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 		}
 		if !adminauth.Allowed(a.Role, permission) {
 			s.adminAuth.AuditDenied(r.Context(), a, r.Method, r.URL.Path, requestIP(r), r.UserAgent(), "permission denied: "+permission)
-			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "当前管理员角色没有此操作权限"})
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "当前管理员没有此操作权限"})
 			return
 		}
 		ctx := context.WithValue(r.Context(), adminKey{}, a)
@@ -48,23 +48,17 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 	}
 }
 
+// GoJet V4 product rebuild no longer uses per-operation step-up authentication.
+// TOTP remains an optional second factor at administrator login. Once an
+// administrator has an authenticated session, authorization is decided by the
+// administrator permission model and all actions are still audited server-side.
 func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.HandlerFunc {
-	return s.admin(permission, func(w http.ResponseWriter, r *http.Request) {
-		if !stepUpRequiredForPath(r.URL.Path) {
-			next(w, r)
-			return
-		}
-		if err := s.verifyAdminStepUp(r); err != nil {
-			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
-			return
-		}
-		next(w, r)
-	})
+	return s.admin(permission, next)
 }
 
-// verifyAdminStepUp deliberately lets MySQL own the step-up clock. DATETIME
-// values are never converted to Go time for expiry decisions, so server,
-// container and database timezone differences cannot invalidate a fresh grant.
+// Kept temporarily for source compatibility with older RC code. It is no
+// longer called by adminStepUp and will be removed after the administrator
+// permission refactor is complete.
 func (s *server) verifyAdminStepUp(r *http.Request) error {
 	a := currentAdmin(r)
 	sessionID := r.Context().Value(adminSessionKey{}).(int64)
@@ -88,24 +82,7 @@ func (s *server) verifyAdminStepUp(r *http.Request) error {
 	return nil
 }
 
-// Ordinary settings/content editing is protected by the authenticated admin
-// session and role permission. Only genuinely high-risk paths are stepped up.
-// Sensitive fields inside settings sections can still enforce step-up inside
-// their own handler based on the actual value being changed.
-func stepUpRequiredForPath(path string) bool {
-	switch {
-	case path == "/api/admin/mail/test":
-		return false
-	case strings.HasPrefix(path, "/api/admin/mail/templates/"):
-		return false
-	case strings.HasPrefix(path, "/api/admin/brand/"):
-		return false
-	case strings.HasPrefix(path, "/api/admin/settings/"):
-		return false
-	default:
-		return true
-	}
-}
+func stepUpRequiredForPath(path string) bool { return false }
 
 func currentAdmin(r *http.Request) adminauth.Administrator {
 	return r.Context().Value(adminKey{}).(adminauth.Administrator)
@@ -138,7 +115,7 @@ func (s *server) adminLogout(w http.ResponseWriter, r *http.Request) {
 func (s *server) adminBeginTOTP(w http.ResponseWriter, r *http.Request) {
 	secret, uri, err := s.adminAuth.BeginTOTP(r.Context(), currentAdmin(r))
 	if err != nil {
-		jsonResponse(w, 503, map[string]string{"error": "无法创建二次验证密钥"})
+		jsonResponse(w, 503, map[string]string{"error": "无法创建登录双因素认证密钥"})
 		return
 	}
 	jsonResponse(w, http.StatusCreated, map[string]string{"secret": secret, "otpauth_uri": uri})
