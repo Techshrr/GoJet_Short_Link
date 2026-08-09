@@ -37,8 +37,7 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if settingsMutationNeedsStepUp(section, values) {
-		sessionID := r.Context().Value(adminSessionKey{}).(int64)
-		if err := s.adminAuth.VerifyStepUp(r.Context(), currentAdmin(r), sessionID, r.Header.Get("X-GoJet-TOTP")); err != nil {
+		if err := s.verifyAdminStepUp(r); err != nil {
 			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
 			return
 		}
@@ -126,13 +125,22 @@ func (s *server) getSettingsCenter(w http.ResponseWriter, r *http.Request) {
 		brand = map[string]any{}
 	}
 	for asset, key := range brandAssets {
-		if value, exists, _ := s.settings.Get(r.Context(), key); exists {
+		value, exists, err := s.settings.Get(r.Context(), key)
+		if err != nil {
+			jsonResponse(w, 503, map[string]string{"error": "品牌设置读取失败"})
+			return
+		}
+		if exists {
 			brand[asset] = value
 		}
 	}
 	out["brand"] = brand
 
-	mailConfig, _ := s.mail.Config(r.Context())
+	mailConfig, err := s.mail.ConfigStrict(r.Context())
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "SMTP 设置读取失败: " + err.Error()})
+		return
+	}
 	out["mail"] = map[string]any{
 		"host":                mailConfig.Host,
 		"port":                mailConfig.Port,
@@ -309,7 +317,6 @@ func validateLinkSettings(values map[string]any) error {
 			if char > 127 || strings.ContainsRune(" /?#", char) {
 				return fmt.Errorf("短码字符集只能使用安全 ASCII 字符")
 			}
-		}
 	}
 	return nil
 }
