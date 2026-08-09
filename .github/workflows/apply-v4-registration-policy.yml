@@ -1,0 +1,48 @@
+name: Apply V4 registration policy
+
+on:
+  push:
+    branches:
+      - 'rebuild/v4-product'
+    paths:
+      - 'scripts/v4-registration-policy.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-product
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebase onto latest product branch
+        run: |
+          git fetch origin rebuild/v4-product
+          git reset --hard origin/rebuild/v4-product
+      - name: Apply real registration policy
+        run: |
+          python3 scripts/apply-v4-registration-policy.py
+          gofmt -w services/platform-api/cmd/server/identity.go services/platform-api/cmd/server/registration_policy.go
+          node --check frontend/admin-console/settings-full.js
+          sh -n scripts/verify-release.sh
+          go test ./...
+          go vet ./...
+      - name: Commit and safely rebase
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name 'gojet-ci'
+          git config user.email 'gojet-ci@users.noreply.github.com'
+          git add services/platform-api/cmd/server/identity.go services/platform-api/cmd/server/registration_policy.go frontend/admin-console/settings-full.js scripts/verify-release.sh .github/workflows/installer-release.yml
+          git commit -m 'auth: enforce real registration and login policies'
+          git pull --rebase origin rebuild/v4-product
+          git push origin HEAD:rebuild/v4-product
