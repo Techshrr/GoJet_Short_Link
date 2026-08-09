@@ -54,13 +54,18 @@ jobs:
           '
           ! grep -Fq '${#cfg[REDIS_PASSWORD]:-}' scripts/native-installer-apply.sh
           grep -Fq 'redis_password=${cfg[REDIS_PASSWORD]-}' scripts/native-installer-apply.sh
-      - name: Admin repair regression checks
+      - name: Admin RC7 regression checks
         run: |
-          grep -Fq 'step_up_until' database/migrations/026_admin_step_up_session.sql
-          grep -Fq 'const stepUpTTL = 10 * time.Minute' app/adminauth/service.go
-          grep -Fq 'settingsMutationNeedsStepUp' services/platform-api/cmd/server/settingscenter.go
-          grep -Fq 'password_configured' services/platform-api/cmd/server/settingscenter.go
-          grep -Fq '服务器回读不一致' frontend/admin-console/admin-settings-fix.js
+          grep -Fq 'SELECT COALESCE(step_up_until > UTC_TIMESTAMP(), FALSE)' services/platform-api/cmd/server/admin_identity.go
+          grep -Fq 'DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE)' services/platform-api/cmd/server/admin_identity.go
+          grep -Fq 'strings.HasPrefix(path, "/api/admin/settings/")' services/platform-api/cmd/server/admin_identity.go
+          grep -Fq 'ConfigStrict' services/platform-api/cmd/server/settingscenter.go
+          grep -Fq '正在从服务器读取当前设置' frontend/admin-console/admin-settings-fix.js
+          grep -Fq 'SMTP 设置已保存，并已从数据库重新读取确认' frontend/admin-console/admin-settings-fix.js
+          ! grep -Fq 'MutationObserver' frontend/admin-console/admin-settings-fix.js
+          grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
+          ! sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'
+          grep -Fq '修复品牌资源目录和宝塔 Nginx 路由' upgrade-native.sh
           grep -Fq 'upgrade-native.sh' scripts/package-release.sh
       - name: Go test and vet
         run: |
@@ -76,21 +81,22 @@ jobs:
           CGO_ENABLED=0 go build ./services/platform-api/cmd/file-worker
           CGO_ENABLED=0 go build ./services/platform-api/cmd/operations-monitor
           CGO_ENABLED=0 go build ./services/log-receiver/cmd/server
-      - name: Build and verify RC6 package
+      - name: Build and verify RC7 package
         run: |
           sudo apt-get update
           sudo apt-get install -y zip
-          ./scripts/package-release.sh 4.0.0-rc.6
-          unzip -l dist/gojet-4.0.0-rc.6-linux-production.zip | grep 'public/install/index.php'
-          unzip -l dist/gojet-4.0.0-rc.6-linux-production.zip | grep 'public/admin/admin-settings-fix.js'
-          unzip -l dist/gojet-4.0.0-rc.6-linux-production.zip | grep 'database/migrations/026_admin_step_up_session.sql'
-          unzip -l dist/gojet-4.0.0-rc.6-linux-production.zip | grep 'upgrade-native.sh'
-      - name: Upload RC6 package
+          ./scripts/package-release.sh 4.0.0-rc.7
+          unzip -l dist/gojet-4.0.0-rc.7-linux-production.zip | grep 'public/install/index.php'
+          unzip -l dist/gojet-4.0.0-rc.7-linux-production.zip | grep 'public/admin/admin-settings-fix.js'
+          unzip -l dist/gojet-4.0.0-rc.7-linux-production.zip | grep 'database/migrations/026_admin_step_up_session.sql'
+          unzip -l dist/gojet-4.0.0-rc.7-linux-production.zip | grep 'deploy/nginx/gojet-bt-rewrite.conf'
+          unzip -l dist/gojet-4.0.0-rc.7-linux-production.zip | grep 'upgrade-native.sh'
+      - name: Upload RC7 package
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-4.0.0-rc.6-linux-production
+          name: gojet-4.0.0-rc.7-linux-production
           path: |
-            dist/gojet-4.0.0-rc.6-linux-production.zip
-            dist/gojet-4.0.0-rc.6-linux-production.zip.sha256
+            dist/gojet-4.0.0-rc.7-linux-production.zip
+            dist/gojet-4.0.0-rc.7-linux-production.zip.sha256
           if-no-files-found: error
           retention-days: 7
