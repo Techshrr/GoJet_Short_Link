@@ -1,0 +1,196 @@
+name: V4 fresh-install candidate gate
+
+on:
+  push:
+    branches:
+      - 'rebuild/v4-product'
+    paths:
+      - 'scripts/v4-candidate-gate-*.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-product
+          fetch-depth: 0
+      - name: Lock latest product branch snapshot
+        run: |
+          git fetch origin rebuild/v4-product
+          git reset --hard origin/rebuild/v4-product
+          git rev-parse HEAD | tee /tmp/gojet-tested-sha
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install test dependencies
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y mysql-client; fi
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Static source policy and syntax
+        run: |
+          php -l installer/index.php
+          php -l public/install/index.php
+          bash -n install.sh
+          bash -n install-native-lemp.sh
+          bash -n launch-web-installer.sh
+          bash -n scripts/native-installer-apply.sh
+          sh -n scripts/package-release.sh
+          sh -n scripts/verify-release.sh
+          node --check frontend/marketing-site/assets/home.js
+          node --check frontend/marketing-site/assets/auth.js
+          node --check frontend/marketing-site/assets/announcements.js
+          node --check frontend/admin-console/app.js
+          node --check frontend/admin-console/product-actions.js
+          node --check frontend/admin-console/settings-full.js
+          node --check frontend/user-console/app.js
+          node --check frontend/user-console/auth-guard.js
+          node --check frontend/user-console/product-router.js
+          node --check frontend/user-console/pending-link.js
+          ! grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP' app services frontend/admin-console
+          test ! -e frontend/admin-console/admin-settings-fix.js
+          test ! -e database/migrations/026_admin_step_up_session.sql
+          grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
+      - name: Go unit tests and vet
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Build all eight production binaries
+        run: |
+          mkdir -p /tmp/gojet-bin
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/redirect-engine ./services/redirect-engine/cmd/server
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/analytics-worker ./services/analytics-worker/cmd/worker
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/analytics-reconciler ./services/analytics-reconciler/cmd/reconciler
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/platform-api ./services/platform-api/cmd/server
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/mail-worker ./services/platform-api/cmd/mail-worker
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/file-worker ./services/platform-api/cmd/file-worker
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/operations-monitor ./services/platform-api/cmd/operations-monitor
+          CGO_ENABLED=0 go build -o /tmp/gojet-bin/log-receiver ./services/log-receiver/cmd/server
+          test "$(find /tmp/gojet-bin -maxdepth 1 -type f | wc -l)" -eq 8
+      - name: Apply fresh migrations to two independent databases
+        env:
+          MYSQL_PWD: root
+        run: |
+          mysql -h127.0.0.1 -P3306 -uroot -e 'CREATE DATABASE gojet_auth_candidate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+          for db in gojet_candidate gojet_auth_candidate; do
+            for f in database/migrations/*.sql; do
+              echo "$db <- $f"
+              mysql -h127.0.0.1 -P3306 -uroot "$db" < "$f"
+            done
+          done
+      - name: Start primary candidate API
+        run: |
+          mkdir -p /tmp/gojet-primary/uploads /tmp/gojet-primary/files
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='candidate-primary-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18090' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-primary/uploads' FILE_STORAGE_PATH='/tmp/gojet-primary/files' \
+            /tmp/gojet-bin/platform-api >/tmp/gojet-primary.log 2>&1 &
+          echo $! >/tmp/gojet-primary.pid
+      - name: Real product and administrator API acceptance
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
+        run: |
+          bash tests/integration/product-rebuild-api.sh
+          bash tests/integration/admin-link-lifecycle.sh
+      - name: Stop primary API
+        if: always()
+        run: kill "$(cat /tmp/gojet-primary.pid)" 2>/dev/null || true
+      - name: Start authentication-policy candidate API
+        run: |
+          mkdir -p /tmp/gojet-auth/uploads /tmp/gojet-auth/files
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(reversed(range(32)))).decode())
+          PY
+          )
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_candidate?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='candidate-auth-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18091' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojet-auth/uploads' FILE_STORAGE_PATH='/tmp/gojet-auth/files' \
+            /tmp/gojet-bin/platform-api >/tmp/gojet-auth.log 2>&1 &
+          echo $! >/tmp/gojet-auth.pid
+      - name: Real registration and authentication policy acceptance
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18091
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_auth_candidate
+        run: bash tests/integration/auth-policy.sh
+      - name: Stop authentication API
+        if: always()
+        run: kill "$(cat /tmp/gojet-auth.pid)" 2>/dev/null || true
+      - name: Browser product acceptance
+        run: |
+          python3 tests/e2e/rebuild_server.py >/tmp/gojet-browser.log 2>&1 &
+          echo $! >/tmp/gojet-browser.pid
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          npx playwright test tests/e2e/product-rebuild.spec.js --project=chromium
+          kill "$(cat /tmp/gojet-browser.pid)" 2>/dev/null || true
+      - name: Build and independently verify fresh-install RC8 package
+        run: |
+          ./scripts/package-release.sh 4.0.0-rc.8
+          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.8*linux-production.zip' | head -1)
+          test -n "$ZIP"
+          ./scripts/verify-release.sh "$ZIP"
+          unzip -tq "$ZIP"
+          sha256sum "$ZIP"
+          printf '%s\n' "$ZIP" >/tmp/gojet-candidate-zip
+      - name: Refuse stale artifact if branch moved during validation
+        run: |
+          TESTED=$(cat /tmp/gojet-tested-sha)
+          CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product | awk '{print $1}')
+          if [ "$TESTED" != "$CURRENT" ]; then
+            echo "Branch moved during validation: tested=$TESTED current=$CURRENT" >&2
+            exit 1
+          fi
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== primary API ====='; cat /tmp/gojet-primary.log 2>/dev/null || true
+          echo '===== auth API ====='; cat /tmp/gojet-auth.log 2>/dev/null || true
+          echo '===== browser harness ====='; cat /tmp/gojet-browser.log 2>/dev/null || true
+      - name: Upload fresh-install RC8 candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-4.0.0-rc.8-fresh-install-candidate
+          path: |
+            dist/*4.0.0-rc.8*linux-production.zip
+            dist/*4.0.0-rc.8*linux-production.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
