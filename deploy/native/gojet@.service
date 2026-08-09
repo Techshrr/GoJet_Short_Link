@@ -1,0 +1,23 @@
+[Unit]
+Description=GoJet %i
+Wants=network-online.target
+After=network-online.target mysql.service mysqld.service redis.service redis-server.service
+
+[Service]
+Type=simple
+User=gojet
+Group=gojet
+WorkingDirectory=__GOJET_ROOT__
+EnvironmentFile=__GOJET_ROOT__/deploy/native/gojet.env
+ExecStart=__GOJET_ROOT__/bin/%i
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__GOJET_ROOT__/deploy/data
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

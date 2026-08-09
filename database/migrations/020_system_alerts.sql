@@ -1,0 +1,22 @@
+CREATE TABLE system_alerts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    alert_key VARCHAR(120) NOT NULL,
+    category ENUM('mail','analytics','files','system') NOT NULL,
+    severity ENUM('warning','critical') NOT NULL,
+    status ENUM('open','acknowledged','resolved') NOT NULL DEFAULT 'open',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    observed_value BIGINT NOT NULL DEFAULT 0,
+    threshold_value BIGINT NOT NULL DEFAULT 0,
+    first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    acknowledged_at DATETIME NULL,
+    acknowledged_by BIGINT UNSIGNED NULL,
+    resolved_at DATETIME NULL,
+    notified_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY system_alerts_key_unique(alert_key),
+    KEY system_alerts_status_severity_idx(status,severity,last_seen_at),
+    FOREIGN KEY(acknowledged_by) REFERENCES administrators(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
