@@ -15,7 +15,7 @@ for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh ins
   public/login/index.html public/register/index.html public/forgot-password/index.html public/reset-password/index.html public/verify-email/index.html \
   public/assets/auth.js public/assets/auth.css public/assets/home.js public/assets/home.css \
   public/app/index.html public/app/app.js public/app/auth-guard.js public/app/pending-link.js public/app/product-router.js public/app/product.css \
-  public/admin/index.html public/admin/app.js public/admin/product-actions.js public/admin/styles.css \
+  public/admin/index.html public/admin/app.js public/admin/product-actions.js public/admin/settings-full.js public/admin/styles.css \
   scripts/verify-published-release.sh scripts/native-installer-apply.sh scripts/install-docker.sh \
   deploy/compose.production.yaml deploy/compose.host-nginx.yaml deploy/.env.production.example \
   deploy/nginx/gojet.conf deploy/nginx/gojet-host.conf deploy/nginx/gojet-native.conf deploy/nginx/gojet-bt-rewrite.conf \
@@ -50,6 +50,8 @@ grep -Fq '添加用户' "$ROOT/public/admin/app.js" || { echo 'administrator use
 grep -Fq 'Markdown 正文' "$ROOT/public/admin/app.js" || { echo 'Markdown announcement editor is missing' >&2; exit 1; }
 grep -Fq 'data-link-toggle' "$ROOT/public/admin/product-actions.js" || { echo 'administrator link operations are missing' >&2; exit 1; }
 grep -Fq 'data-plan-edit' "$ROOT/public/admin/product-actions.js" || { echo 'administrator plan editor is missing' >&2; exit 1; }
+grep -Fq 'links.default_redirect_status' "$ROOT/public/admin/settings-full.js" || { echo 'complete settings editor is missing' >&2; exit 1; }
+grep -Fq '/app/analytics' "$ROOT/public/app/product-router.js" || { echo 'workspace analytics route is missing' >&2; exit 1; }
 if grep -R -n -E 'step_up_required|X-GoJet-TOTP|MutationObserver' "$ROOT/public/admin"; then
   echo 'operation-level admin step-up or RC hotpatch leaked into rebuilt admin UI' >&2; exit 1
 fi

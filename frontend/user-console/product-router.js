@@ -2,10 +2,10 @@
   const routeToView={
     '/app/':'overview','/app/dashboard':'overview','/app/links':'links','/app/team':'team',
     '/app/organization':'organization','/app/domains':'domains','/app/text':'texts','/app/bio':'bios',
-    '/app/files':'files','/app/qr':'qrs','/app/billing':'billing','/app/settings':'settings'
+    '/app/files':'files','/app/qr':'qrs','/app/billing':'billing','/app/analytics':'analytics','/app/settings':'settings'
   };
-  const viewToRoute={overview:'/app/dashboard',links:'/app/links',team:'/app/team',organization:'/app/organization',domains:'/app/domains',texts:'/app/text',bios:'/app/bio',files:'/app/files',qrs:'/app/qr',billing:'/app/billing',settings:'/app/settings'};
-  const functions={overview:()=>renderOverview(),team:()=>renderTeam(),organization:()=>renderOrganization(),domains:()=>renderDomains(),texts:()=>renderTexts(),bios:()=>renderBios(),files:()=>renderFiles(),qrs:()=>renderQRs(),billing:()=>renderBilling(),settings:()=>renderAccountSettings()};
+  const viewToRoute={overview:'/app/dashboard',links:'/app/links',team:'/app/team',organization:'/app/organization',domains:'/app/domains',texts:'/app/text',bios:'/app/bio',files:'/app/files',qrs:'/app/qr',billing:'/app/billing',analytics:'/app/analytics',settings:'/app/settings'};
+  const functions={overview:()=>renderOverview(),team:()=>renderTeam(),organization:()=>renderOrganization(),domains:()=>renderDomains(),texts:()=>renderTexts(),bios:()=>renderBios(),files:()=>renderFiles(),qrs:()=>renderQRs(),billing:()=>renderBilling(),analytics:()=>renderGlobalAnalytics(),settings:()=>renderAccountSettings()};
 
   function activate(view){document.querySelectorAll('[data-console-view]').forEach(x=>x.classList.toggle('active',x.dataset.consoleView===view))}
   function ready(fn){let n=0;const t=setInterval(()=>{if(state?.workspace){clearInterval(t);fn()}else if(++n>80)clearInterval(t)},100)}
@@ -41,6 +41,23 @@
     activate('links');
   }else{
     ready(()=>show(initial,false));
+  }
+
+  async function renderGlobalAnalytics(){
+    const wid=state.workspace;
+    const [overview,links]=await Promise.all([
+      api(`/api/workspaces/${wid}/overview`).catch(()=>({})),
+      api(`/api/workspaces/${wid}/links?limit=50&offset=0`).catch(()=>({data:[]}))
+    ]);
+    const rows=(links.data||[]);
+    const clicks=overview.total_clicks??overview.clicks??rows.reduce((n,x)=>n+Number(x.clicks||0),0);
+    const visitors=overview.unique_visitors??overview.visitors??rows.reduce((n,x)=>n+Number(x.unique_visitors||x.visitors||0),0);
+    const active=overview.active_links??rows.filter(x=>x.status==='active').length;
+    const content=document.querySelector('.content');
+    content.innerHTML=`<div class="title"><div><small>Analytics</small><h1>工作区访问分析</h1><p>汇总当前工作区的真实短链访问表现，并可继续进入单条链接查看详细事件。</p></div><button id="analyticsRefresh">刷新数据</button></div>
+      <div class="metrics"><article><span>累计点击</span><strong>${Number(clicks||0).toLocaleString()}</strong></article><article><span>独立访客</span><strong>${Number(visitors||0).toLocaleString()}</strong></article><article><span>活跃链接</span><strong>${Number(active||0).toLocaleString()}</strong></article><article><span>链接总数</span><strong>${Number(rows.length).toLocaleString()}</strong></article></div>
+      <div class="tableWrap"><table><thead><tr><th>短码</th><th>目标地址</th><th>点击</th><th>访客</th><th>状态</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${escapeHTML(x.code||'—')}</td><td>${escapeHTML(x.destination||'—')}</td><td>${Number(x.clicks||0).toLocaleString()}</td><td>${Number(x.unique_visitors||x.visitors||0).toLocaleString()}</td><td>${escapeHTML(x.status||'—')}</td></tr>`).join('')||'<tr><td colspan="5">当前工作区还没有短链接数据。</td></tr>'}</tbody></table></div>`;
+    $('#analyticsRefresh').onclick=renderGlobalAnalytics;
   }
 
   async function renderAccountSettings(){

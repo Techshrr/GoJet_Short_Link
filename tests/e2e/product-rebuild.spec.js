@@ -98,3 +98,14 @@ test('mail templates save is an ordinary admin operation',async({page})=>{
   await expect(page.getByRole('button',{name:'保存 SMTP'})).toBeVisible();
   await expect(page.getByText(/二次验证|step-up/i)).toHaveCount(0);
 });
+
+
+test('system settings expose the full editable policy surface',async({page})=>{
+  await adminLogin(page);
+  await page.getByRole('button',{name:'系统设置'}).click();
+  await expect(page.getByText('短链接默认策略',{exact:true})).toBeVisible();
+  await expect(page.getByText('Analytics 与隐私',{exact:true})).toBeVisible();
+  await expect(page.getByText('注册、登录与安全',{exact:true})).toBeVisible();
+  await expect(page.getByText('API 与缓存',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'保存短链接默认策略'})).toBeVisible();
+});
