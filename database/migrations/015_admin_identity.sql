@@ -3,13 +3,23 @@ CREATE TABLE administrators (
     email VARCHAR(320) NOT NULL,
     display_name VARCHAR(120) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('super_admin','operator','security','support','analyst') NOT NULL DEFAULT 'analyst',
+    role VARCHAR(40) NOT NULL DEFAULT 'custom',
     status ENUM('active','suspended') NOT NULL DEFAULT 'active',
     totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY administrators_email_unique(email)
+    UNIQUE KEY administrators_email_unique(email),
+    KEY administrators_role_status_idx(role,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE administrator_permissions (
+    administrator_id BIGINT UNSIGNED NOT NULL,
+    permission VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(administrator_id,permission),
+    FOREIGN KEY(administrator_id) REFERENCES administrators(id) ON DELETE CASCADE,
+    KEY administrator_permission_lookup_idx(permission,administrator_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE administrator_sessions (
