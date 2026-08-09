@@ -17,7 +17,7 @@ if(page==='register'){
 }
 
 if(page==='forgot'){
-  $('#forgotForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;setBusy(form,true);try{await request('/api/auth/reset-password',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});form.reset();showMessage('如果该邮箱对应有效账户，我们已经发送密码重置链接。','success')}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
+  $('#forgotForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;setBusy(form,true);try{await request('/api/auth/forgot-password',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});form.reset();showMessage('如果该邮箱对应有效账户，我们已经发送密码重置链接。','success')}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
 }
 
 if(page==='reset'){
