@@ -1,0 +1,51 @@
+name: Installer and release
+
+on:
+  push:
+    branches:
+      - 'fix/v4-standard-web-installer'
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: PHP installer syntax
+        run: |
+          php -l installer/index.php
+          php -l public/install/index.php
+      - name: Shell syntax
+        run: |
+          bash -n install.sh
+          bash -n install-native-lemp.sh
+          bash -n launch-web-installer.sh
+          bash -n scripts/native-installer-apply.sh
+          bash -n scripts/install-docker.sh
+          sh -n scripts/package-release.sh
+      - name: Go test and vet
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Build all production services
+        run: |
+          CGO_ENABLED=0 go build ./services/redirect-engine/cmd/server
+          CGO_ENABLED=0 go build ./services/analytics-worker/cmd/worker
+          CGO_ENABLED=0 go build ./services/analytics-reconciler/cmd/reconciler
+          CGO_ENABLED=0 go build ./services/platform-api/cmd/server
+          CGO_ENABLED=0 go build ./services/platform-api/cmd/mail-worker
+          CGO_ENABLED=0 go build ./services/platform-api/cmd/file-worker
+          CGO_ENABLED=0 go build ./services/platform-api/cmd/operations-monitor
+          CGO_ENABLED=0 go build ./services/log-receiver/cmd/server
+      - name: Build and verify release package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+          ./scripts/package-release.sh ci
+          unzip -l dist/gojet-ci-linux-production.zip | grep 'public/install/index.php'
+          unzip -l dist/gojet-ci-linux-production.zip | grep 'deploy/nginx/gojet-bt-rewrite.conf'
+          unzip -l dist/gojet-ci-linux-production.zip | grep 'scripts/native-installer-apply.sh'
