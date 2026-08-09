@@ -42,6 +42,8 @@ type AdministratorRecord struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+const stepUpTTL = 10 * time.Minute
+
 func New(db *sql.DB, store *settings.Store) *Service {
 	return &Service{db: db, settings: store, now: time.Now}
 }
@@ -102,7 +104,11 @@ func (s *Service) Login(ctx context.Context, email, password, code, ip, ua strin
 	}
 	token := hex.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(token))
-	_, err = s.db.ExecContext(ctx, `INSERT INTO administrator_sessions(administrator_id,token_hash,ip_address,user_agent,expires_at,last_seen_at) VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 12 HOUR),UTC_TIMESTAMP())`, a.ID, hex.EncodeToString(sum[:]), ip, truncate(ua, 500))
+	var stepUpUntil any
+	if a.TOTPEnabled {
+		stepUpUntil = s.now().UTC().Add(stepUpTTL)
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO administrator_sessions(administrator_id,token_hash,ip_address,user_agent,expires_at,last_seen_at,step_up_until) VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 12 HOUR),UTC_TIMESTAMP(),?)`, a.ID, hex.EncodeToString(sum[:]), ip, truncate(ua, 500), stepUpUntil)
 	if err != nil {
 		return a, "", false, err
 	}
@@ -259,15 +265,30 @@ func (s *Service) ConfirmTOTP(ctx context.Context, a Administrator, code string)
 	return err
 }
 
-// VerifyStepUp requires a fresh TOTP proof for high-risk administrator
-// mutations even when the administrator already has a valid login session.
-func (s *Service) VerifyStepUp(ctx context.Context, a Administrator, code string) error {
+// VerifyStepUp permits high-risk administrator mutations for a short window
+// after a successful TOTP proof. The grant is tied to the current session only.
+func (s *Service) VerifyStepUp(ctx context.Context, a Administrator, sessionID int64, code string) error {
+	var elevatedUntil sql.NullTime
+	if err := s.db.QueryRowContext(ctx, `SELECT step_up_until FROM administrator_sessions WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID).Scan(&elevatedUntil); err != nil {
+		return errors.New("管理员会话无效或已过期")
+	}
+	if elevatedUntil.Valid && elevatedUntil.Time.After(s.now().UTC()) {
+		return nil
+	}
 	if !a.TOTPEnabled {
 		return errors.New("请先启用管理员二次验证")
 	}
 	secret, ok, err := s.settings.Get(ctx, fmt.Sprintf("admin.totp.%d", a.ID))
 	if err != nil || !ok || !verifyTOTP(secret, code, s.now()) {
 		return errors.New("敏感操作需要有效的二次验证码")
+	}
+	until := s.now().UTC().Add(stepUpTTL)
+	result, err := s.db.ExecContext(ctx, `UPDATE administrator_sessions SET step_up_until=? WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, until, sessionID, a.ID)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected != 1 {
+		return errors.New("管理员会话无效或已过期")
 	}
 	return nil
 }
