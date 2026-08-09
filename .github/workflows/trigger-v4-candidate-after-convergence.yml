@@ -1,0 +1,30 @@
+name: Trigger V4 candidate after convergence
+
+on:
+  workflow_run:
+    workflows:
+      - 'Apply V4 final release gates'
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  trigger:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'rebuild/v4-product' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-product
+          fetch-depth: 0
+      - name: Create fresh candidate trigger on latest head
+        run: |
+          git fetch origin rebuild/v4-product
+          git reset --hard origin/rebuild/v4-product
+          printf 'candidate=4.0.0-rc.8\nfresh_install_only=true\nsource_after_final_convergence=true\n' > scripts/v4-candidate-gate-2.trigger
+          git config user.name 'gojet-ci'
+          git config user.email 'gojet-ci@users.noreply.github.com'
+          git add scripts/v4-candidate-gate-2.trigger
+          git commit -m 'ci: run RC8 candidate gate after final convergence'
+          git push origin HEAD:rebuild/v4-product
