@@ -6,6 +6,11 @@ STATE="$ROOT/storage/installer"
 REQUEST="$STATE/request.ready"
 PROCESSING="$STATE/request.processing"
 LOCK="$ROOT/deploy/native/installed.lock"
+REWRITE=""
+REWRITE_BACKUP=""
+REWRITE_EXISTED=0
+NGINX_CHANGED=0
+SERVICES=(log-receiver redirect-engine platform-api analytics-worker analytics-reconciler mail-worker file-worker operations-monitor)
 [[ $(id -u) -eq 0 ]] || { echo 'root required' >&2; exit 1; }
 [[ -f "$BOOT" ]] || { echo 'bootstrap.env missing' >&2; exit 1; }
 # bootstrap.env is generated only by root-owned install.sh and contains no user input.
@@ -22,6 +27,19 @@ status(){
 }
 fail(){
   local msg=$1
+  set +e
+  for service in "${SERVICES[@]}"; do
+    systemctl stop "gojet@$service.service" >/dev/null 2>&1 || true
+  done
+  if [[ "$NGINX_CHANGED" -eq 1 && -n "$REWRITE" ]]; then
+    if [[ "$REWRITE_EXISTED" -eq 1 && -f "$REWRITE_BACKUP" ]]; then
+      cp -a "$REWRITE_BACKUP" "$REWRITE"
+    else
+      rm -f "$REWRITE"
+    fi
+    "$nginx" -t >/dev/null 2>&1 && (systemctl reload nginx >/dev/null 2>&1 || "$nginx" -s reload >/dev/null 2>&1) || true
+  fi
+  set -e
   status failed 100 "$msg" failed
   rm -f "$PROCESSING"
   exit 1
@@ -53,14 +71,18 @@ done
 [[ "${cfg[MYSQL_USER]}" =~ ^[A-Za-z0-9_.-]+$ ]] || fail '数据库用户名格式无效'
 [[ "${cfg[PUBLIC_BASE_URL]}" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] || fail '正式网址必须为 HTTPS 根地址'
 [[ "${cfg[ADMIN_EMAIL]}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail '管理员邮箱格式无效'
-if [[ -n "${cfg[ALERT_EMAIL]:-}" ]]; then [[ "${cfg[ALERT_EMAIL]}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail '告警邮箱格式无效'; fi
+if [[ -n "${cfg[ALERT_EMAIL]:-}" ]]; then
+  [[ "${cfg[ALERT_EMAIL]}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail '告警邮箱格式无效'
+fi
 [[ "${#cfg[ADMIN_PASSWORD]}" -ge 12 && "${#cfg[ADMIN_PASSWORD]}" -le 256 ]] || fail '管理员密码长度必须为 12-256 位'
 [[ "${#cfg[MYSQL_PASSWORD]}" -le 512 && "${#cfg[REDIS_PASSWORD]:-}" -le 512 ]] || fail '数据库或 Redis 密码过长'
 for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do
   value=${cfg[$key]:-}
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "安装参数 $key 包含非法控制字符"
 done
-HOST=${cfg[PUBLIC_BASE_URL]#https://}; HOST=${HOST%/}; HOST=${HOST%%:*}
+HOST=${cfg[PUBLIC_BASE_URL]#https://}
+HOST=${HOST%/}
+HOST=${HOST%%:*}
 
 status database 15 '正在验证 MySQL 连接与权限'
 MYSQL_HOST=127.0.0.1
@@ -81,7 +103,9 @@ done
 
 status redis 38 '正在验证 Redis'
 redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}")
-if [[ -n "${cfg[REDIS_PASSWORD]:-}" ]]; then redis_args+=(-a "${cfg[REDIS_PASSWORD]}"); fi
+if [[ -n "${cfg[REDIS_PASSWORD]:-}" ]]; then
+  redis_args+=(-a "${cfg[REDIS_PASSWORD]}")
+fi
 "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 连接或密码验证失败'
 
 status secrets 45 '正在生成系统安全密钥'
@@ -98,7 +122,8 @@ fi
 
 envq(){
   local v=$1
-  v=${v//\\/\\\\}; v=${v//\"/\\\"}
+  v=${v//\\/\\\\}
+  v=${v//\"/\\\"}
   printf '"%s"' "$v"
 }
 ENV_FILE="$ROOT/deploy/native/gojet.env"
@@ -140,10 +165,13 @@ chmod 0600 "$ENV_FILE"
 
 status services 58 '正在创建 GoJet 系统用户和服务'
 id gojet >/dev/null 2>&1 || useradd --system --home-dir "$ROOT" --shell /usr/sbin/nologin gojet
-if getent group clamav >/dev/null 2>&1; then usermod -aG clamav gojet || true; fi
+if getent group clamav >/dev/null 2>&1; then
+  usermod -aG clamav gojet || true
+fi
 mkdir -p "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/files"
 chown -R gojet:gojet "$ROOT/deploy/data"
-chmod 0755 "$ROOT/deploy/data/uploads"; chmod 0750 "$ROOT/deploy/data/files"
+chmod 0755 "$ROOT/deploy/data/uploads"
+chmod 0750 "$ROOT/deploy/data/files"
 chmod 0755 "$ROOT" "$ROOT/bin" "$ROOT/public"
 sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojet@.service" > /etc/systemd/system/gojet@.service
 systemctl daemon-reload
@@ -153,25 +181,35 @@ if [[ -d /www/server/panel/vhost/nginx && -f "/www/server/panel/vhost/nginx/$HOS
   VHOST="/www/server/panel/vhost/nginx/$HOST.conf"
   REWRITE_DIR=/www/server/panel/vhost/rewrite
   REWRITE="$REWRITE_DIR/$HOST.conf"
+  REWRITE_BACKUP="$REWRITE.gojet-preinstall.bak"
   mkdir -p "$REWRITE_DIR"
   grep -Fq "root $ROOT/public;" "$VHOST" || fail "宝塔站点运行目录尚未设置为 /public（期望 root $ROOT/public;）"
   grep -Fq "$REWRITE" "$VHOST" || fail '宝塔站点配置未包含标准 rewrite 文件，安装器为避免破坏 SSL 配置已停止'
-  if [[ -f "$REWRITE" && ! -f "$REWRITE.gojet-preinstall.bak" ]]; then cp -a "$REWRITE" "$REWRITE.gojet-preinstall.bak"; fi
+  if [[ -f "$REWRITE" ]]; then
+    REWRITE_EXISTED=1
+    [[ -f "$REWRITE_BACKUP" ]] || cp -a "$REWRITE" "$REWRITE_BACKUP"
+  fi
   sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" > "$REWRITE"
+  NGINX_CHANGED=1
 else
   fail "未找到宝塔站点配置 /www/server/panel/vhost/nginx/$HOST.conf；RC5 当前优先支持宝塔 Native 安装"
 fi
-"$nginx" -t || { [[ -f "$REWRITE.gojet-preinstall.bak" ]] && cp -a "$REWRITE.gojet-preinstall.bak" "$REWRITE"; fail 'Nginx 配置验证失败，已尝试恢复原 rewrite'; }
+"$nginx" -t || fail 'Nginx 配置验证失败，已恢复安装前 rewrite'
 systemctl reload nginx 2>/dev/null || "$nginx" -s reload
 
 status services 76 '正在启动 8 个 GoJet 服务'
-services=(log-receiver redirect-engine platform-api analytics-worker analytics-reconciler mail-worker file-worker operations-monitor)
-for service in "${services[@]}"; do systemctl enable --now "gojet@$service.service" || fail "服务启动失败：$service"; done
+for service in "${SERVICES[@]}"; do
+  systemctl enable --now "gojet@$service.service" || fail "服务启动失败：$service"
+done
 
 status health 88 '正在执行服务健康检查'
-for service in "${services[@]}"; do systemctl is-active --quiet "gojet@$service.service" || fail "服务未保持运行：$service"; done
+for service in "${SERVICES[@]}"; do
+  systemctl is-active --quiet "gojet@$service.service" || fail "服务未保持运行：$service"
+done
 for _ in {1..45}; do
-  if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:18090/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:18092/health >/dev/null 2>&1; then break; fi
+  if curl -fsS http://127.0.0.1:18080/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:18090/health >/dev/null 2>&1 && curl -fsS http://127.0.0.1:18092/health >/dev/null 2>&1; then
+    break
+  fi
   sleep 2
 done
 curl -fsS http://127.0.0.1:18080/health >/dev/null || fail 'redirect-engine 健康检查失败'
@@ -181,7 +219,9 @@ curl -fsS http://127.0.0.1:18092/health >/dev/null || fail 'log-receiver 健康�
 status finalize 96 '正在锁定安装入口'
 version=$(cat "$ROOT/VERSION" 2>/dev/null || echo development)
 installation_id=$(openssl rand -hex 16)
-printf 'version=%s\ninstalled_at=%s\ninstallation_id=%s\nmysql_schema=%s\nclamav=%s\n' "$version" "$(date -u +%FT%TZ)" "$installation_id" "$(basename "$(ls -1 "$ROOT"/database/migrations/*.sql | tail -1)")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"
+printf 'version=%s\ninstalled_at=%s\ninstallation_id=%s\nmysql_schema=%s\nclamav=%s\n' \
+  "$version" "$(date -u +%FT%TZ)" "$installation_id" \
+  "$(basename "$(ls -1 "$ROOT"/database/migrations/*.sql | tail -1)")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"
 chmod 0644 "$LOCK"
 rm -f "$PROCESSING" "$STATE/mysql-version.txt"
 status complete 100 'GoJet 安装完成，所有核心服务已通过健康检查' success
