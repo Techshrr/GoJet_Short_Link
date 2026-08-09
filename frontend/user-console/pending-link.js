@@ -1,4 +1,11 @@
 (()=>{
+  if(!document.querySelector('link[data-product-style]')){
+    const link=document.createElement('link');
+    link.rel='stylesheet';
+    link.href='/app/product.css';
+    link.dataset.productStyle='1';
+    document.head.appendChild(link);
+  }
   const nav=document.querySelector('aside nav');
   if(nav&&!nav.querySelector('[data-console-view="settings"]')){
     const button=document.createElement('button');
