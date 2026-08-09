@@ -1,0 +1,96 @@
+name: V4 product full-stack acceptance
+
+on:
+  push:
+    branches:
+      - 'rebuild/v4-product'
+  pull_request:
+
+jobs:
+  api-acceptance:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install MySQL client
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-client
+          fi
+      - name: Apply fresh database migrations
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            mysql -h127.0.0.1 -P3306 -uroot gojet_test < "$f"
+          done
+      - name: Build and start platform API
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet/uploads /tmp/gojet/files
+          go build -o /tmp/gojet/platform-api ./services/platform-api/cmd/server
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_test?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
+            ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='full-stack-acceptance-qr-key-2026' \
+            PUBLIC_BASE_URL='http://127.0.0.1:18090' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
+            UPLOAD_STORAGE_PATH='/tmp/gojet/uploads' \
+            FILE_STORAGE_PATH='/tmp/gojet/files' \
+            /tmp/gojet/platform-api >/tmp/gojet/platform-api.log 2>&1 &
+          echo $! >/tmp/gojet/platform-api.pid
+      - name: Run real product API acceptance
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+          REDIS_ADDRESS: 127.0.0.1:6379
+        run: bash tests/integration/product-rebuild-api.sh
+      - name: Platform API log on failure
+        if: failure()
+        run: |
+          cat /tmp/gojet/platform-api.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES;' || true
+      - name: Stop platform API
+        if: always()
+        run: |
+          if [ -f /tmp/gojet/platform-api.pid ]; then kill "$(cat /tmp/gojet/platform-api.pid)" 2>/dev/null || true; fi
