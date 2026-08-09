@@ -41,11 +41,20 @@ jobs:
           CGO_ENABLED=0 go build ./services/platform-api/cmd/file-worker
           CGO_ENABLED=0 go build ./services/platform-api/cmd/operations-monitor
           CGO_ENABLED=0 go build ./services/log-receiver/cmd/server
-      - name: Build and verify release package
+      - name: Build and verify RC5 package
         run: |
           sudo apt-get update
           sudo apt-get install -y zip
-          ./scripts/package-release.sh ci
-          unzip -l dist/gojet-ci-linux-production.zip | grep 'public/install/index.php'
-          unzip -l dist/gojet-ci-linux-production.zip | grep 'deploy/nginx/gojet-bt-rewrite.conf'
-          unzip -l dist/gojet-ci-linux-production.zip | grep 'scripts/native-installer-apply.sh'
+          ./scripts/package-release.sh 4.0.0-rc.5
+          unzip -l dist/gojet-4.0.0-rc.5-linux-production.zip | grep 'public/install/index.php'
+          unzip -l dist/gojet-4.0.0-rc.5-linux-production.zip | grep 'deploy/nginx/gojet-bt-rewrite.conf'
+          unzip -l dist/gojet-4.0.0-rc.5-linux-production.zip | grep 'scripts/native-installer-apply.sh'
+      - name: Upload RC5 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-4.0.0-rc.5-linux-production
+          path: |
+            dist/gojet-4.0.0-rc.5-linux-production.zip
+            dist/gojet-4.0.0-rc.5-linux-production.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
