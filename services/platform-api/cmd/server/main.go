@@ -88,6 +88,7 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
 	mux.HandleFunc("GET /api/public/status", s.publicStatus)
+	mux.HandleFunc("GET /api/public/announcements", s.publicAnnouncements)
 
 	mux.HandleFunc("POST /api/admin/auth/login", s.adminLogin)
 	mux.HandleFunc("GET /api/admin/auth/me", s.admin("platform.read", s.adminMe))
@@ -130,20 +131,25 @@ func main() {
 	mux.HandleFunc("DELETE /api/admin/users/{id}/sessions", s.admin("users.manage", s.adminRevokeAllUserSessions))
 	mux.HandleFunc("DELETE /api/admin/users/{id}/sessions/{session}", s.admin("users.manage", s.adminRevokeUserSession))
 
-	mux.HandleFunc("GET /api/admin/workspaces", s.admin("platform.read", s.adminWorkspaces))
+	mux.HandleFunc("GET /api/admin/workspaces", s.admin("workspaces.manage", s.adminWorkspaces))
+	mux.HandleFunc("PATCH /api/admin/workspaces/{id}", s.admin("workspaces.manage", s.adminUpdateWorkspace))
 	mux.HandleFunc("GET /api/admin/links", s.admin("links.manage", s.adminLinks))
+	mux.HandleFunc("PATCH /api/admin/links/{id}/status", s.admin("links.manage", s.adminUpdateLinkStatus))
+	mux.HandleFunc("DELETE /api/admin/links/{id}", s.admin("links.manage", s.adminDeleteLink))
 	mux.HandleFunc("GET /api/admin/audit", s.admin("platform.read", s.adminAudit))
 	mux.HandleFunc("GET /api/admin/abuse", s.admin("security.manage", s.adminAbuse))
 	mux.HandleFunc("PATCH /api/admin/abuse/{id}", s.admin("security.manage", s.adminResolveAbuse))
-	mux.HandleFunc("GET /api/admin/domains", s.admin("security.manage", s.adminDomains))
+	mux.HandleFunc("GET /api/admin/domains", s.admin("domains.manage", s.adminDomains))
+	mux.HandleFunc("PATCH /api/admin/domains/{id}/status", s.admin("domains.manage", s.adminUpdateDomainStatus))
+	mux.HandleFunc("DELETE /api/admin/domains/{id}", s.admin("domains.manage", s.adminDeleteDomain))
 	mux.HandleFunc("GET /api/admin/security", s.admin("security.manage", s.adminSecurityEvents))
 	mux.HandleFunc("PATCH /api/admin/security/{id}", s.admin("security.manage", s.adminResolveSecurity))
-	mux.HandleFunc("GET /api/admin/files", s.admin("security.manage", s.adminFiles))
-	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin("security.manage", s.adminRetryFileScan))
-	mux.HandleFunc("GET /api/admin/resources", s.admin("security.manage", s.adminResources))
-	mux.HandleFunc("GET /api/admin/resource-inventory", s.admin("security.manage", s.adminResourceInventory))
-	mux.HandleFunc("POST /api/admin/resources/{type}/{id}/quarantine", s.admin("security.manage", s.adminQuarantineResource))
-	mux.HandleFunc("POST /api/admin/quarantine/{id}/restore", s.admin("security.manage", s.adminRestoreResource))
+	mux.HandleFunc("GET /api/admin/files", s.admin("files.manage", s.adminFiles))
+	mux.HandleFunc("POST /api/admin/files/{id}/retry-scan", s.admin("files.manage", s.adminRetryFileScan))
+	mux.HandleFunc("GET /api/admin/resources", s.admin("files.manage", s.adminResources))
+	mux.HandleFunc("GET /api/admin/resource-inventory", s.admin("files.manage", s.adminResourceInventory))
+	mux.HandleFunc("POST /api/admin/resources/{type}/{id}/quarantine", s.admin("files.manage", s.adminQuarantineResource))
+	mux.HandleFunc("POST /api/admin/quarantine/{id}/restore", s.admin("files.manage", s.adminRestoreResource))
 
 	mux.HandleFunc("GET /api/admin/announcements", s.admin("content.manage", s.adminAnnouncements))
 	mux.HandleFunc("POST /api/admin/announcements", s.admin("content.manage", s.adminCreateAnnouncement))
@@ -164,9 +170,12 @@ func main() {
 	mux.HandleFunc("POST /api/auth/verify-email", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/register", s.register)
 	mux.HandleFunc("POST /api/auth/login", s.login)
+	mux.HandleFunc("POST /api/auth/logout", s.user(s.logoutUser))
 	mux.HandleFunc("POST /api/auth/forgot-password", s.resetPassword)
 	mux.HandleFunc("POST /api/auth/reset-password", s.resetPassword)
 	mux.HandleFunc("GET /api/me", s.user(s.me))
+	mux.HandleFunc("PATCH /api/me", s.user(s.updateMe))
+	mux.HandleFunc("POST /api/me/password", s.user(s.changeMyPassword))
 
 	mux.HandleFunc("POST /api/workspaces", s.user(s.createWorkspace))
 	mux.HandleFunc("GET /api/workspaces", s.user(s.listWorkspaces))
@@ -246,7 +255,7 @@ func (s *server) maintenance(next http.Handler) http.Handler {
 				return
 			}
 		}
-		publicControl := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || r.URL.Path == "/api/public/settings" || strings.HasPrefix(r.URL.Path, "/api/admin/")
+		publicControl := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || r.URL.Path == "/api/public/settings" || r.URL.Path == "/api/public/announcements" || strings.HasPrefix(r.URL.Path, "/api/admin/")
 		if strings.HasPrefix(r.URL.Path, "/api/") && !publicControl {
 			enabled, exists, err := s.runtimeFlag(r.Context(), "api.enabled")
 			if err != nil {
