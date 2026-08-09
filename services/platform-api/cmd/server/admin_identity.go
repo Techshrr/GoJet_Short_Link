@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -53,8 +54,7 @@ func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.Hand
 			next(w, r)
 			return
 		}
-		sessionID := r.Context().Value(adminSessionKey{}).(int64)
-		if err := s.adminAuth.VerifyStepUp(r.Context(), currentAdmin(r), sessionID, r.Header.Get("X-GoJet-TOTP")); err != nil {
+		if err := s.verifyAdminStepUp(r); err != nil {
 			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
 			return
 		}
@@ -62,8 +62,36 @@ func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.Hand
 	})
 }
 
-// Ordinary content/settings editing should not force a TOTP prompt for every save.
-// Truly high-risk changes are still protected either here or inside their handler.
+// verifyAdminStepUp deliberately lets MySQL own the step-up clock. DATETIME
+// values are never converted to Go time for expiry decisions, so server,
+// container and database timezone differences cannot invalidate a fresh grant.
+func (s *server) verifyAdminStepUp(r *http.Request) error {
+	a := currentAdmin(r)
+	sessionID := r.Context().Value(adminSessionKey{}).(int64)
+	var active bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COALESCE(step_up_until > UTC_TIMESTAMP(), FALSE) FROM administrator_sessions WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID).Scan(&active); err != nil {
+		return errors.New("管理员会话无效或已过期")
+	}
+	if active {
+		return nil
+	}
+	if err := s.adminAuth.ValidateTOTP(r.Context(), a, r.Header.Get("X-GoJet-TOTP")); err != nil {
+		return err
+	}
+	result, err := s.db.ExecContext(r.Context(), `UPDATE administrator_sessions SET step_up_until=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE) WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID)
+	if err != nil {
+		return errors.New("无法保存管理员二次验证授权")
+	}
+	if affected, _ := result.RowsAffected(); affected != 1 {
+		return errors.New("管理员会话无效或已过期")
+	}
+	return nil
+}
+
+// Ordinary settings/content editing is protected by the authenticated admin
+// session and role permission. Only genuinely high-risk paths are stepped up.
+// Sensitive fields inside settings sections can still enforce step-up inside
+// their own handler based on the actual value being changed.
 func stepUpRequiredForPath(path string) bool {
 	switch {
 	case path == "/api/admin/mail/test":
@@ -72,7 +100,7 @@ func stepUpRequiredForPath(path string) bool {
 		return false
 	case strings.HasPrefix(path, "/api/admin/brand/"):
 		return false
-	case strings.HasPrefix(path, "/api/admin/settings/") && path != "/api/admin/settings/mail":
+	case strings.HasPrefix(path, "/api/admin/settings/"):
 		return false
 	default:
 		return true
