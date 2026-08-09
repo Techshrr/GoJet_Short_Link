@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (s *server) adminUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +150,7 @@ func (s *server) publicAnnouncements(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id int64
 		var title, body string
-		var published any
+		var published time.Time
 		if rows.Scan(&id, &title, &body, &published) == nil {
 			items = append(items, map[string]any{"id": id, "title": title, "body_markdown": body, "published_at": published})
 		}
