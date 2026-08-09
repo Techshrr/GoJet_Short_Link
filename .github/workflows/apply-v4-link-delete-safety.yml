@@ -1,0 +1,42 @@
+name: Apply V4 safe link deletion
+
+on:
+  push:
+    branches:
+      - 'rebuild/v4-product'
+    paths:
+      - 'scripts/v4-link-delete-safety.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-product
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply latest safe-delete order
+        run: |
+          git fetch origin rebuild/v4-product
+          git reset --hard origin/rebuild/v4-product
+          python3 scripts/apply-v4-link-delete-safety.py
+          gofmt -w services/platform-api/cmd/server/product_resource_actions.go
+          grep -Fq 'First make the live redirect non-routable' services/platform-api/cmd/server/product_resource_actions.go
+          go test ./...
+          go vet ./...
+      - name: Commit safe-delete order
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name 'gojet-ci'
+          git config user.email 'gojet-ci@users.noreply.github.com'
+          git add services/platform-api/cmd/server/product_resource_actions.go
+          git commit -m 'links: pause and sync before admin soft delete'
+          git pull --rebase origin rebuild/v4-product
+          git push origin HEAD:rebuild/v4-product
