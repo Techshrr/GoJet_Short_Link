@@ -65,12 +65,6 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &values) != nil {
 		return
 	}
-	if settingsMutationNeedsStepUp(section, values) {
-		if err := s.verifyAdminStepUp(r); err != nil {
-			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
-			return
-		}
-	}
 	for key := range values {
 		if !allowed[key] {
 			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "不允许的设置项: " + key})
@@ -110,25 +104,6 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id,metadata) VALUES('admin.settings_updated','settings',?,JSON_OBJECT('keys',?))`, section, strings.Join(mapKeys(values), ","))
 	s.invalidatePublicSettings(r.Context())
 	jsonResponse(w, http.StatusOK, map[string]any{"saved": true, "section": section})
-}
-
-func settingsMutationNeedsStepUp(section string, values map[string]any) bool {
-	if section == "registration" {
-		if _, changed := values["turnstile.secret"]; changed {
-			return true
-		}
-		if _, changed := values["registration.admin_mfa"]; changed {
-			return true
-		}
-	}
-	if section == "runtime" {
-		if raw, changed := values["api.enabled"]; changed {
-			if enabled, valid := raw.(bool); valid && !enabled {
-				return true
-			}
-	}
-	}
-	return false
 }
 
 func (s *server) getSettingsCenter(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +348,6 @@ func validateRuntimeSettings(values map[string]any) error {
 			if _, valid := value.(bool); !valid {
 				return fmt.Errorf("%s 必须为布尔值", key)
 			}
-		}
 	}
 	if value, ok := values["cache.default_ttl_seconds"]; ok {
 		raw, valid := value.(float64)
