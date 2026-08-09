@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,10 +29,22 @@ func main() {
 		log.Fatal(err)
 	}
 	service := resources.NewFileWorker(db, getenv("FILE_STORAGE_PATH", "/data/files")).WithFileStore(fileStore)
-	clamAddress := getenv("CLAMAV_ADDRESS", "clamav:3310")
+	clamEndpoint := strings.TrimSpace(getenv("CLAMAV_ADDRESS", "disabled"))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	log.Printf("file scanner consuming quarantine with clamd at %s", clamAddress)
+
+	if clamEndpoint == "" || clamEndpoint == "disabled" {
+		log.Printf("file scanner is disabled because ClamAV is unavailable; file shares will remain quarantined until the scanner is configured")
+		for ctx.Err() == nil {
+			if _, purgeErr := service.PurgeDeletedFiles(ctx, 100); purgeErr != nil {
+				log.Printf("purge deleted files: %v", purgeErr)
+			}
+			wait(ctx, 30*time.Second)
+		}
+		return
+	}
+
+	log.Printf("file scanner consuming quarantine with clamd at %s", clamEndpoint)
 	for ctx.Err() == nil {
 		if _, purgeErr := service.PurgeDeletedFiles(ctx, 100); purgeErr != nil {
 			log.Printf("purge deleted files: %v", purgeErr)
@@ -49,7 +62,7 @@ func main() {
 		path, cleanup, materializeErr := service.MaterializeForScan(ctx, item)
 		clean, result, scanErr := false, "", materializeErr
 		if materializeErr == nil {
-			clean, result, scanErr = resources.ScanClamAV(ctx, clamAddress, path)
+			clean, result, scanErr = resources.ScanClamAVEndpoint(ctx, clamEndpoint, path)
 		}
 		cleanup()
 		if finishErr := service.FinishFileScan(ctx, item.ID, clean, result, scanErr); finishErr != nil {
