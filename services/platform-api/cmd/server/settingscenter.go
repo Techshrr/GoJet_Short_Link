@@ -36,6 +36,13 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &values) != nil {
 		return
 	}
+	if settingsMutationNeedsStepUp(section, values) {
+		sessionID := r.Context().Value(adminSessionKey{}).(int64)
+		if err := s.adminAuth.VerifyStepUp(r.Context(), currentAdmin(r), sessionID, r.Header.Get("X-GoJet-TOTP")); err != nil {
+			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
+			return
+		}
+	}
 	if section == "registration" && truthy(values["registration.require_email_verification"]) {
 		var status string
 		if err := s.db.QueryRowContext(r.Context(), `SELECT status FROM mail_health WHERE singleton_id=1`).Scan(&status); err != nil || status != "connected" {
@@ -74,6 +81,26 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 	s.invalidatePublicSettings(r.Context())
 	jsonResponse(w, 200, map[string]any{"saved": true, "section": section})
 }
+
+func settingsMutationNeedsStepUp(section string, values map[string]any) bool {
+	if section == "registration" {
+		if _, changed := values["turnstile.secret"]; changed {
+			return true
+		}
+		if _, changed := values["registration.admin_mfa"]; changed {
+			return true
+		}
+	}
+	if section == "runtime" {
+		if value, changed := values["api.enabled"]; changed {
+			if enabled, valid := value.(bool); valid && !enabled {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *server) getSettingsCenter(w http.ResponseWriter, r *http.Request) {
 	out := map[string]map[string]any{}
 	for section, keys := range settingSections {
@@ -104,6 +131,19 @@ func (s *server) getSettingsCenter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out["brand"] = brand
+
+	mailConfig, _ := s.mail.Config(r.Context())
+	out["mail"] = map[string]any{
+		"host":                mailConfig.Host,
+		"port":                mailConfig.Port,
+		"username":            mailConfig.Username,
+		"encryption":          mailConfig.Encryption,
+		"ehlo":                mailConfig.EHLO,
+		"from_email":          mailConfig.FromEmail,
+		"from_name":           mailConfig.FromName,
+		"reply_to":            mailConfig.ReplyTo,
+		"password_configured": mailConfig.Password != "",
+	}
 	jsonResponse(w, 200, out)
 }
 func (s *server) uploadBrandAsset(w http.ResponseWriter, r *http.Request) {
