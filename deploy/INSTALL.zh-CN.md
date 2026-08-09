@@ -1,213 +1,269 @@
-# GoJet Linux 生产安装手册
+# GoJet V4 Linux 生产安装手册
 
-本文件适用于 `gojet-<版本>-linux-production.zip`。安装包是可直接构建的生产发行目录，不包含
-Git 历史、Node 依赖、Playwright、测试报告或开发 Compose 文件。
+本手册适用于 `gojet-4.0.0-rc.5-linux-production.zip` 及后续采用标准 Web 安装器的版本。
 
-## 0. 已有 Nginx 1.28.1 + PHP 8.3.31 + MySQL 8.0（原生安装）
+> RC4 的临时 Token、`18088` 安装端口以及 MySQL root/管理员密码安装方式已经停用。
 
-这正是安装包支持的“传统 LEMP 主机”模式。需要说明：GoJet 后端是 Go 可执行程序，**不是 PHP
-应用**，因此不会复制到 PHP 项目的 `public/` 目录，也不经过 PHP-FPM。PHP 8.3.31 与现有 PHP
-站点保持不变；systemd 在本机启动 GoJet，Nginx 1.28.1 同时提供静态页面并反向代理本机端口。
+## 1. 当前优先支持的 Native 环境
 
-除现有 Nginx、PHP-FPM 和 MySQL 8.0 外，还必须安装 Redis 7.x；启用文件分享时必须运行 ClamAV
-daemon。发行 ZIP 已包含 Linux amd64 的 8 个生产二进制文件，不需要 Go、Node、Docker 或在生产机
-编译源码。
+GoJet RC5 首要验收环境：
 
-解压后只需要启动一次安装向导，不需要手工编辑 `.env`：
+- Debian 12 / Ubuntu 24.04，64 位；
+- 宝塔面板（aaPanel/BT）管理 Nginx 网站；
+- PHP 8.3，仅用于 `/install/` Web 安装向导；
+- MySQL 8.x；
+- Redis；
+- systemd；
+- ClamAV daemon（文件分享安全扫描；未安装时允许安装主系统，但文件分享暂不可用）。
 
-```bash
-unzip gojet-v4.0.0-rc.4-linux-production.zip
-cd gojet-v4.0.0-rc.4-linux-production
-sudo ./launch-web-installer.sh
+GoJet 的业务后端仍然是 Go。PHP 不承担短链跳转、API、Analytics、邮件 Worker 或文件 Worker，只承担标准安装入口。
+
+发行 ZIP 已包含 Linux amd64 的 8 个 GoJet 二进制文件，Native 部署不要求服务器安装 Go、Node 或 Docker。
+
+## 2. 宝塔网站创建方式
+
+在宝塔中创建 **PHP 项目/普通 PHP 网站**，不要使用“Go 项目”来托管整个 GoJet。
+
+例如测试站：
+
+```text
+网站目录：/www/wwwroot/test.san6.cn
+运行目录：/public
+PHP：8.3
+HTTPS：启用
 ```
 
-命令会显示一个带一次性随机令牌的安装网址，例如
-`http://服务器IP:18088/?token=...`。在浏览器中依次填写 MySQL 管理员连接、GoJet 数据库账号、
-Redis、正式域名、管理员账号与安全密钥；页面会即时验证 PHP 扩展、MySQL 版本、数据库登录和 Redis
-密码。点击“验证配置并开始安装”后，保持启动器窗口运行，后续数据库迁移、systemd 注册、Nginx
-配置和健康检查会自动完成。
+GoJet 的发行目录结构包含标准 Web Root：
 
-安装页只在安装期间临时启用，使用 192-bit 随机令牌；成功、失败或 30 分钟超时后都会删除临时
-Nginx 配置和令牌。宝塔环境会自动使用 `/www/server/panel/vhost/nginx` 和 PHP 8.3 FPM socket；
-标准 Debian 软件包环境使用 `/etc/nginx/conf.d`。如果服务器安全组拦截 18088，仅需在安装期间允许
-管理员 IP 访问该端口，安装完成后立即关闭。
-
-后台安装器会验证 Nginx >= 1.28、PHP >= 8.3，连接现有 MySQL/Redis，按顺序登记迁移，创建受限的
-`gojet` 系统用户和 systemd 服务，并在 `nginx -t` 成功后 reload。Go 服务仅监听
-`127.0.0.1:18080/18090/18092`。生成的 Nginx server block 只匹配 `PUBLIC_BASE_URL` 中的域名，
-不会删除默认站点或覆盖已有 PHP 站点。证书仍由现有 Certbot/面板管理；可在生成的
-`/etc/nginx/conf.d/gojet.conf` 上追加现有的 443/TLS 配置。
-
-原生服务状态与日志：
-
-```bash
-sudo systemctl status 'gojet@*.service'
-sudo journalctl -u gojet@platform-api -u gojet@redirect-engine -n 200
-sudo nginx -t
-curl -fsS http://127.0.0.1:18080/health
-curl -fsS http://127.0.0.1:18090/health
+```text
+GoJet/
+├── public/                 # 宝塔运行目录
+│   ├── index.html          # 公开站
+│   ├── app/                # 用户控制台
+│   ├── admin/              # 管理后台
+│   └── install/            # PHP 安装向导
+├── bin/                    # 8 个 Go 服务二进制
+├── app/
+├── database/
+├── deploy/
+├── installer/
+├── scripts/
+└── storage/
 ```
 
-如果希望数据库、Redis、ClamAV 也由安装包隔离管理，才选择下文 Docker Compose 模式；两种
-模式不要在同一发行目录混用。
+只有 `public/` 应作为网站根目录暴露到公网。
 
-## 1. 主机与网络准备
+## 3. 先准备 MySQL、Redis 与 ClamAV
 
-最低建议：64 位 Linux、2 vCPU、4 GB RAM、20 GB 可用磁盘。正式文件分享和分析数据量较大时，
-应使用独立数据盘或外部 S3。开放 `80/tcp`；TLS 在 Cloudflare、负载均衡器、Caddy 或 Certbot
-代理处终止时还应开放 `443/tcp`。不要把 MySQL、Redis、ClamAV 或内部服务端口暴露到公网。
+### MySQL
 
-Ubuntu 24.04 / Debian 12 安装 Docker：
+请先在宝塔中创建空数据库和普通数据库用户，例如：
 
-```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl unzip openssl
-curl -fsSL https://get.docker.com | sudo sh
-sudo systemctl enable --now docker
-sudo usermod -aG docker "$USER"
-# 重新登录后继续，或者后续命令使用 sudo
+```text
+数据库地址：127.0.0.1
+端口：3306
+数据库：gojet
+用户：gojet
+密码：高强度随机密码
 ```
 
-RHEL / Rocky Linux 9 可使用 Docker 官方仓库安装 `docker-ce` 与
-`docker-compose-plugin`。安装后确认：
+安装器 **不会要求 MySQL root 密码**，也不会自行创建数据库管理员账号。安装器使用所填普通数据库用户测试连接、检查 MySQL 8.x、创建表并执行迁移。
 
-```bash
-docker version
-docker compose version
+### Redis
+
+默认：
+
+```text
+127.0.0.1:6379
 ```
 
-## 2. 校验并解压发行包
+Redis 设置了密码时在安装页填写；未设置密码时可留空。
 
-把 ZIP 与同名 `.sha256` 上传到服务器，例如 `/opt/gojet/releases`：
+### ClamAV
+
+Debian/Ubuntu 推荐：
 
 ```bash
-cd /opt/gojet/releases
-sha256sum -c gojet-v4.0.0-linux-production.zip.sha256
-unzip gojet-v4.0.0-linux-production.zip
-cd gojet-v4.0.0-linux-production
-./scripts/verify-release.sh ../gojet-v4.0.0-linux-production.zip
+sudo apt update
+sudo apt install -y clamav clamav-daemon
+sudo systemctl restart clamav-daemon
+sudo systemctl status clamav-daemon --no-pager
+ls -l /run/clamav/clamd.ctl
 ```
 
-`verify-release.sh` 会检查 ZIP 完整性、内部文件清单、逐文件 SHA-256、生产服务集合和是否误带开发
-文件。发行目录建议保持只读；运行数据位于 Docker volumes，密钥仅位于
-`deploy/.env.production`。
+Native 模式使用 Debian 默认 Unix Socket：
 
-## 3. 创建生产配置
-
-```bash
-cp deploy/.env.production.example deploy/.env.production
-chmod 600 deploy/.env.production
+```text
+unix:///run/clamav/clamd.ctl
 ```
 
-生成密钥（每一项必须分别生成，不能复用）：
+不需要开放 `3310/tcp`。如果 ClamAV 没有安装或 daemon 未运行，GoJet 主系统仍可安装，但 File Worker 会保持运行并暂停病毒扫描，上传文件继续处于隔离状态，文件分享暂不可用。
+
+## 4. 校验并解压发行包
+
+将 ZIP 和 `.sha256` 上传到服务器后：
 
 ```bash
-openssl rand -base64 36   # MYSQL_PASSWORD
-openssl rand -base64 36   # MYSQL_ROOT_PASSWORD
-openssl rand -base64 36   # REDIS_PASSWORD
-openssl rand -hex 32      # VISITOR_HASH_KEY
-openssl rand -hex 32      # QR_TRACKING_KEY
-openssl rand -base64 32   # SETTINGS_ENCRYPTION_KEY，必须解码为 32 字节
-openssl rand -hex 32      # LOG_INGEST_TOKEN 与 LOG_WEBHOOK_TOKEN 使用同一个值
-openssl rand -base64 36   # ADMIN_BOOTSTRAP_PASSWORD
+sha256sum -c gojet-4.0.0-rc.5-linux-production.zip.sha256
+unzip gojet-4.0.0-rc.5-linux-production.zip
 ```
 
-编辑 `deploy/.env.production`，至少确认：
+将解压后的 **目录内容** 放到宝塔网站目录，例如：
 
-- `PUBLIC_BASE_URL=https://你的正式域名`；DNS 已指向当前主机；
-- `ADMIN_BOOTSTRAP_EMAIL` 和高强度初始密码；
-- 两个日志 Token 完全相同；
-- `FILE_STORAGE_DRIVER=filesystem` 时无需填写 S3；生产对象存储使用 `s3` 时必须填写 endpoint、
-  access key、secret key、bucket、region 和 TLS 开关；
-- `HTTP_PORT` 没有被其他服务占用；告警邮箱 `ALERT_RECIPIENT` 可正常接收邮件；
-- 使用安装包内置 Nginx 时设置 `NGINX_MODE=container`；使用系统 Nginx 时设置 `NGINX_MODE=host`；
-- 文件中不存在 `replace-with-`，也没有把示例域名或空密码保留下来。
+```text
+/www/wwwroot/test.san6.cn
+```
 
-## 4. 安装并启动
+确认：
 
 ```bash
+cd /www/wwwroot/test.san6.cn
+ls public/install/index.php
+ls bin/platform-api
+ls bin/redirect-engine
+```
+
+## 5. 一次 Root 准备
+
+进入 GoJet 根目录执行：
+
+```bash
+cd /www/wwwroot/test.san6.cn
 sudo ./install.sh
 ```
 
-安装器将依次执行：环境与 Compose 校验、拉取基础镜像、构建 GoJet 镜像、启动 MySQL/Redis、逐项
-登记数据库迁移、启动全部服务，并轮询真实 `/health`。首次拉取 ClamAV 特征库可能需要几分钟。
+这一步不会启动临时 HTTP 服务器，不生成浏览器 Token，也不会使用 `18088`。
 
-### 使用主机已有的 Nginx
+Root 准备程序只负责：
 
-如果服务器已经由系统软件包安装了 Nginx，不要手工复制容器版 `gojet.conf`。容器版配置中的
-`redirect-engine`、`platform-api` 是 Docker DNS 名称，主机 Nginx 无法解析。请改用：
+1. 检查 Nginx、PHP 8.3、PDO MySQL、OpenSSL、MySQL Client、Redis CLI、systemd、curl 和 8 个 GoJet 二进制；
+2. 创建受控的安装状态目录；
+3. 安装 root-only 的 `gojet-installer.service` 与 `gojet-installer.path`；
+4. 检测本机 ClamAV Unix Socket；
+5. 输出宝塔网站目录、运行目录与 Web 安装地址。
 
-```bash
-sudo ./install-host-nginx.sh
+PHP-FPM 不会获得 sudo/root 权限。Web 安装页只能写入白名单安装请求，特权操作由 root systemd Helper 执行。
+
+## 6. 浏览器安装
+
+先确认宝塔：
+
+```text
+网站目录 = GoJet 根目录
+运行目录 = /public
+PHP = 8.3
+HTTPS = 已开启
 ```
 
-该安装器使用 `compose.host-nginx.yaml` 禁用内置 Nginx，只把跳转引擎和 Platform API 分别绑定到
-`127.0.0.1:18080`、`127.0.0.1:18090`，渲染绝对静态目录到系统 Nginx 配置，执行 `nginx -t`
-后才 reload。MySQL、Redis、ClamAV 和 Worker 仍不开放主机端口。安装目录不能含空格。
+然后访问：
 
-查看状态：
-
-```bash
-docker compose --env-file deploy/.env.production -f deploy/compose.production.yaml ps
-docker compose --env-file deploy/.env.production -f deploy/compose.production.yaml logs --tail=200
-docker compose --env-file deploy/.env.production -f deploy/compose.production.yaml logs -f platform-api redirect-engine
-curl -fsS http://127.0.0.1:${HTTP_PORT:-80}/health
+```text
+https://你的域名/install/
 ```
 
-访问入口：
+安装向导分为：
 
-- 公开站：`https://你的域名/`
-- 用户控制台：`https://你的域名/app/`
-- 管理后台：`https://你的域名/admin/`
+1. **环境检查**：PHP、扩展、64 位、8 个 GoJet 二进制、安装 Helper、ClamAV；
+2. **MySQL / Redis**：MySQL 地址固定 `127.0.0.1`，填写端口、数据库名、普通用户名和密码；Redis 地址固定 `127.0.0.1`；
+3. **站点 / 管理员**：HTTPS 根地址、管理员邮箱、管理员密码、告警邮箱；
+4. **确认并安装**。
 
-## 5. 首次上线检查
+以下内部安全值由安装器通过 CSPRNG 自动生成，不要求人工填写：
 
-1. 使用 bootstrap 管理员登录，立即修改密码并启用 TOTP；保存恢复码到离线密码库。
-2. 在设置中心上传最终 Logo/Favicon，配置站点名称、SEO、邮件 SMTP 并发送真实测试邮件。
-3. 创建普通用户、工作区和短链接，访问短链接后确认实时点击与历史分析均增长。
-4. 上传一个允许类型的小文件，确认状态从 quarantine/pending 变为 clean 后才能下载。
-5. 检查“系统诊断”中的 MySQL、Redis、邮件、文件扫描、Analytics 和日志趋势。
-6. 在 Cloudflare 或外部代理启用 TLS Full (strict)，再启用 HSTS；不要在纯 HTTP 下录入生产密钥。
+- Settings Encryption Key；
+- Visitor Hash Key；
+- QR Tracking Key；
+- Log Ingest/Webhook Token。
 
-## 6. 备份与升级
+## 7. 后台安装阶段
 
-升级前保留当前解压目录。解压新版本后复制旧配置，再执行：
+点击“开始安装”后，root Helper 会：
 
-```bash
-cp /opt/gojet/releases/gojet-旧版本-linux-production/deploy/.env.production deploy/.env.production
-sudo ./upgrade.sh
+1. 再次验证所有 Web 输入，拒绝未知字段与控制字符；
+2. 使用普通 MySQL 用户连接 `127.0.0.1`；
+3. 检查 MySQL 8.x 并执行数据库迁移；
+4. 验证 Redis；
+5. 自动生成内部安全密钥；
+6. 检测 `/run/clamav/clamd.ctl`；
+7. 创建受限的 `gojet` 系统用户和数据目录；
+8. 注册 8 个 `gojet@*.service` systemd 服务；
+9. 在不覆盖宝塔 SSL/PHP 主配置的前提下写入 GoJet rewrite 路由；
+10. 执行 `nginx -t` 后 reload；
+11. 启动并检查全部 8 个 GoJet 服务；
+12. 检查 Redirect Engine、Platform API 和 Log Receiver 的真实 `/health`；
+13. 写入 `deploy/native/installed.lock` 并锁定安装入口。
+
+安装成功后 `/install/` 不再作为重新安装入口开放。
+
+## 8. Native 运行结构
+
+```text
+Internet
+   ↓
+宝塔 Nginx / TLS
+   ├── /              → public 静态站 / Redirect Engine
+   ├── /app/          → 用户控制台
+   ├── /admin/        → 管理后台
+   ├── /api/          → Platform API 127.0.0.1:18090
+   └── 短码请求       → Redirect Engine 127.0.0.1:18080
+
+systemd
+   ├── gojet@redirect-engine
+   ├── gojet@platform-api
+   ├── gojet@analytics-worker
+   ├── gojet@analytics-reconciler
+   ├── gojet@mail-worker
+   ├── gojet@file-worker
+   ├── gojet@operations-monitor
+   └── gojet@log-receiver
+
+ClamAV
+   └── /run/clamav/clamd.ctl
 ```
 
-升级器先在当前新版本目录的 `backups/` 创建一致性 MySQL 压缩备份和版本记录，再构建、迁移并健康
-检查。额外建议对 `gojet_mysql-data`、`gojet_redis-data`、`gojet_uploads` 和 `gojet_files` volumes
-创建基础设施快照。
+内部服务端口只监听 `127.0.0.1`，不要加入公网安全组。
 
-## 7. 回滚
-
-进入保留的旧版本发行目录，复制生产配置并传入升级前备份：
+## 9. 安装后检查
 
 ```bash
-cd /opt/gojet/releases/gojet-旧版本-linux-production
-cp ../gojet-新版本-linux-production/deploy/.env.production deploy/.env.production
-sudo ./rollback.sh ../gojet-新版本-linux-production/backups/gojet-20260809T120000Z.sql.gz
+sudo systemctl status 'gojet@*.service' --no-pager
+sudo journalctl -u gojet@platform-api -u gojet@redirect-engine -n 200 --no-pager
+curl -fsS http://127.0.0.1:18080/health
+curl -fsS http://127.0.0.1:18090/health
+curl -fsS http://127.0.0.1:18092/health
+sudo /www/server/nginx/sbin/nginx -t
 ```
 
-回滚会使用旧版本镜像定义重建服务、恢复 MySQL 并执行健康检查。数据库恢复会覆盖当前 GoJet 数据，
-执行前必须保留一次当前快照。
+浏览器检查：
 
-## 8. 常见故障
+```text
+https://你的域名/
+https://你的域名/app/
+https://你的域名/admin/
+```
 
-- **环境校验失败**：检查占位值、密钥长度、重复密码、S3 必填字段和 `PUBLIC_BASE_URL`。
-- **MySQL 不健康**：运行 `docker compose ... logs mysql`，检查磁盘空间及 volume 权限。
-- **Platform API 不健康**：确认 MySQL/Redis 已健康，检查设置加密密钥是否仍为安装时原值。
-- **文件一直等待扫描**：ClamAV 首次下载病毒库较慢；检查 `clamav` 与 `file-worker` 日志。
-- **502**：先检查 `platform-api` 和 `redirect-engine` health，再检查 Nginx 日志。
-- **误关 API/维护模式**：管理员入口仍保留，从 `/admin/` 的系统诊断或设置中心恢复。
+文件分享验收必须至少包含一次真实安全扫描。可以在测试环境使用 EICAR 标准测试文件确认恶意文件被 ClamAV 检出并保持隔离。
 
-不要执行 `docker compose down -v`，该命令会删除数据库、Redis、上传和文件 volumes。
+## 10. Docker 模式
 
-## 9. 下载地址自检
+Docker 部署仍然保留，但不与宝塔 Native 安装混用。需要 Docker 模式时显式执行：
 
-发行链接发布后必须从未登录 GitHub 的公开 HTTP 客户端完整下载并核对 SHA-256，不能只检查仓库内
-是否存在文件。维护者使用 `./scripts/verify-published-release.sh v4.0.0-rc.4` 验证标签指向、公开下载、
-校验文件和 ZIP 结构；任一项失败都不得向用户提供该链接。
+```bash
+sudo ./install.sh --docker
+```
+
+Docker 模式继续使用 Compose 管理 MySQL、Redis、ClamAV 和 GoJet 服务；Native `/install/` 流程不会修改 Docker 部署逻辑。
+
+## 11. RC5 验收原则
+
+RC5 只有在以下条件全部满足后才允许升级为 Final：
+
+- GitHub Actions：PHP/Shell/Go tests/vet 全绿；
+- 8 个 Linux 生产二进制全部可构建；
+- Production ZIP 构建与内部 SHA-256 Manifest 校验通过；
+- Debian 12 + 宝塔 + PHP 8.3 + MySQL 8.x + Redis + ClamAV **空目录真实安装通过**；
+- `/`、`/app/`、`/admin/`、短链、API、Analytics、邮件、文件上传/ClamAV/下载均完成真机验收；
+- 重启服务器后全部 systemd 服务可自动恢复；
+- 安装失败可明确显示原因并允许安全重试。
+
+在上述真机验收完成前，版本保持 RC，不标记为 GoJet V4.0.0 Final。
