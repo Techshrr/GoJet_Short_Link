@@ -77,8 +77,11 @@ done
 if [[ -n "${cfg[ALERT_EMAIL]:-}" ]]; then
   [[ "${cfg[ALERT_EMAIL]}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || fail '告警邮箱格式无效'
 fi
-[[ "${#cfg[ADMIN_PASSWORD]}" -ge 12 && "${#cfg[ADMIN_PASSWORD]}" -le 256 ]] || fail '管理员密码长度必须为 12-256 位'
-[[ "${#cfg[MYSQL_PASSWORD]}" -le 512 && "${#cfg[REDIS_PASSWORD]:-}" -le 512 ]] || fail '数据库或 Redis 密码过长'
+admin_password=${cfg[ADMIN_PASSWORD]}
+mysql_password=${cfg[MYSQL_PASSWORD]}
+redis_password=${cfg[REDIS_PASSWORD]-}
+[[ ${#admin_password} -ge 12 && ${#admin_password} -le 256 ]] || fail '管理员密码长度必须为 12-256 位'
+[[ ${#mysql_password} -le 512 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 密码过长'
 for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do
   value=${cfg[$key]:-}
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "安装参数 $key 包含非法控制字符"
