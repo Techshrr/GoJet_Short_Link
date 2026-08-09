@@ -23,7 +23,7 @@ func TestRolePermissionsAreExplicit(t *testing.T) {
 	}
 }
 
-func TestSensitiveOperationRequiresFreshTOTP(t *testing.T) {
+func TestSensitiveOperationRequiresTOTPAndGrantsSessionWindow(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -36,12 +36,33 @@ func TestSensitiveOperationRequiresFreshTOTP(t *testing.T) {
 	gcm, _ := cipher.NewGCM(block)
 	nonce := make([]byte, gcm.NonceSize())
 	encrypted := base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, []byte(secret), nil))
-	now := time.Unix(1_234_567_890, 0)
+	now := time.Unix(1_234_567_890, 0).UTC()
 	code := totpCode(secret, now)
+	mock.ExpectQuery("SELECT step_up_until FROM administrator_sessions").WithArgs(int64(88), int64(7)).WillReturnRows(sqlmock.NewRows([]string{"step_up_until"}).AddRow(nil))
 	mock.ExpectQuery("SELECT setting_value,is_encrypted FROM system_settings").WithArgs("admin.totp.7").WillReturnRows(sqlmock.NewRows([]string{"setting_value", "is_encrypted"}).AddRow(encrypted, true))
+	mock.ExpectExec("UPDATE administrator_sessions SET step_up_until").WithArgs(sqlmock.AnyArg(), int64(88), int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	service := New(db, store)
 	service.now = func() time.Time { return now }
-	if err = service.VerifyStepUp(context.Background(), Administrator{ID: 7, TOTPEnabled: true}, code); err != nil {
+	if err = service.VerifyStepUp(context.Background(), Administrator{ID: 7, TOTPEnabled: true}, 88, code); err != nil {
+		t.Fatal(err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSensitiveOperationReusesFreshSessionStepUp(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store, _ := settings.NewStore(db, []byte("0123456789abcdef0123456789abcdef"))
+	now := time.Unix(1_234_567_890, 0).UTC()
+	mock.ExpectQuery("SELECT step_up_until FROM administrator_sessions").WithArgs(int64(88), int64(7)).WillReturnRows(sqlmock.NewRows([]string{"step_up_until"}).AddRow(now.Add(5 * time.Minute)))
+	service := New(db, store)
+	service.now = func() time.Time { return now }
+	if err = service.VerifyStepUp(context.Background(), Administrator{ID: 7, TOTPEnabled: true}, 88, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
