@@ -49,12 +49,34 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 
 func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return s.admin(permission, func(w http.ResponseWriter, r *http.Request) {
-		if err := s.adminAuth.VerifyStepUp(r.Context(), currentAdmin(r), r.Header.Get("X-GoJet-TOTP")); err != nil {
+		if !stepUpRequiredForPath(r.URL.Path) {
+			next(w, r)
+			return
+		}
+		sessionID := r.Context().Value(adminSessionKey{}).(int64)
+		if err := s.adminAuth.VerifyStepUp(r.Context(), currentAdmin(r), sessionID, r.Header.Get("X-GoJet-TOTP")); err != nil {
 			jsonResponse(w, http.StatusPreconditionRequired, map[string]any{"error": err.Error(), "step_up_required": true})
 			return
 		}
 		next(w, r)
 	})
+}
+
+// Ordinary content/settings editing should not force a TOTP prompt for every save.
+// Truly high-risk changes are still protected either here or inside their handler.
+func stepUpRequiredForPath(path string) bool {
+	switch {
+	case path == "/api/admin/mail/test":
+		return false
+	case strings.HasPrefix(path, "/api/admin/mail/templates/"):
+		return false
+	case strings.HasPrefix(path, "/api/admin/brand/"):
+		return false
+	case strings.HasPrefix(path, "/api/admin/settings/") && path != "/api/admin/settings/mail":
+		return false
+	default:
+		return true
+	}
 }
 
 func currentAdmin(r *http.Request) adminauth.Administrator {
