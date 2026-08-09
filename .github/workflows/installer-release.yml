@@ -38,6 +38,19 @@ jobs:
           test "$(printf '%s' "$payload" | base64 -d)" = "https://test.san6.cn"
           ! grep -Fq "while IFS='=' read -r key encoded" scripts/native-installer-apply.sh
           grep -Fq 'encoded=${line#*=}' scripts/native-installer-apply.sh
+      - name: Installer Bash parameter expansion
+        run: |
+          bash -u -c '
+            declare -A cfg=([ADMIN_PASSWORD]="123456789012" [MYSQL_PASSWORD]="dbpass" [REDIS_PASSWORD]="")
+            admin_password=${cfg[ADMIN_PASSWORD]}
+            mysql_password=${cfg[MYSQL_PASSWORD]}
+            redis_password=${cfg[REDIS_PASSWORD]-}
+            test ${#admin_password} -eq 12
+            test ${#mysql_password} -eq 6
+            test ${#redis_password} -eq 0
+          '
+          ! grep -Fq '${#cfg[REDIS_PASSWORD]:-}' scripts/native-installer-apply.sh
+          grep -Fq 'redis_password=${cfg[REDIS_PASSWORD]-}' scripts/native-installer-apply.sh
       - name: Go test and vet
         run: |
           go test ./...
