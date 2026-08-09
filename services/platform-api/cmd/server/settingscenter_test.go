@@ -73,3 +73,32 @@ func TestValidateLinkSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestSettingsStepUpPolicyOnlyProtectsHighRiskChanges(t *testing.T) {
+	ordinary := []struct {
+		section string
+		values  map[string]any
+	}{
+		{"basic", map[string]any{"site.name": "GoJet"}},
+		{"seo", map[string]any{"seo.default_title": "GoJet"}},
+		{"brand", map[string]any{"brand.primary_color": "#1769e0"}},
+		{"registration", map[string]any{"registration.enabled": true}},
+		{"links", map[string]any{"links.code_length": float64(7)}},
+		{"privacy", map[string]any{"analytics.enabled": true}},
+		{"runtime", map[string]any{"api.enabled": true, "cache.enabled": true}},
+	}
+	for _, item := range ordinary {
+		if settingsMutationNeedsStepUp(item.section, item.values) {
+			t.Fatalf("ordinary %s settings unexpectedly require step-up", item.section)
+		}
+	}
+	if !settingsMutationNeedsStepUp("runtime", map[string]any{"api.enabled": false}) {
+		t.Fatal("disabling the user API must require step-up")
+	}
+	if !settingsMutationNeedsStepUp("registration", map[string]any{"turnstile.secret": "secret"}) {
+		t.Fatal("changing Turnstile secret must require step-up")
+	}
+	if !settingsMutationNeedsStepUp("registration", map[string]any{"registration.admin_mfa": false}) {
+		t.Fatal("changing administrator MFA policy must require step-up")
+	}
+}
