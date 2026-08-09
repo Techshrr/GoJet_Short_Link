@@ -28,8 +28,21 @@ if find "$ROOT" -type f -name '*_test.go' | grep -q .; then echo "Go test source
 if grep -R -n -E 'installer\.token|MYSQL_ADMIN_PASSWORD' "$ROOT/install.sh" "$ROOT/install-native-lemp.sh" "$ROOT/installer" "$ROOT/public/install" "$ROOT/deploy/native"; then
   echo "deprecated RC4 installer behavior leaked into production package" >&2; exit 1
 fi
+
 grep -Fq 'step_up_until' "$ROOT/database/migrations/026_admin_step_up_session.sql" || { echo 'step-up migration is invalid' >&2; exit 1; }
-grep -Fq '10 分钟内无需重复输入' "$ROOT/public/admin/admin-settings-fix.js" || { echo 'admin settings fix is missing' >&2; exit 1; }
+grep -Fq '正在从服务器读取当前设置' "$ROOT/public/admin/admin-settings-fix.js" || { echo 'RC7 direct settings renderer is missing' >&2; exit 1; }
+grep -Fq 'SMTP 设置已保存，并已从数据库重新读取确认' "$ROOT/public/admin/admin-settings-fix.js" || { echo 'RC7 SMTP read-back validation is missing' >&2; exit 1; }
+if grep -Fq 'MutationObserver' "$ROOT/public/admin/admin-settings-fix.js"; then
+  echo 'obsolete RC6 MutationObserver hotpatch leaked into RC7' >&2; exit 1
+fi
+grep -Fq 'admin-settings-fix.js?v=4.0.0-rc.7' "$ROOT/public/admin/index.html" || { echo 'RC7 admin cache-busting script reference is missing' >&2; exit 1; }
+grep -Fq 'location ^~ /uploads/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'RC7 upload alias route is missing' >&2; exit 1; }
+if sed -n '/location \^~ \/uploads\//,/^}/p' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" | grep -Fq 'try_files'; then
+  echo 'upload alias must not use try_files' >&2; exit 1
+fi
+grep -Fq '修复品牌资源目录和宝塔 Nginx 路由' "$ROOT/upgrade-native.sh" || { echo 'native upgrade does not refresh aaPanel routing' >&2; exit 1; }
+grep -Fq 'gojet-bt-rewrite.conf' "$ROOT/upgrade-native.sh" || { echo 'native upgrade does not install the RC7 rewrite' >&2; exit 1; }
+
 (cd "$ROOT" && sha256sum -c MANIFEST.sha256 >/dev/null)
 actual=$(sed -n '/^services:$/,/^volumes:$/p' "$ROOT/deploy/compose.production.yaml" | sed -n 's/^  \([a-z][a-z0-9-]*\):$/\1/p' | sort | tr '\n' ' ')
 expected='analytics-reconciler analytics-worker clamav file-worker log-receiver mail-worker mysql nginx operations-monitor platform-api redirect-engine redis '
