@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -31,7 +30,7 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 			jsonResponse(w, http.StatusUnauthorized, map[string]string{"error": "管理员会话无效或已过期"})
 			return
 		}
-		if !adminauth.Allowed(a.Role, permission) {
+		if !adminauth.AllowedAdministrator(a, permission) {
 			s.adminAuth.AuditDenied(r.Context(), a, r.Method, r.URL.Path, requestIP(r), r.UserAgent(), "permission denied: "+permission)
 			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "当前管理员没有此操作权限"})
 			return
@@ -48,38 +47,10 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 	}
 }
 
-// GoJet V4 product rebuild no longer uses per-operation step-up authentication.
-// TOTP remains an optional second factor at administrator login. Once an
-// administrator has an authenticated session, authorization is decided by the
-// administrator permission model and all actions are still audited server-side.
+// Kept as a compatibility alias for route declarations left over from older
+// release candidates. There is intentionally no per-operation second factor.
 func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return s.admin(permission, next)
-}
-
-// Kept temporarily for source compatibility with older RC code. It is no
-// longer called by adminStepUp and will be removed after the administrator
-// permission refactor is complete.
-func (s *server) verifyAdminStepUp(r *http.Request) error {
-	a := currentAdmin(r)
-	sessionID := r.Context().Value(adminSessionKey{}).(int64)
-	var active bool
-	if err := s.db.QueryRowContext(r.Context(), `SELECT COALESCE(step_up_until > UTC_TIMESTAMP(), FALSE) FROM administrator_sessions WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID).Scan(&active); err != nil {
-		return errors.New("管理员会话无效或已过期")
-	}
-	if active {
-		return nil
-	}
-	if err := s.adminAuth.ValidateTOTP(r.Context(), a, r.Header.Get("X-GoJet-TOTP")); err != nil {
-		return err
-	}
-	result, err := s.db.ExecContext(r.Context(), `UPDATE administrator_sessions SET step_up_until=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE) WHERE id=? AND administrator_id=? AND expires_at>UTC_TIMESTAMP()`, sessionID, a.ID)
-	if err != nil {
-		return errors.New("无法保存管理员二次验证授权")
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return errors.New("管理员会话无效或已过期")
-	}
-	return nil
 }
 
 func stepUpRequiredForPath(path string) bool { return false }
@@ -150,7 +121,7 @@ func (s *server) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 func (s *server) adminRevokeSessions(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		jsonResponse(w, 400, map[string]string{"error": "invalid administrator"})
+		jsonResponse(w, 400, map[string]string{"error": "管理员编号无效"})
 		return
 	}
 	if err = s.adminAuth.RevokeAll(r.Context(), id); err != nil {
@@ -160,20 +131,46 @@ func (s *server) adminRevokeSessions(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]bool{"revoked": true})
 }
 
+func administratorRoleTemplates() map[string][]string {
+	return map[string][]string{
+		"super_admin": adminauth.TemplatePermissions("super_admin"),
+		"operator":    adminauth.TemplatePermissions("operator"),
+		"security":    adminauth.TemplatePermissions("security"),
+		"support":     adminauth.TemplatePermissions("support"),
+		"analyst":     adminauth.TemplatePermissions("analyst"),
+		"custom":      adminauth.TemplatePermissions("custom"),
+	}
+}
+
 func (s *server) adminListAdministrators(w http.ResponseWriter, r *http.Request) {
 	items, err := s.adminAuth.List(r.Context())
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "管理员列表暂时不可用"})
 		return
 	}
-	jsonResponse(w, 200, map[string]any{"data": items})
+	jsonResponse(w, 200, map[string]any{
+		"data":               items,
+		"permission_catalog": adminauth.PermissionCatalog(),
+		"role_templates":     administratorRoleTemplates(),
+	})
 }
 func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request) {
-	var input struct{ Email, DisplayName, Password, Role string }
+	var input struct {
+		Email       string   `json:"email"`
+		DisplayName string   `json:"display_name"`
+		Password    string   `json:"password"`
+		Role        string   `json:"role"`
+		Permissions []string `json:"permissions"`
+	}
 	if decode(w, r, &input) != nil {
 		return
 	}
-	id, err := s.adminAuth.Create(r.Context(), input.Email, input.DisplayName, input.Password, input.Role)
+	actor := currentAdmin(r)
+	if input.Role == "super_admin" && actor.Role != "super_admin" {
+		jsonResponse(w, http.StatusForbidden, map[string]string{"error": "只有超级管理员可以创建新的超级管理员"})
+		return
+	}
+	id, err := s.adminAuth.Create(r.Context(), input.Email, input.DisplayName, input.Password, input.Role, input.Permissions)
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
@@ -182,15 +179,24 @@ func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request
 }
 func (s *server) adminUpdateAdministrator(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	var input struct{ Role, Status string }
+	var input struct {
+		Role        string   `json:"role"`
+		Status      string   `json:"status"`
+		Permissions []string `json:"permissions"`
+	}
 	if decode(w, r, &input) != nil {
 		return
 	}
 	if err != nil {
-		jsonResponse(w, 400, map[string]string{"error": "invalid administrator"})
+		jsonResponse(w, 400, map[string]string{"error": "管理员编号无效"})
 		return
 	}
-	if err = s.adminAuth.Update(r.Context(), currentAdmin(r).ID, id, input.Role, input.Status); err != nil {
+	actor := currentAdmin(r)
+	if input.Role == "super_admin" && actor.Role != "super_admin" {
+		jsonResponse(w, http.StatusForbidden, map[string]string{"error": "只有超级管理员可以授予超级管理员权限"})
+		return
+	}
+	if err = s.adminAuth.Update(r.Context(), actor.ID, id, input.Role, input.Status, input.Permissions); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
