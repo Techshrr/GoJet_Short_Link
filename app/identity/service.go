@@ -30,6 +30,7 @@ func (s *Service) Register(ctx context.Context, email, password, name string) (U
 }
 func (s *Service) RegisterWithMetadata(ctx context.Context, email, password, name, ip, userAgent string) (User, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
+	name = strings.TrimSpace(name)
 	if !strings.Contains(email, "@") || len(password) < 10 || name == "" {
 		return User{}, "", errors.New("邮箱、显示名称和至少 10 位密码为必填项")
 	}
@@ -84,10 +85,26 @@ func (s *Service) LoginWithMetadata(ctx context.Context, email, password, ip, us
 	if err != nil {
 		return User{}, "", err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL))
-	return user, token, err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, "", err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL)); err != nil {
+		return User{}, "", err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET last_login_at=NOW() WHERE id=?`, user.ID); err != nil {
+		return User{}, "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return User{}, "", err
+	}
+	return user, token, nil
 }
 func (s *Service) Authenticate(ctx context.Context, token string) (User, error) {
+	if len(token) != 64 {
+		return User{}, sql.ErrNoRows
+	}
 	sum := sha256.Sum256([]byte(token))
 	var u User
 	id := hex.EncodeToString(sum[:])
