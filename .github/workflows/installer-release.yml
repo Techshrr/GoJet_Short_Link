@@ -28,8 +28,8 @@ jobs:
           bash -n scripts/install-docker.sh
           sh -n scripts/package-release.sh
           node --check frontend/admin-console/app.js
-          node --check frontend/admin-console/admin-settings-fix.js
           node --check frontend/user-console/app.js
+          node --check frontend/user-console/auth-guard.js
           node --check frontend/marketing-site/assets/auth.js
       - name: Fresh install release policy
         run: |
@@ -48,11 +48,17 @@ jobs:
           grep -Fq 'POST /api/auth/forgot-password' services/platform-api/cmd/server/main.go
           grep -Fq 'PATCH /api/admin/announcements/{id}' services/platform-api/cmd/server/main.go
           grep -Fq 'adminRunReconciliationSimple' services/platform-api/cmd/server/main.go
+          test ! -e frontend/admin-console/admin-settings-fix.js
+          grep -Fq 'Markdown 正文' frontend/admin-console/app.js
+          grep -Fq '添加用户' frontend/admin-console/app.js
+          grep -Fq 'permissionGrid' frontend/admin-console/app.js
+          ! grep -Fq 'step_up_required' frontend/admin-console/app.js
           test -f frontend/marketing-site/login/index.html
           test -f frontend/marketing-site/register/index.html
           test -f frontend/marketing-site/forgot-password/index.html
           test -f frontend/marketing-site/reset-password/index.html
           test -f frontend/marketing-site/verify-email/index.html
+          grep -Fq 'location = /login' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
           ! sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'
       - name: Go test and vet
