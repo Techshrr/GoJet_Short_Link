@@ -11,7 +11,7 @@ TARGET="$STAGE/$NAME"
 for tool in go zip sha256sum; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 mkdir -p "$TARGET/app" "$TARGET/bin" "$TARGET/frontend" "$TARGET/installer" "$TARGET/services" \
   "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/scripts" "$TARGET/docs" \
-  "$TARGET/public" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer"
+  "$TARGET/public" "$TARGET/public/assets" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer"
 
 build() { (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$TARGET/bin/$1" "$2"); }
 build redirect-engine ./services/redirect-engine/cmd/server
@@ -33,6 +33,7 @@ cp -R "$ROOT/database/migrations/." "$TARGET/database/migrations/"
 cp -R "$ROOT/frontend/marketing-site/." "$TARGET/public/"
 cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
 cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
+cp "$ROOT/frontend/shared/gojet-design-system.css" "$TARGET/public/assets/gojet-design-system.css"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
