@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -37,11 +38,11 @@ func (s *server) invoicePDF(w http.ResponseWriter, r *http.Request) {
 	method := methodNames[paidVia]
 	if method == "" { method = paidVia }
 	data := billing.InvoicePDFData{
-		BrandColor: s.stringSetting("brand.primary_color", "#16A66A"),
-		SiteName: s.stringSetting("site.short_name", "GoJet"),
-		CompanyName: s.stringSetting("site.company_name", "GoJet"),
-		CompanyAddress: s.stringSetting("site.company_address", ""),
-		ContactEmail: s.stringSetting("site.contact_email", ""),
+		BrandColor: s.stringSetting(r.Context(), "brand.primary_color", "#16A66A"),
+		SiteName: s.stringSetting(r.Context(), "site.short_name", "GoJet"),
+		CompanyName: s.stringSetting(r.Context(), "site.company_name", "GoJet"),
+		CompanyAddress: s.stringSetting(r.Context(), "site.company_address", ""),
+		ContactEmail: s.stringSetting(r.Context(), "site.contact_email", ""),
 		WorkspaceName: workspaceName,
 		InvoiceNumber: number,
 		Status: status,
@@ -62,15 +63,13 @@ func (s *server) invoicePDF(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(pdf)
 }
 
-func (s *server) stringSetting(key, fallback string) string {
-	raw, exists, err := s.settings.Get(rContextFallback(), key)
+func (s *server) stringSetting(ctx context.Context, key, fallback string) string {
+	raw, exists, err := s.settings.Get(ctx, key)
 	if err != nil || !exists || strings.TrimSpace(raw) == "" { return fallback }
 	var value string
 	if json.Unmarshal([]byte(raw), &value) == nil { return value }
 	return raw
 }
-
-func rContextFallback() interface{ Done() <-chan struct{} } { return nil }
 
 func safeInvoiceFilename(value string) string {
 	var out strings.Builder
