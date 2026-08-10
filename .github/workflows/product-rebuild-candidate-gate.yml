@@ -298,8 +298,8 @@ jobs:
             MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_candidate?parseTime=true&multiStatements=true' \
             REDIS_ADDRESS='127.0.0.1:6379' \
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
-            ADMIN_BOOTSTRAP_EMAIL='owner-auth@example.test' \
-            ADMIN_BOOTSTRAP_PASSWORD='OwnerAuthPassword!2026' \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
+            ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
             QR_TRACKING_KEY='fresh-candidate-auth-qr-key-2026' \
             PUBLIC_BASE_URL='http://127.0.0.1:18091' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' \
