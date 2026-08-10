@@ -6,6 +6,10 @@ on:
       - 'rebuild/v4-product'
   pull_request:
 
+concurrency:
+  group: v4-product-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -14,7 +18,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - name: PHP installer syntax
         run: |
           php -l installer/index.php
