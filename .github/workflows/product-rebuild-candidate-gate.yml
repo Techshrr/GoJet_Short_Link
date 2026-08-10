@@ -6,18 +6,18 @@ on:
     branches:
       - 'rebuild/v4-product-hardening'
     paths:
-      - 'scripts/v4-candidate-gate-rc10.trigger'
+      - 'scripts/v4-candidate-gate-rc11.trigger'
 
 permissions:
   contents: read
   actions: read
 
 env:
-  PACKAGE_RUN_ID: '31421124096'
-  PACKAGE_HEAD_SHA: '5f5282e8e329c5c38b91733de379d1666f7014bd'
-  PACKAGE_ARTIFACT_NAME: 'gojet-4.0.0-rc.10-package-release'
-  PACKAGE_VERSION: '4.0.0-rc.10'
-  PACKAGE_ZIP_SHA256: '6bcefc6b0160ca67b92c05d98866d4868ba8492605baaf624de3faed12b55c6c'
+  PACKAGE_RUN_ID: '31422346928'
+  PACKAGE_HEAD_SHA: 'aa642f0cb9fc66698854552a725e08249a38e663'
+  PACKAGE_ARTIFACT_NAME: 'gojet-4.0.0-rc.11-package-release'
+  PACKAGE_VERSION: '4.0.0-rc.11'
+  PACKAGE_ZIP_SHA256: '80e6d7c2370f8642b3b7196666a1ac3ac1500f2820b72eb33bcfd9917475dffa'
 
 concurrency:
   group: v4-fresh-install-candidate-${{ github.ref }}
@@ -58,7 +58,7 @@ jobs:
           while IFS= read -r path; do
             [ -n "$path" ] || continue
             case "$path" in
-              .github/workflows/product-rebuild-candidate-gate.yml|scripts/v4-candidate-gate-rc10.trigger) ;;
+              .github/workflows/product-rebuild-candidate-gate.yml|scripts/v4-candidate-gate-rc11.trigger|.github/workflows/product-rebuild-candidate-p0-debug.yml|scripts/v4-candidate-p0-debug.trigger) ;;
               *) echo "runtime/package content changed after Package gate: $path" >&2; exit 1 ;;
             esac
           done < /tmp/gojet-post-package-files
@@ -68,7 +68,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y default-mysql-client zbar-tools unzip file
 
-      - name: Download exact verified RC10 package artifact
+      - name: Download exact verified RC11 package artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PACKAGE_ARTIFACT_NAME }}
@@ -81,8 +81,8 @@ jobs:
         run: |
           set -euo pipefail
           ART=/tmp/gojet-package-artifact
-          EVIDENCE="$ART/RC10-RELEASE-EVIDENCE.txt"
-          ZIP="$ART/gojet-4.0.0-rc.10-linux-production.zip"
+          EVIDENCE="$ART/RC11-RELEASE-EVIDENCE.txt"
+          ZIP="$ART/gojet-4.0.0-rc.11-linux-production.zip"
           SHA_FILE="$ZIP.sha256"
           test -f "$EVIDENCE"
           test -f "$ZIP"
@@ -166,7 +166,7 @@ jobs:
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
             ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='fresh-candidate-rc10-qr-key-2026' \
+            QR_TRACKING_KEY='fresh-candidate-rc11-qr-key-2026' \
             PUBLIC_BASE_URL='http://127.0.0.1:18080' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
             UPLOAD_STORAGE_PATH='/tmp/gojet-candidate/uploads' \
@@ -177,14 +177,14 @@ jobs:
             REDIS_ADDRESS='127.0.0.1:6379' \
             HTTP_ADDRESS='127.0.0.1:18080' \
             VISITOR_HASH_KEY='fresh-candidate-visitor-key-2026' \
-            QR_TRACKING_KEY='fresh-candidate-rc10-qr-key-2026' \
+            QR_TRACKING_KEY='fresh-candidate-rc11-qr-key-2026' \
             "$ROOT/bin/redirect-engine" >/tmp/gojet-candidate/redirect-engine.log 2>&1 &
           echo $! >/tmp/gojet-candidate/redirect-engine.pid
           env \
             MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' \
             REDIS_ADDRESS='127.0.0.1:6379' \
             ANALYTICS_GROUP='gojet-mysql' \
-            ANALYTICS_CONSUMER='fresh-candidate-rc10' \
+            ANALYTICS_CONSUMER='fresh-candidate-rc11' \
             "$ROOT/bin/analytics-worker" >/tmp/gojet-candidate/analytics-worker.log 2>&1 &
           echo $! >/tmp/gojet-candidate/analytics-worker.pid
           for port in 18090 18080; do
@@ -246,7 +246,7 @@ jobs:
           USER_TOKEN=$(printf '%s' "$user" | field "['token']")
           departments=$(expect 200 "$(request GET /api/support/departments '' "$USER_TOKEN")" 'support departments')
           DEPT_ID=$(printf '%s' "$departments" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
-          ticket=$(expect 201 "$(request POST /api/support/tickets "{\"department_id\":$DEPT_ID,\"subject\":\"Fresh Candidate Support\",\"priority\":\"high\",\"message\":\"RC10 fresh candidate support lifecycle\"}" "$USER_TOKEN")" 'ticket create')
+          ticket=$(expect 201 "$(request POST /api/support/tickets "{\"department_id\":$DEPT_ID,\"subject\":\"Fresh Candidate Support\",\"priority\":\"high\",\"message\":\"RC11 fresh candidate support lifecycle\"}" "$USER_TOKEN")" 'ticket create')
           TICKET_ID=$(printf '%s' "$ticket" | field "['id']")
           TICKET_NUMBER=$(printf '%s' "$ticket" | field "['ticket_number']")
           expect 200 "$(request GET "/api/support/tickets/$TICKET_ID" '' "$USER_TOKEN")" 'ticket detail' >/dev/null
@@ -341,33 +341,44 @@ jobs:
             echo 'packaged_runtime_p0=pass'
             echo 'support_turnstile_abuse=pass'
             echo 'packaged_auth_policy=pass'
-          } | tee "$ART/RC10-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt"
+          } | tee "$ART/RC11-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt"
 
       - name: Refuse stale candidate controls if branch moved
         run: |
           set -euo pipefail
           TESTED=$(cat /tmp/gojet-candidate-control-sha)
           CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product-hardening | awk '{print $1}')
-          test "$TESTED" = "$CURRENT" || { echo "hardening branch moved during candidate validation: tested=$TESTED current=$CURRENT" >&2; exit 1; }
+          if [ "$TESTED" != "$CURRENT" ]; then
+            git fetch --no-tags origin "$CURRENT"
+            git diff --name-only "$TESTED".."$CURRENT" | tee /tmp/gojet-candidate-post-lock-files
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              case "$path" in
+                .github/workflows/product-rebuild-candidate-p0-debug.yml|scripts/v4-candidate-p0-debug.trigger) ;;
+                *) echo "candidate controls/runtime changed during validation: $path" >&2; exit 1 ;;
+              esac
+            done < /tmp/gojet-candidate-post-lock-files
+          fi
 
       - name: Diagnostics on failure
         if: failure()
         run: |
           echo '===== post-package changed files ====='; cat /tmp/gojet-post-package-files 2>/dev/null || true
+          echo '===== candidate post-lock changed files ====='; cat /tmp/gojet-candidate-post-lock-files 2>/dev/null || true
           echo '===== primary platform API ====='; cat /tmp/gojet-candidate/platform-api.log 2>/dev/null || true
           echo '===== redirect engine ====='; cat /tmp/gojet-candidate/redirect-engine.log 2>/dev/null || true
           echo '===== analytics worker ====='; cat /tmp/gojet-candidate/analytics-worker.log 2>/dev/null || true
           echo '===== auth API ====='; cat /tmp/gojet-auth.log 2>/dev/null || true
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,ticket_number,status,priority FROM support_tickets ORDER BY id DESC LIMIT 20; SELECT id,reported_url,reason,status FROM abuse_reports ORDER BY id DESC LIMIT 20;' || true
 
-      - name: Upload exact RC10 fresh-install candidate
+      - name: Upload exact RC11 fresh-install candidate
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-4.0.0-rc.10-fresh-install-candidate
+          name: gojet-4.0.0-rc.11-fresh-install-candidate
           path: |
-            /tmp/gojet-package-artifact/gojet-4.0.0-rc.10-linux-production.zip
-            /tmp/gojet-package-artifact/gojet-4.0.0-rc.10-linux-production.zip.sha256
-            /tmp/gojet-package-artifact/RC10-RELEASE-EVIDENCE.txt
-            /tmp/gojet-package-artifact/RC10-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt
+            /tmp/gojet-package-artifact/gojet-4.0.0-rc.11-linux-production.zip
+            /tmp/gojet-package-artifact/gojet-4.0.0-rc.11-linux-production.zip.sha256
+            /tmp/gojet-package-artifact/RC11-RELEASE-EVIDENCE.txt
+            /tmp/gojet-package-artifact/RC11-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt
           if-no-files-found: error
           retention-days: 14
