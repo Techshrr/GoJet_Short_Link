@@ -140,6 +140,9 @@ jobs:
       - name: Protected file share lifecycle
         env: *integration-env
         run: bash tests/integration/file-share-lifecycle.sh
+      - name: Logo upload, readback, persistence and deletion
+        env: *integration-env
+        run: bash tests/integration/brand-logo-lifecycle.sh
       - name: SMTP readback, branded test mail and lifecycle coverage
         env: *integration-env
         run: bash tests/integration/mail-lifecycle-smtp.sh
