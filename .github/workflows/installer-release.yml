@@ -34,15 +34,26 @@ jobs:
           bash -n scripts/native-installer-apply.sh
           bash -n scripts/install-docker.sh
           sh -n scripts/package-release.sh
-          node --check frontend/admin-console/app.js
-          node --check frontend/admin-console/product-actions.js
-          node --check frontend/admin-console/settings-full.js
-          node --check frontend/admin-console/admin-hardening.js
-          node --check frontend/user-console/app.js
-          node --check frontend/user-console/auth-guard.js
-          node --check frontend/user-console/product-hardening.js
-          node --check frontend/user-console/product-router.js
-          node --check frontend/marketing-site/assets/auth.js
+          for js in \
+            frontend/admin-console/app.js \
+            frontend/admin-console/product-actions.js \
+            frontend/admin-console/settings-full.js \
+            frontend/admin-console/admin-hardening.js \
+            frontend/user-console/app.js \
+            frontend/user-console/auth-guard.js \
+            frontend/user-console/product-hardening.js \
+            frontend/user-console/product-router.js \
+            frontend/user-console/pending-link.js \
+            frontend/user-console/link-hardening.js \
+            frontend/user-console/file-hardening.js \
+            frontend/user-console/bio-hardening.js \
+            frontend/user-console/domain-hardening.js \
+            frontend/user-console/analytics-hardening.js \
+            frontend/marketing-site/assets/auth.js \
+            frontend/marketing-site/assets/home.js \
+            frontend/marketing-site/assets/file-share.js; do
+            node --check "$js"
+          done
       - name: Fresh install runtime integrity policy
         run: |
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
@@ -51,22 +62,36 @@ jobs:
           grep -Fq '/proc/$pid/exe' scripts/native-installer-run.sh
           grep -Fq 'totp_enabled' scripts/native-installer-run.sh
           grep -Fq 'native-installer-run.sh' deploy/native/gojet-installer.service
+          grep -Fq 'reenable_installer_path' scripts/native-installer-run.sh
           if grep -Fq '"$ROOT/upgrade-native.sh"' scripts/package-release.sh; then exit 1; fi
           if grep -Fq '"$ROOT/upgrade.sh"' scripts/package-release.sh; then exit 1; fi
       - name: Product hardening regression checks
         run: |
           test -f docs/V4_PRODUCT_HARDENING_AUDIT.md
-          test -f frontend/user-console/product-hardening.js
-          test -f frontend/user-console/product-hardening.css
+          test -f frontend/user-console/shell-hardening.css
+          test -f frontend/user-console/link-hardening.js
+          test -f frontend/user-console/file-hardening.js
+          test -f frontend/user-console/bio-hardening.js
+          test -f frontend/user-console/domain-hardening.js
+          test -f frontend/user-console/analytics-hardening.js
           test -f frontend/admin-console/admin-hardening.js
-          test -f frontend/admin-console/admin-hardening.css
-          grep -Fq '完整可分享地址' frontend/user-console/product-hardening.js
-          grep -Fq '复制下载链接' frontend/user-console/product-hardening.js
-          grep -Fq '纯文本、Markdown、代码 / 日志' frontend/user-console/product-hardening.js
-          grep -Fq '二维码必须绑定真实启用短链' frontend/user-console/product-hardening.js
-          grep -Fq 'renderSharedText' services/platform-api/cmd/server/public_resources.go
+          test -f frontend/marketing-site/assets/home-hardening.css
+          test -f database/migrations/028_file_share_password.sql
+          grep -Fq '完整公开网址' frontend/user-console/link-hardening.js
+          grep -Fq '/f/' frontend/user-console/file-hardening.js
+          grep -Fq '文件访问密码' services/platform-api/cmd/server/resources.go
+          grep -Fq 'OpenDownloadWithPassword' app/resources/file_public.go
+          grep -Fq 'X-GoJet-Public-File-Page' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'renderSafeMarkdown' services/platform-api/cmd/server/text_render.go
+          grep -Fq '手机实时预览' frontend/user-console/bio-hardening.js
+          grep -Fq '重新生成 TXT' frontend/user-console/domain-hardening.js
+          grep -Fq 'QR 扫码访问' frontend/user-console/analytics-hardening.js
           grep -Fq '未接入运行时的装饰性设置已经从正式后台移除' frontend/admin-console/admin-hardening.js
+          grep -Fq 'data-demo-tab="url"' frontend/marketing-site/index.html
+          grep -Fq 'data-demo-tab="text"' frontend/marketing-site/index.html
+          grep -Fq 'data-demo-tab="file"' frontend/marketing-site/index.html
+          grep -Fq 'gojet_post_auth_path' frontend/marketing-site/assets/auth.js
+          grep -Fq 'redirect_status' app/links/json.go
           if grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP|settingsMutationNeedsStepUp' app services frontend/admin-console; then
             echo 'obsolete operation-level administrator step-up code remains' >&2
             exit 1
@@ -80,6 +105,7 @@ jobs:
           grep -Fq 'location ^~ /app/' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'location ^~ /admin/' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
+          grep -Fq 'location ~ ^/f/' deploy/nginx/gojet-bt-rewrite.conf
           if sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'; then
             echo '/uploads alias must not use try_files' >&2
             exit 1
@@ -91,10 +117,7 @@ jobs:
           set +e
           go test ./... 2>&1 | tee /tmp/go-test.log
           rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then
-            echo '--- Go test failure tail ---' >&2
-            tail -120 /tmp/go-test.log >&2
-          fi
+          if [ "$rc" -ne 0 ]; then tail -160 /tmp/go-test.log >&2; fi
           exit "$rc"
       - name: Go vet
         id: go-vet
@@ -104,10 +127,7 @@ jobs:
           set +e
           go vet ./... 2>&1 | tee /tmp/go-vet.log
           rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then
-            echo '--- Go vet failure tail ---' >&2
-            tail -120 /tmp/go-vet.log >&2
-          fi
+          if [ "$rc" -ne 0 ]; then tail -160 /tmp/go-vet.log >&2; fi
           exit "$rc"
       - name: Upload Go diagnostics
         if: failure()
