@@ -9,7 +9,7 @@
 </head>
 <body>
 <div id="loginView" class="login-view">
-  <form id="loginForm" class="login-card">
+  <form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">
     <a href="/" class="login-brand">GoJet<span>.</span><small>ADMIN</small></a>
     <h1>管理后台</h1>
     <p>使用管理员账户登录。若账户启用了双因素认证，验证码只在登录时输入一次。</p>
@@ -17,7 +17,7 @@
     <label><span>管理员邮箱</span><input name="email" type="email" autocomplete="username" required></label>
     <label><span>密码</span><input name="password" type="password" autocomplete="current-password" required></label>
     <label id="loginTotp" class="hidden"><span>验证器验证码</span><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></label>
-    <button class="btn primary wide">登录后台</button>
+    <button class="btn primary wide" type="submit">登录后台</button>
   </form>
 </div>
 
