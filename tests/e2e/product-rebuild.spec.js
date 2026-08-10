@@ -151,7 +151,7 @@ test('Turnstile control center masks secret and exposes per-surface switches',as
   await adminLogin(page);
   await page.getByRole('button',{name:'人机验证',exact:true}).click();
   const form=page.locator('#botProtectionForm');
-  await expect(form.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
+  await expect(page.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
   await expect(form.getByLabel('Secret Key')).toHaveValue('');
   for(const text of ['注册','登录','忘记密码','重置密码','创建工单','工单回复','滥用举报']){
     await expect(form.getByText(text,{exact:true})).toBeVisible();
