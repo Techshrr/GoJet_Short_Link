@@ -31,6 +31,8 @@ func (s *server) registerProductHardeningRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/payments/paypal/webhook", s.paypalWebhook)
 	mux.HandleFunc("GET /api/payments/paypal/return", s.paypalReturn)
 	mux.HandleFunc("POST /api/payments/stripe/webhook", s.stripeWebhook)
+
+	s.registerSupportAndBotRoutes(mux)
 }
 
 func (s *server) paymentService() *payments.Service {
