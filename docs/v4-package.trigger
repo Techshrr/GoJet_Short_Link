@@ -1,13 +1,11 @@
 V4 package/release gate trigger
 
-PDF real render gate: GREEN
-PDF tested SHA: f45131482a527db87f0e4b2ed6c98f5960ba1595
-PDF workflow run: 31419757297
-Package target: 4.0.0-rc.10
-Purpose: build and independently verify the production fresh-install archive before Fresh Install Candidate acceptance.
+Browser gate: GREEN
+Invoice PDF real render gate: GREEN
+Full-stack P0 regression: GREEN
+Authentication policy: GREEN
+Redirect engine: GREEN
+Hardening validation: GREEN
+Package target: 4.0.0-rc.11
+Purpose: build and independently verify the post-support/Turnstile production fresh-install archive before Fresh Install Candidate acceptance.
 Triggered: 2026-08-11 Asia/Singapore
-Retrigger: package workflow is now registered and active in GitHub Actions.
-Retry 2: align payment transaction migration assertion with the current formal migration.
-Retry 3: align account lifecycle assertions across migrations 030/031.
-Retry 4: replace development asset query strings with the release version and package the hardening verifier.
-Retry 5: invoke the source hardening verifier via sh while keeping the packaged verifier executable.
