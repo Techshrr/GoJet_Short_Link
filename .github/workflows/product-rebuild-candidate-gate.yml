@@ -86,6 +86,11 @@ jobs:
           test ! -e frontend/admin-console/admin-settings-fix.js
           test ! -e database/migrations/026_admin_step_up_session.sql
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
+          grep -Fq '<form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">' frontend/admin-console/index.html
+          grep -Fq 'location ^~ /admin/' deploy/nginx/gojet-bt-rewrite.conf
+          grep -Fq 'location ^~ /app/' deploy/nginx/gojet-bt-rewrite.conf
+          grep -Fq 'admin/styles.css' scripts/native-installer-apply.sh
+          grep -Fq 'admin/app.js' scripts/native-installer-apply.sh
       - name: Go unit tests and vet
         run: |
           go test ./...
@@ -170,10 +175,10 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
           npx playwright test tests/e2e/product-rebuild.spec.js --project=chromium
           kill "$(cat /tmp/gojet-browser.pid)" 2>/dev/null || true
-      - name: Build and independently verify fresh-install RC8 package
+      - name: Build and independently verify fresh-install RC9 package
         run: |
-          ./scripts/package-release.sh 4.0.0-rc.8
-          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.8*linux-production.zip' | head -1)
+          ./scripts/package-release.sh 4.0.0-rc.9
+          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.9*linux-production.zip' | head -1)
           test -n "$ZIP"
           ./scripts/verify-release.sh "$ZIP"
           unzip -tq "$ZIP"
@@ -193,12 +198,12 @@ jobs:
           echo '===== primary API ====='; cat /tmp/gojet-primary.log 2>/dev/null || true
           echo '===== auth API ====='; cat /tmp/gojet-auth.log 2>/dev/null || true
           echo '===== browser harness ====='; cat /tmp/gojet-browser.log 2>/dev/null || true
-      - name: Upload fresh-install RC8 candidate
+      - name: Upload fresh-install RC9 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-4.0.0-rc.8-fresh-install-candidate
+          name: gojet-4.0.0-rc.9-fresh-install-candidate
           path: |
-            dist/*4.0.0-rc.8*linux-production.zip
-            dist/*4.0.0-rc.8*linux-production.zip.sha256
+            dist/*4.0.0-rc.9*linux-production.zip
+            dist/*4.0.0-rc.9*linux-production.zip.sha256
           if-no-files-found: error
           retention-days: 14
