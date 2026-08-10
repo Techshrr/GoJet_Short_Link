@@ -52,10 +52,13 @@ grep -Fq 'data-link-toggle' "$ROOT/public/admin/product-actions.js" || { echo 'a
 grep -Fq 'data-plan-edit' "$ROOT/public/admin/product-actions.js" || { echo 'administrator plan editor is missing' >&2; exit 1; }
 grep -Fq 'links.default_redirect_status' "$ROOT/public/admin/settings-full.js" || { echo 'complete settings editor is missing' >&2; exit 1; }
 grep -Fq '/app/analytics' "$ROOT/public/app/product-router.js" || { echo 'workspace analytics route is missing' >&2; exit 1; }
+grep -Fq '<form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">' "$ROOT/public/admin/index.html" || { echo 'admin login form must fail closed with POST when JavaScript is unavailable' >&2; exit 1; }
 if grep -R -n -E 'step_up_required|X-GoJet-TOTP|MutationObserver' "$ROOT/public/admin"; then
   echo 'operation-level admin step-up or RC hotpatch leaked into rebuilt admin UI' >&2; exit 1
 fi
 grep -Fq 'location = /login' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'clean login route is missing' >&2; exit 1; }
+grep -Fq 'location ^~ /app/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'aaPanel-safe app console route is missing' >&2; exit 1; }
+grep -Fq 'location ^~ /admin/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'aaPanel-safe admin console route is missing' >&2; exit 1; }
 grep -Fq 'location ^~ /uploads/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'upload alias route is missing' >&2; exit 1; }
 if sed -n '/location \^~ \/uploads\//,/^}/p' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" | grep -Fq 'try_files'; then
   echo 'upload alias must not use try_files' >&2; exit 1
