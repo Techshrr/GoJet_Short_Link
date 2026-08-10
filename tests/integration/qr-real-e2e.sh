@@ -46,7 +46,8 @@ cleanup(){ rm -f "$headers"; }
 trap cleanup EXIT
 curl -sS -D "$headers" -o /dev/null "$decoded"
 grep -Eq '^HTTP/[^ ]+ 302' "$headers" || { cat "$headers" >&2; echo 'decoded QR did not redirect' >&2; exit 1; }
-grep -Eiq '^Location: https://example\.com/qr-real\r?$' "$headers" || { cat "$headers" >&2; echo 'decoded QR destination mismatch' >&2; exit 1; }
+location=$(tr -d '\r' < "$headers" | sed -n 's/^Location:[[:space:]]*//Ip' | head -n1)
+[[ "$location" == 'https://example.com/qr-real' ]] || { cat "$headers" >&2; printf 'decoded QR destination mismatch: %s\n' "$location" >&2; exit 1; }
 
 count=0
 for _ in $(seq 1 60); do
