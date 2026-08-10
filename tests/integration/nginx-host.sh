@@ -47,10 +47,12 @@ PY
 python3 "$tmp/upstream.py" 18080 redirect-engine >"$tmp/redirect.log" 2>&1 & redirect_pid=$!
 python3 "$tmp/upstream.py" 18090 platform-api >"$tmp/platform.log" 2>&1 & platform_pid=$!
 for port in 18080 18090; do
+  ready=0
   for _ in $(seq 1 30); do
-    curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
+    if curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1; then ready=1; break; fi
     sleep .2
   done
+  [[ "$ready" == 1 ]] || { echo "test upstream did not become ready on port $port" >&2; exit 1; }
 done
 
 sed -e "s|__GOJET_ROOT__|$(pwd)|g" -e 's/listen 80;/listen 127.0.0.1:18081;/' deploy/nginx/gojet-host.conf >"$tmp/gojet.conf"
@@ -67,18 +69,43 @@ EOF2
 
 nginx -t -c "$tmp/nginx.conf" -p "$tmp"
 nginx -c "$tmp/nginx.conf" -p "$tmp" -g 'daemon off;' & nginx_pid=$!
+ready=0
 for _ in $(seq 1 30); do
-  curl -fsS http://127.0.0.1:18081/ >/dev/null 2>&1 && break
+  if curl -fsS http://127.0.0.1:18081/ >/dev/null 2>&1; then ready=1; break; fi
   sleep .2
 done
+[[ "$ready" == 1 ]] || { echo 'host Nginx did not become ready'; cat "$tmp/error.log" >&2 || true; exit 1; }
 
-curl -fsS http://127.0.0.1:18081/ | grep -q 'GoJet'
-curl -fsS http://127.0.0.1:18081/app/ | grep -q 'GoJet 控制台'
-curl -fsS http://127.0.0.1:18081/admin/ | grep -q 'GoJet 平台管理'
-test "$(curl -fsS http://127.0.0.1:18081/api/public/status)" = platform-api
-test "$(curl -fsS http://127.0.0.1:18081/t/demo)" = platform-api
-test "$(curl -fsS http://127.0.0.1:18081/p/demo)" = platform-api
-test "$(curl -fsS http://127.0.0.1:18081/f/demo)" = platform-api
-test "$(curl -fsS http://127.0.0.1:18081/example-code)" = redirect-engine
+assert_contains(){
+  local path=$1 needle=$2 label=$3 body code
+  body=$(mktemp "$tmp/body.XXXXXX")
+  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:18081$path")
+  if [[ "$code" != 200 ]] || ! grep -Fq "$needle" "$body"; then
+    echo "host Nginx assertion failed: $label; path=$path status=$code expected text=[$needle]" >&2
+    cat "$body" >&2 || true
+    cat "$tmp/error.log" >&2 || true
+    exit 1
+  fi
+}
+assert_upstream(){
+  local path=$1 wanted=$2 label=$3 body code
+  body=$(mktemp "$tmp/upstream.XXXXXX")
+  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:18081$path")
+  actual=$(cat "$body")
+  if [[ "$code" != 200 || "$actual" != "$wanted" ]]; then
+    echo "host Nginx assertion failed: $label; path=$path status=$code expected=[$wanted] actual=[$actual]" >&2
+    cat "$tmp/error.log" >&2 || true
+    exit 1
+  fi
+}
+
+assert_contains / 'GoJet' 'marketing root'
+assert_contains /app/ 'GoJet 控制台' 'user console'
+assert_contains /admin/ 'GoJet 管理中心' 'administrator console'
+assert_upstream /api/public/status platform-api 'public API to platform-api'
+assert_upstream /t/demo platform-api 'text share to platform-api'
+assert_upstream /p/demo platform-api 'bio page to platform-api'
+assert_upstream /f/demo platform-api 'file share to platform-api'
+assert_upstream /example-code redirect-engine 'short link fallback to redirect-engine'
 
 printf 'four-deployment public routing and host Nginx acceptance passed\n'
