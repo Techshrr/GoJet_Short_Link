@@ -33,6 +33,7 @@ func main() {
 			if lastLifecycleScan.IsZero() || time.Since(lastLifecycleScan) >= time.Minute {
 				if err = service.QueueAccountLifecycleNotifications(ctx); err != nil { log.Printf("account mail lifecycle scan failed: %v", err) }
 				if err = service.QueueLifecycleNotifications(ctx); err != nil { log.Printf("business mail lifecycle scan failed: %v", err) }
+				if err = service.QueueSecurityAndWorkspaceNotifications(ctx); err != nil { log.Printf("security/workspace mail lifecycle scan failed: %v", err) }
 				lastLifecycleScan = time.Now()
 			}
 			if err = service.ProcessOne(ctx); err != nil { log.Printf("mail delivery failed: %v", err) }
