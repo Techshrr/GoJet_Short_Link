@@ -24,6 +24,24 @@ type PublicFileMetadata struct {
 	Protected    bool       `json:"protected"`
 }
 
+func (s *Service) FileProtectionMap(ctx context.Context, workspaceID int64) (map[int64]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,(password_hash IS NOT NULL) FROM file_shares WHERE workspace_id=? AND deleted_at IS NULL`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		var protected bool
+		if err = rows.Scan(&id, &protected); err != nil {
+			return nil, err
+		}
+		items[id] = protected
+	}
+	return items, rows.Err()
+}
+
 func (s *Service) SetFilePassword(ctx context.Context, user, workspaceID, id int64, password string) error {
 	if err := s.canEdit(ctx, user, workspaceID); err != nil {
 		return err
