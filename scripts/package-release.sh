@@ -29,19 +29,16 @@ cp -R "$ROOT/installer/." "$TARGET/installer/"
 cp -R "$ROOT/services/." "$TARGET/services/"
 cp -R "$ROOT/database/migrations/." "$TARGET/database/migrations/"
 
-# Standard web root used by aaPanel/PHP project deployments.
 cp -R "$ROOT/frontend/marketing-site/." "$TARGET/public/"
 cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
 cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
 cp "$ROOT/frontend/shared/gojet-design-system.css" "$TARGET/public/assets/gojet-design-system.css"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 
-# Every release receives a distinct static-resource URL. This is deliberately
-# done at packaging time so CDN/browser caches cannot serve JavaScript or CSS
-# from a previous GoJet release after a fresh deployment.
-find "$TARGET/public" -type f -name '*.html' -print0 | while IFS= read -r -d '' page; do
-  sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(['\"])#\1?v=$SAFE_VERSION\4#g" "$page"
-done
+# Version every local CSS/JavaScript URL in the production web root. Distinct
+# release URLs prevent CDN/browser caches from reusing assets from an older
+# deployment. find -exec keeps this compatible with /bin/sh.
+find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(['\"])#\1?v=$SAFE_VERSION\4#g" {} \;
 
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
 cp "$ROOT/deploy/compose.host-nginx.yaml" "$TARGET/deploy/compose.host-nginx.yaml"
