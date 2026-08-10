@@ -78,7 +78,11 @@ jobs:
           node --check frontend/user-console/auth-guard.js
           node --check frontend/user-console/product-router.js
           node --check frontend/user-console/pending-link.js
-          ! grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP' app services frontend/admin-console
+          if grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP|settingsMutationNeedsStepUp' app services frontend/admin-console; then
+            echo 'obsolete operation-level administrator step-up code remains' >&2
+            exit 1
+          fi
+          test ! -e services/platform-api/cmd/server/admin_stepup_sql_test.go
           test ! -e frontend/admin-console/admin-settings-fix.js
           test ! -e database/migrations/026_admin_step_up_session.sql
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
