@@ -17,7 +17,7 @@ module.exports=defineConfig({
   webServer:{
     command:'python3 tests/e2e/rebuild_server.py',
     url:'http://127.0.0.1:4173/',
-    reuseExistingServer:false,
+    reuseExistingServer:true,
     timeout:15000,
     stdout:'pipe',
     stderr:'pipe'
