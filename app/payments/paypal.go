@@ -84,8 +84,11 @@ func (s *Service) createPayPal(ctx context.Context, payment invoicePayment) (cre
 		return createResult{}, fmt.Errorf("PayPal 创建支付失败 (%d)", response.StatusCode)
 	}
 	var result struct {
-		ID    string `json:"id"`
-		Links []struct{ Href, Rel string } `json:"links"`
+		ID string `json:"id"`
+		Links []struct {
+			Href string `json:"href"`
+			Rel string `json:"rel"`
+		} `json:"links"`
 	}
 	if json.Unmarshal(responseBody, &result) != nil || result.ID == "" {
 		return createResult{}, errors.New("PayPal 返回了无效订单")
@@ -142,7 +145,10 @@ func (s *Service) CompletePayPalReturn(ctx context.Context, merchantOrder, order
 				Captures []struct {
 					ID string `json:"id"`
 					Status string `json:"status"`
-					Amount struct{ CurrencyCode, Value string } `json:"amount"`
+					Amount struct {
+						CurrencyCode string `json:"currency_code"`
+						Value string `json:"value"`
+					} `json:"amount"`
 				} `json:"captures"`
 			} `json:"payments"`
 		} `json:"purchase_units"`
@@ -205,7 +211,10 @@ func (s *Service) HandlePayPalWebhook(ctx context.Context, body []byte, headers 
 		Resource struct {
 			ID string `json:"id"`
 			Status string `json:"status"`
-			Amount struct{ CurrencyCode, Value string } `json:"amount"`
+			Amount struct {
+				CurrencyCode string `json:"currency_code"`
+				Value string `json:"value"`
+			} `json:"amount"`
 			SupplementaryData struct { RelatedIDs struct { OrderID string `json:"order_id"` } `json:"related_ids"` } `json:"supplementary_data"`
 		} `json:"resource"`
 	}
