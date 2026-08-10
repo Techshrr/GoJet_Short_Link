@@ -1,12 +1,12 @@
 (()=>{
 const routeToView={'/app/':'overview','/app/dashboard':'overview','/app/links':'links','/app/team':'team','/app/organization':'organization','/app/domains':'domains','/app/text':'texts','/app/bio':'bios','/app/files':'files','/app/qr':'qrs','/app/billing':'billing','/app/analytics':'analytics','/app/settings':'settings'};
 const viewToRoute={overview:'/app/dashboard',links:'/app/links',team:'/app/team',organization:'/app/organization',domains:'/app/domains',texts:'/app/text',bios:'/app/bio',files:'/app/files',qrs:'/app/qr',billing:'/app/billing',analytics:'/app/analytics',settings:'/app/settings'};
-const assetVersion='hardening-3';
+const assetVersion='hardening-4';
 function loadStyle(path){return new Promise(resolve=>{if(document.querySelector(`link[data-hardening="${path}"]`))return resolve();const l=document.createElement('link');l.rel='stylesheet';l.href=`${path}?v=${assetVersion}`;l.dataset.hardening=path;l.onload=resolve;l.onerror=resolve;document.head.appendChild(l)})}
 function loadScript(path){return new Promise((resolve,reject)=>{if(document.querySelector(`script[data-hardening="${path}"]`))return resolve();const s=document.createElement('script');s.src=`${path}?v=${assetVersion}`;s.dataset.hardening=path;s.async=false;s.onload=resolve;s.onerror=()=>reject(new Error(`无法加载 ${path}`));document.head.appendChild(s)})}
 const hardeningReady=Promise.all([
- loadStyle('/app/link-hardening.css'),loadStyle('/app/bio-hardening.css'),loadStyle('/app/domain-hardening.css'),loadStyle('/app/analytics-hardening.css'),
- loadScript('/app/link-hardening.js'),loadScript('/app/bio-hardening.js'),loadScript('/app/domain-hardening.js'),loadScript('/app/analytics-hardening.js')
+ loadStyle('/app/link-hardening.css'),loadStyle('/app/bio-hardening.css'),loadStyle('/app/domain-hardening.css'),loadStyle('/app/analytics-hardening.css'),loadStyle('/app/file-hardening.css'),
+ loadScript('/app/link-hardening.js'),loadScript('/app/bio-hardening.js'),loadScript('/app/domain-hardening.js'),loadScript('/app/analytics-hardening.js'),loadScript('/app/file-hardening.js')
 ]);
 function activate(view){document.querySelectorAll('[data-console-view]').forEach(x=>x.classList.toggle('active',x.dataset.consoleView===view))}
 function ready(fn){let n=0;const t=setInterval(()=>{if(typeof state!=='undefined'&&state.workspace){clearInterval(t);fn()}else if(++n>100)clearInterval(t)},80)}
