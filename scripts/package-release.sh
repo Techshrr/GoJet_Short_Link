@@ -8,7 +8,7 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 TARGET="$STAGE/$NAME"
 
-for tool in go zip sha256sum; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+for tool in go zip sha256sum sed; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 mkdir -p "$TARGET/app" "$TARGET/bin" "$TARGET/frontend" "$TARGET/installer" "$TARGET/services" \
   "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/scripts" "$TARGET/docs" \
   "$TARGET/public" "$TARGET/public/assets" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer"
@@ -35,6 +35,13 @@ cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
 cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
 cp "$ROOT/frontend/shared/gojet-design-system.css" "$TARGET/public/assets/gojet-design-system.css"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
+
+# Every release receives a distinct static-resource URL. This is deliberately
+# done at packaging time so CDN/browser caches cannot serve JavaScript or CSS
+# from a previous GoJet release after a fresh deployment.
+find "$TARGET/public" -type f -name '*.html' -print0 | while IFS= read -r -d '' page; do
+  sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(['\"])#\1?v=$SAFE_VERSION\4#g" "$page"
+done
 
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
 cp "$ROOT/deploy/compose.host-nginx.yaml" "$TARGET/deploy/compose.host-nginx.yaml"
