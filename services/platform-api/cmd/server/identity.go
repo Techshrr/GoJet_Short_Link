@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
-	"github.com/Techshrr/GoJet_Short_Link/app/identity"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 )
 
 type userKey struct{}
@@ -22,6 +24,7 @@ func (s *server) user(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r.WithContext(context.WithValue(r.Context(), userKey{}, u)))
 	}
 }
+
 func currentUser(r *http.Request) identity.User { return r.Context().Value(userKey{}).(identity.User) }
 
 func settingEnabled(value string, exists bool, fallback bool) bool {
@@ -29,6 +32,11 @@ func settingEnabled(value string, exists bool, fallback bool) bool {
 		return fallback
 	}
 	return strings.EqualFold(strings.TrimSpace(value), "true") || strings.TrimSpace(value) == "1"
+}
+
+func (s *server) revokeUserSessions(ctx context.Context, userID int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,UTC_TIMESTAMP()) WHERE user_id=? AND revoked_at IS NULL`, userID)
+	return err
 }
 
 func (s *server) register(w http.ResponseWriter, r *http.Request) {
@@ -40,29 +48,43 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &in) != nil {
 		return
 	}
-	if enabled, exists, _ := s.settings.Get(r.Context(), "registration.enabled"); !settingEnabled(enabled, exists, true) {
+	ctx := r.Context()
+	email := strings.ToLower(strings.TrimSpace(in.Email))
+	if !s.registrationBool(ctx, "registration.enabled", true) {
 		jsonResponse(w, 403, map[string]string{"error": "当前暂未开放新用户注册"})
 		return
 	}
-	u, token, err := s.identity.RegisterWithMetadata(r.Context(), in.Email, in.Password, in.DisplayName, clientIP(r), r.UserAgent())
+	if s.blockedRegistrationEmail(ctx, email) {
+		jsonResponse(w, 422, map[string]string{"error": "该邮箱域名不允许注册"})
+		return
+	}
+	minPassword := s.registrationInt(ctx, "registration.password_min_length", 10, 10, 72)
+	if len(in.Password) < minPassword {
+		jsonResponse(w, 422, map[string]string{"error": fmt.Sprintf("密码至少需要 %d 位", minPassword)})
+		return
+	}
+	requireVerification := s.registrationBool(ctx, "registration.require_email_verification", false)
+	u, token, err := s.identity.RegisterWithMetadata(ctx, email, in.Password, in.DisplayName, clientIP(r), r.UserAgent())
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
-	requireValue, requireExists, _ := s.settings.Get(r.Context(), "registration.require_email_verification")
-	requireVerification := settingEnabled(requireValue, requireExists, false)
 	if !requireVerification {
 		jsonResponse(w, 201, map[string]any{"user": u, "token": token, "verification_required": false})
 		return
 	}
-	verificationToken, createErr := s.identity.CreateVerification(r.Context(), u.ID)
+	if err = s.revokeUserSessions(ctx, u.ID); err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "账户已创建，但暂时无法进入邮箱验证状态"})
+		return
+	}
+	verificationToken, createErr := s.identity.CreateVerification(ctx, u.ID)
 	if createErr != nil {
 		jsonResponse(w, 503, map[string]string{"error": "账户已创建，但暂时无法创建邮箱验证请求"})
 		return
 	}
 	base := strings.TrimRight(getenv("PUBLIC_BASE_URL", "http://localhost:8080"), "/")
 	verificationURL := base + "/verify-email?token=" + verificationToken
-	_, mailErr := s.mail.QueueTemplate(r.Context(), "verification", u.Email, map[string]string{
+	_, mailErr := s.mail.QueueTemplate(ctx, "verification", u.Email, map[string]string{
 		"site_name":        "GoJet",
 		"token":            verificationToken,
 		"verification_url": verificationURL,
@@ -82,12 +104,25 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &in) != nil {
 		return
 	}
-	u, token, err := s.identity.LoginWithMetadata(r.Context(), in.Email, in.Password, clientIP(r), r.UserAgent())
+	ctx := r.Context()
+	email := strings.ToLower(strings.TrimSpace(in.Email))
+	ip := clientIP(r)
+	if s.loginRateExceeded(ctx, email, ip) {
+		jsonResponse(w, 429, map[string]string{"error": "登录失败次数过多，请稍后再试"})
+		return
+	}
+	u, token, err := s.identity.LoginWithMetadata(ctx, email, in.Password, ip, r.UserAgent())
 	if err != nil {
+		s.recordLoginAttempt(ctx, email, ip, "failure")
 		jsonResponse(w, 401, map[string]string{"error": "邮箱或密码错误"})
 		return
 	}
-	if required, exists, _ := s.settings.Get(r.Context(), "registration.require_email_verification"); settingEnabled(required, exists, false) && !u.EmailVerified {
+	s.recordLoginAttempt(ctx, email, ip, "success")
+	if s.registrationBool(ctx, "registration.require_email_verification", false) && !u.EmailVerified {
+		if revokeErr := s.revokeUserSessions(ctx, u.ID); revokeErr != nil {
+			jsonResponse(w, 503, map[string]string{"error": "邮箱验证状态暂时不可用"})
+			return
+		}
 		jsonResponse(w, 403, map[string]any{"error": "请先完成邮箱验证", "email_verification_required": true})
 		return
 	}
@@ -254,20 +289,25 @@ func (s *server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &in) != nil {
 		return
 	}
+	ctx := r.Context()
 	if strings.TrimSpace(in.Token) == "" {
+		if !s.registrationBool(ctx, "registration.forgot_password", true) {
+			jsonResponse(w, 403, map[string]string{"error": "密码找回功能当前已关闭"})
+			return
+		}
 		email := strings.ToLower(strings.TrimSpace(in.Email))
 		if !strings.Contains(email, "@") {
 			jsonResponse(w, 202, map[string]bool{"queued": true})
 			return
 		}
 		var userID int64
-		err := s.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE email=? AND status='active'`, email).Scan(&userID)
+		err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE email=? AND status='active'`, email).Scan(&userID)
 		if err == nil {
-			token, createErr := s.identity.CreatePasswordReset(r.Context(), userID, nil)
+			token, createErr := s.identity.CreatePasswordReset(ctx, userID, nil)
 			if createErr == nil {
 				base := strings.TrimRight(getenv("PUBLIC_BASE_URL", "http://localhost:8080"), "/")
 				resetURL := base + "/reset-password?token=" + token
-				_, _ = s.mail.QueueTemplate(r.Context(), "password_reset", email, map[string]string{"site_name": "GoJet", "reset_url": resetURL})
+				_, _ = s.mail.QueueTemplate(ctx, "password_reset", email, map[string]string{"site_name": "GoJet", "reset_url": resetURL})
 			}
 		} else if err != sql.ErrNoRows {
 			jsonResponse(w, 503, map[string]string{"error": "密码重置服务暂时不可用"})
@@ -276,7 +316,12 @@ func (s *server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 202, map[string]bool{"queued": true})
 		return
 	}
-	if err := s.identity.ResetPassword(r.Context(), in.Token, in.Password); err != nil {
+	minPassword := s.registrationInt(ctx, "registration.password_min_length", 10, 10, 72)
+	if len(in.Password) < minPassword {
+		jsonResponse(w, 422, map[string]string{"error": fmt.Sprintf("新密码至少需要 %d 位", minPassword)})
+		return
+	}
+	if err := s.identity.ResetPassword(ctx, in.Token, in.Password); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
