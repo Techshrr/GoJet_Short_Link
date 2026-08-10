@@ -47,19 +47,6 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 	}
 }
 
-// Kept as a compatibility alias for route declarations left over from older
-// release candidates. There is intentionally no per-operation second factor.
-func (s *server) adminStepUp(permission string, next http.HandlerFunc) http.HandlerFunc {
-	return s.admin(permission, next)
-}
-
-func stepUpRequiredForPath(path string) bool { return false }
-
-// Legacy settings code may still call this while the settings center is being
-// rewritten. It intentionally performs no challenge: V4 uses TOTP only at
-// administrator login, never as an operation-level step-up prompt.
-func (s *server) verifyAdminStepUp(r *http.Request) error { return nil }
-
 func currentAdmin(r *http.Request) adminauth.Administrator {
 	return r.Context().Value(adminKey{}).(adminauth.Administrator)
 }
