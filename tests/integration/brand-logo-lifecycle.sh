@@ -10,13 +10,13 @@ admin=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.te
 png=$(mktemp --suffix=.png)
 python3 - "$png" <<'PY'
 import base64,sys
-# 1x1 valid PNG
 raw='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 open(sys.argv[1],'wb').write(base64.b64decode(raw))
 PY
 raw=$(curl -sS -X POST -H "Authorization: Bearer $admin" -F "file=@$png;type=image/png" -w $'\n%{http_code}' "$BASE/api/admin/brand/logo")
 body=$(expect 201 "$raw" upload-logo)
-url=$(printf '%s' "$body"|field "['url']")n
+url=$(printf '%s' "$body"|field "['url']")
+
 settings1=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback-1)
 printf '%s' "$settings1" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['brand']['logo']=='$url',d['brand']"
 file="$UPLOAD_ROOT/$(basename "$url")"
