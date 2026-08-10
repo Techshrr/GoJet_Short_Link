@@ -15,6 +15,9 @@ func TestRolePermissionsAreExplicit(t *testing.T) {
 	if !Allowed("super_admin", "settings.manage") || Allowed("analyst", "settings.manage") || !Allowed("security", "security.manage") {
 		t.Fatal("administrator permission templates are unsafe")
 	}
+	if !Allowed("support", "tickets.manage") {
+		t.Fatal("support administrators must be able to manage customer tickets")
+	}
 }
 
 func TestSuperAdminAlwaysHasEveryPermission(t *testing.T) {
@@ -41,7 +44,7 @@ func TestRoleTemplateNormalization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"mail.manage", "platform.read", "users.manage"}
+	want := []string{"mail.manage", "platform.read", "tickets.manage", "users.manage"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("support template = %#v, want %#v", got, want)
 	}
