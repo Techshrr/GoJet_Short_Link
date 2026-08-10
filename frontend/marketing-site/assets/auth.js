@@ -4,7 +4,8 @@ const qs=new URLSearchParams(location.search);
 function showMessage(text,type='error'){const el=$('#message');if(!el)return;el.className=`message show ${type}`;el.textContent=text}
 function setBusy(form,busy){const btn=form?.querySelector('button[type="submit"]');if(btn){btn.disabled=busy;btn.dataset.label||=btn.textContent;btn.textContent=busy?'处理中…':btn.dataset.label}}
 async function request(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||`请求失败 (${response.status})`),{data,status:response.status});return data}
-function safeRedirect(){const target=qs.get('redirect')||'/app/';return target.startsWith('/')&&!target.startsWith('//')?target:'/app/'}
+function validLocalPath(target){return typeof target==='string'&&target.startsWith('/')&&!target.startsWith('//')}
+function safeRedirect(){const queryTarget=qs.get('redirect'),stored=localStorage.getItem('gojet_post_auth_path');if(validLocalPath(queryTarget))return queryTarget;if(validLocalPath(stored)){localStorage.removeItem('gojet_post_auth_path');return stored}return'/app/dashboard'}
 
 if(page==='login'){
   if(localStorage.getItem('gojet_token'))location.replace(safeRedirect());
@@ -13,7 +14,7 @@ if(page==='login'){
 
 if(page==='register'){
   request('/api/public/settings').then(settings=>{const enabled=settings?.registration?.enabled??settings?.['registration.enabled'];if(enabled===false||enabled==='false'){$('#registerForm')?.remove();showMessage('当前暂未开放新用户注册。','info')}}).catch(()=>{});
-  $('#registerForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;const body=Object.fromEntries(new FormData(form));if(body.password!==body.password_confirmation){showMessage('两次输入的密码不一致');return}delete body.password_confirmation;setBusy(form,true);try{const result=await request('/api/auth/register',{method:'POST',body:JSON.stringify(body)});if(result.verification_required){form.reset();showMessage(result.verification_queued?'账户已创建，验证邮件已经发送。完成邮箱验证后即可登录。':'账户已创建，但验证邮件暂时无法发送，请稍后重试。','success')}else{localStorage.setItem('gojet_token',result.token);location.replace('/app/')}}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
+  $('#registerForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;const body=Object.fromEntries(new FormData(form));if(body.password!==body.password_confirmation){showMessage('两次输入的密码不一致');return}delete body.password_confirmation;setBusy(form,true);try{const result=await request('/api/auth/register',{method:'POST',body:JSON.stringify(body)});if(result.verification_required){form.reset();showMessage(result.verification_queued?'账户已创建，验证邮件已经发送。完成邮箱验证后即可登录。':'账户已创建，但验证邮件暂时无法发送，请稍后重试。','success')}else{localStorage.setItem('gojet_token',result.token);location.replace(safeRedirect())}}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
 }
 
 if(page==='forgot'){
