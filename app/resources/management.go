@@ -149,7 +149,7 @@ func (s *Service) ListQRs(ctx context.Context, userID, workspaceID int64) ([]QRC
 	if _, err := s.workspaces.Role(ctx, workspaceID, userID); err != nil {
 		return nil, errors.New("forbidden")
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT q.id,q.link_id,q.name,q.image_url,q.foreground,q.background,q.size,l.code,l.domain,(SELECT COUNT(*) FROM analytics_events a WHERE a.link_id=CAST(q.link_id AS CHAR) AND a.visit_type='qr') AS qr_visits,q.created_at FROM qr_codes q JOIN short_links l ON l.id=q.link_id WHERE q.workspace_id=? AND q.deleted_at IS NULL ORDER BY q.created_at DESC`, workspaceID)
+	rows, err := s.db.QueryContext(ctx, `SELECT q.id,q.link_id,q.name,q.image_url,q.foreground,q.background,q.size,l.code,l.domain,(SELECT COUNT(*) FROM analytics_events a WHERE CAST(a.link_id AS UNSIGNED)=q.link_id AND a.visit_type='qr') AS qr_visits,q.created_at FROM qr_codes q JOIN short_links l ON l.id=q.link_id WHERE q.workspace_id=? AND q.deleted_at IS NULL ORDER BY q.created_at DESC`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
