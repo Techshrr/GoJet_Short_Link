@@ -27,14 +27,14 @@ echo '[4/8] verified-email policy never returns or keeps an authenticated sessio
 r=$(req POST /api/auth/register '{"email":"verify@example.test","display_name":"Verify User","password":"VerifyPassword!2026"}')
 b=$(expect 201 "$r" verification-registration)
 printf '%s' "$b"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verification_required"] is True; assert "token" not in d'
-UID=$(mysqlq "SELECT id FROM users WHERE email='verify@example.test';")
-[[ $(mysqlq "SELECT COUNT(*) FROM user_sessions WHERE user_id=$UID AND revoked_at IS NULL AND expires_at>NOW();") == 0 ]] || { echo 'registration left a live unverified session' >&2; exit 1; }
+USER_ID=$(mysqlq "SELECT id FROM users WHERE email='verify@example.test';")
+[[ $(mysqlq "SELECT COUNT(*) FROM user_sessions WHERE user_id=$USER_ID AND revoked_at IS NULL AND expires_at>NOW();") == 0 ]] || { echo 'registration left a live unverified session' >&2; exit 1; }
 [[ $(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='verify@example.test' AND message_type='verification';") -ge 1 ]] || { echo 'verification mail not queued' >&2; exit 1; }
 
 echo '[5/8] correct password before verification still cannot create a live session'
 r=$(req POST /api/auth/login '{"email":"verify@example.test","password":"VerifyPassword!2026"}')
 expect 403 "$r" unverified-login >/dev/null
-[[ $(mysqlq "SELECT COUNT(*) FROM user_sessions WHERE user_id=$UID AND revoked_at IS NULL AND expires_at>NOW();") == 0 ]] || { echo 'unverified login left a live session' >&2; exit 1; }
+[[ $(mysqlq "SELECT COUNT(*) FROM user_sessions WHERE user_id=$USER_ID AND revoked_at IS NULL AND expires_at>NOW();") == 0 ]] || { echo 'unverified login left a live session' >&2; exit 1; }
 
 echo '[6/8] verification link from real queued mail activates login'
 HTML=$(mysqlq "SELECT html_body FROM mail_messages WHERE recipient='verify@example.test' AND message_type='verification' ORDER BY id DESC LIMIT 1;" 2>/dev/null || true)
