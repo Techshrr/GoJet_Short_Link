@@ -91,6 +91,7 @@ func (s *Service) queue(ctx context.Context, kind, dedupeKey, to, subject, body 
 }
 
 func (s *Service) QueueTemplate(ctx context.Context, key, to string, values map[string]string) (int64, error) {
+	values = s.enrichTemplateValues(ctx, key, to, values)
 	subject, body, err := s.renderTemplate(ctx, key, values)
 	if err != nil {
 		return 0, err
@@ -99,6 +100,7 @@ func (s *Service) QueueTemplate(ctx context.Context, key, to string, values map[
 }
 
 func (s *Service) QueueTemplateOnce(ctx context.Context, key, dedupeKey, to string, values map[string]string) (int64, error) {
+	values = s.enrichTemplateValues(ctx, key, to, values)
 	subject, body, err := s.renderTemplate(ctx, key, values)
 	if err != nil {
 		return 0, err
