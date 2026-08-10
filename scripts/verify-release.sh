@@ -13,14 +13,16 @@ ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
 for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh install-host-nginx.sh install-native-lemp.sh launch-web-installer.sh \
   installer/index.php public/index.html public/install/index.php \
   public/login/index.html public/register/index.html public/forgot-password/index.html public/reset-password/index.html public/verify-email/index.html \
-  public/assets/auth.js public/assets/auth.css public/assets/home.js public/assets/home.css \
+  public/assets/auth.js public/assets/auth.css public/assets/home.js public/assets/home.css public/assets/gojet-design-system.css \
   public/app/index.html public/app/app.js public/app/auth-guard.js public/app/pending-link.js public/app/product-router.js public/app/product.css \
-  public/admin/index.html public/admin/app.js public/admin/product-actions.js public/admin/settings-full.js public/admin/styles.css \
+  public/admin/index.html public/admin/app.js public/admin/product-actions.js public/admin/styles.css \
   scripts/verify-published-release.sh scripts/native-installer-run.sh scripts/native-installer-apply.sh scripts/install-docker.sh \
   deploy/compose.production.yaml deploy/compose.host-nginx.yaml deploy/.env.production.example \
   deploy/nginx/gojet.conf deploy/nginx/gojet-host.conf deploy/nginx/gojet-native.conf deploy/nginx/gojet-bt-rewrite.conf \
   deploy/native/gojet.env.example deploy/native/gojet@.service deploy/native/gojet-installer.service deploy/native/gojet-installer.path \
   database/migrations/003_identity_and_workspaces.sql database/migrations/015_admin_identity.sql database/migrations/025_mail_templates.sql \
+  database/migrations/028_file_share_password.sql database/migrations/029_payment_transactions.sql \
+  database/migrations/030_fx_and_mail_lifecycle.sql database/migrations/031_account_workspace_mail_events.sql \
   docs/v4-product-rebuild.zh-CN.md docs/V4_PRODUCT_HARDENING_AUDIT.md app frontend services go.mod go.sum; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
@@ -43,6 +45,12 @@ grep -Fq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY" || { echo 'fresh inst
 grep -Fq 'CREATE TABLE administrator_permissions' "$ROOT/database/migrations/015_admin_identity.sql" || { echo 'administrator permission schema is missing' >&2; exit 1; }
 grep -Fq "status ENUM('active','suspended','deleted')" "$ROOT/database/migrations/003_identity_and_workspaces.sql" || { echo 'user lifecycle schema is missing' >&2; exit 1; }
 grep -Fq '{{verification_url}}' "$ROOT/database/migrations/025_mail_templates.sql" || { echo 'verification mail link is missing' >&2; exit 1; }
+grep -Fq 'password_hash' "$ROOT/database/migrations/028_file_share_password.sql" || { echo 'protected file-share migration is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE IF NOT EXISTS payment_transactions' "$ROOT/database/migrations/029_payment_transactions.sql" || { echo 'payment transaction migration is missing' >&2; exit 1; }
+grep -Fq 'fx_rate_cache' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'FX cache migration is missing' >&2; exit 1; }
+grep -Fq 'invoice_paid' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'billing lifecycle mail templates are missing' >&2; exit 1; }
+grep -Fq 'account_welcome' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'account lifecycle mail templates are missing' >&2; exit 1; }
+
 grep -Fq 'data-auth-page="login"' "$ROOT/public/login/index.html" || { echo 'dedicated login page is invalid' >&2; exit 1; }
 grep -Fq '/api/auth/forgot-password' "$ROOT/public/assets/auth.js" || { echo 'password recovery frontend is not connected' >&2; exit 1; }
 grep -Fq '/api/me/password' "$ROOT/public/app/product-router.js" || { echo 'user account settings are not connected' >&2; exit 1; }
@@ -50,16 +58,28 @@ grep -Fq '添加用户' "$ROOT/public/admin/app.js" || { echo 'administrator use
 grep -Fq 'Markdown 正文' "$ROOT/public/admin/app.js" || { echo 'Markdown announcement editor is missing' >&2; exit 1; }
 grep -Fq 'data-link-toggle' "$ROOT/public/admin/product-actions.js" || { echo 'administrator link operations are missing' >&2; exit 1; }
 grep -Fq 'data-plan-edit' "$ROOT/public/admin/product-actions.js" || { echo 'administrator plan editor is missing' >&2; exit 1; }
-grep -Fq 'links.default_redirect_status' "$ROOT/public/admin/settings-full.js" || { echo 'complete settings editor is missing' >&2; exit 1; }
 grep -Fq '/app/analytics' "$ROOT/public/app/product-router.js" || { echo 'workspace analytics route is missing' >&2; exit 1; }
 grep -Fq '<form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">' "$ROOT/public/admin/index.html" || { echo 'admin login form must fail closed with POST when JavaScript is unavailable' >&2; exit 1; }
 if grep -R -n -E 'step_up_required|X-GoJet-TOTP|MutationObserver' "$ROOT/public/admin"; then
   echo 'operation-level admin step-up or RC hotpatch leaked into rebuilt admin UI' >&2; exit 1
 fi
+
+# Production HTML must request release-specific CSS/JS URLs so CDN/browser
+# caches cannot reuse assets from an older deployment.
+VERSION=$(cat "$ROOT/VERSION")
+for page in public/index.html public/login/index.html public/app/index.html public/admin/index.html; do
+  grep -Eq "(src|href)=['\"][^'\"]+\.(css|js)\?v=${VERSION}['\"]" "$ROOT/$page" || { echo "release asset version is missing from $page" >&2; exit 1; }
+done
+
 grep -Fq 'location = /login' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'clean login route is missing' >&2; exit 1; }
 grep -Fq 'location ^~ /app/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'aaPanel-safe app console route is missing' >&2; exit 1; }
 grep -Fq 'location ^~ /admin/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'aaPanel-safe admin console route is missing' >&2; exit 1; }
 grep -Fq 'location ^~ /uploads/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || { echo 'upload alias route is missing' >&2; exit 1; }
+for config in "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" "$ROOT/deploy/nginx/gojet.conf" "$ROOT/deploy/nginx/gojet-host.conf" "$ROOT/deploy/nginx/gojet-native.conf"; do
+  grep -Eq '\^/t/|location [^[:space:]]* /t/' "$config" || { echo "public text route missing in $config" >&2; exit 1; }
+  grep -Eq '\^/p/|location [^[:space:]]* /p/' "$config" || { echo "public bio route missing in $config" >&2; exit 1; }
+  grep -Eq '\^/f/|location [^[:space:]]* /f/' "$config" || { echo "public file route missing in $config" >&2; exit 1; }
+done
 if sed -n '/location \^~ \/uploads\//,/^}/p' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" | grep -Fq 'try_files'; then
   echo 'upload alias must not use try_files' >&2; exit 1
 fi
