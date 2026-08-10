@@ -51,8 +51,9 @@ test('admin users page exposes actual management actions',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'用户管理'}).click();
   await expect(page.getByRole('button',{name:'添加用户'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'管理'})).toBeVisible();
-  await page.getByRole('button',{name:'管理'}).click();
+  const manage=page.getByRole('button',{name:'管理',exact:true});
+  await expect(manage).toBeVisible();
+  await manage.click();
   for(const text of ['编辑资料','取消邮箱验证','发送密码重置','强制退出全部会话','封禁用户','删除用户']){
     await expect(page.getByRole('button',{name:text})).toBeVisible();
   }
@@ -92,11 +93,14 @@ test('operations page has direct actions without mandatory reason fields',async(
   await expect(page.getByText('预计恢复时间（可选）')).toBeVisible();
 });
 
-test('mail templates save is an ordinary admin operation',async({page})=>{
+test('mail templates and SMTP save are ordinary admin operations',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'邮件中心'}).click();
-  await expect(page.getByRole('button',{name:'保存 SMTP'})).toBeVisible();
-  await expect(page.getByText(/二次验证|step-up/i)).toHaveCount(0);
+  await page.getByLabel('SMTP Host').fill('smtp.example.test');
+  await page.getByLabel('发件邮箱').fill('noreply@example.test');
+  await page.getByRole('button',{name:'保存 SMTP'}).click();
+  await expect(page.locator('#toast')).toContainText('SMTP 设置已保存');
+  await expect(page.locator('#modal')).toHaveClass(/hidden/);
 });
 
 
