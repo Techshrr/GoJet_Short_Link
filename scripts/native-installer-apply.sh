@@ -88,7 +88,11 @@ for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL;
 done
 HOST=${cfg[PUBLIC_BASE_URL]#https://}
 HOST=${HOST%/}
-HOST=${HOST%%:*}
+HTTPS_PORT=443
+if [[ "$HOST" == *:* ]]; then
+  HTTPS_PORT=${HOST##*:}
+  HOST=${HOST%%:*}
+fi
 
 status database 15 '正在验证 MySQL 连接与权限'
 MYSQL_HOST=127.0.0.1
@@ -198,10 +202,17 @@ if [[ -d /www/server/panel/vhost/nginx && -f "/www/server/panel/vhost/nginx/$HOS
   sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" > "$REWRITE"
   NGINX_CHANGED=1
 else
-  fail "未找到宝塔站点配置 /www/server/panel/vhost/nginx/$HOST.conf；RC5 当前优先支持宝塔 Native 安装"
+  fail "未找到宝塔站点配置 /www/server/panel/vhost/nginx/$HOST.conf；当前 Native 安装优先支持宝塔"
 fi
 "$nginx" -t || fail 'Nginx 配置验证失败，已恢复安装前 rewrite'
 systemctl reload nginx 2>/dev/null || "$nginx" -s reload
+
+status nginx 72 '正在验证后台静态资源路由'
+PUBLIC_ORIGIN=${cfg[PUBLIC_BASE_URL]%/}
+CURL_LOCAL=(curl --noproxy '*' -kfsS --resolve "$HOST:$HTTPS_PORT:127.0.0.1")
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" | grep -Fq 'method="post" action="/api/admin/auth/login"' || fail '管理员登录页安全回退验证失败；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/styles.css" | grep -Fq ':root{' || fail '管理员后台 CSS 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/app.js" | grep -Fq 'loginForm' || fail '管理员后台 JavaScript 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
 
 status services 76 '正在启动 8 个 GoJet 服务'
 for service in "${SERVICES[@]}"; do
@@ -230,6 +241,6 @@ printf 'version=%s\ninstalled_at=%s\ninstallation_id=%s\nmysql_schema=%s\nclamav
   "$(basename "$(ls -1 "$ROOT"/database/migrations/*.sql | tail -1)")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"
 chmod 0644 "$LOCK"
 rm -f "$PROCESSING" "$STATE/mysql-version.txt"
-status complete 100 'GoJet 安装完成，所有核心服务已通过健康检查' success
+status complete 100 'GoJet 安装完成，核心服务和后台静态资源均已通过健康检查' success
 systemctl disable --now gojet-installer.path >/dev/null 2>&1 || true
 trap - EXIT
