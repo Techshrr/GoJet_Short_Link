@@ -30,6 +30,7 @@ func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFun
 			jsonResponse(w, http.StatusUnauthorized, map[string]string{"error": "管理员会话无效或已过期"})
 			return
 		}
+		a = adminauth.WithBaselinePermissions(a)
 		if !adminauth.AllowedAdministrator(a, permission) {
 			s.adminAuth.AuditDenied(r.Context(), a, r.Method, r.URL.Path, requestIP(r), r.UserAgent(), "permission denied: "+permission)
 			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "当前管理员没有此操作权限"})
@@ -65,6 +66,7 @@ func (s *server) adminLogin(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, status, map[string]any{"error": err.Error(), "two_factor_required": twoFactor})
 		return
 	}
+	a = adminauth.WithBaselinePermissions(a)
 	jsonResponse(w, http.StatusOK, map[string]any{"administrator": a, "token": token})
 }
 
@@ -125,12 +127,12 @@ func (s *server) adminRevokeSessions(w http.ResponseWriter, r *http.Request) {
 
 func administratorRoleTemplates() map[string][]string {
 	return map[string][]string{
-		"super_admin": adminauth.TemplatePermissions("super_admin"),
-		"operator":    adminauth.TemplatePermissions("operator"),
-		"security":    adminauth.TemplatePermissions("security"),
-		"support":     adminauth.TemplatePermissions("support"),
-		"analyst":     adminauth.TemplatePermissions("analyst"),
-		"custom":      adminauth.TemplatePermissions("custom"),
+		"super_admin": adminauth.EffectiveTemplatePermissions("super_admin"),
+		"operator":    adminauth.EffectiveTemplatePermissions("operator"),
+		"security":    adminauth.EffectiveTemplatePermissions("security"),
+		"support":     adminauth.EffectiveTemplatePermissions("support"),
+		"analyst":     adminauth.EffectiveTemplatePermissions("analyst"),
+		"custom":      adminauth.EffectiveTemplatePermissions("custom"),
 	}
 }
 
@@ -139,6 +141,9 @@ func (s *server) adminListAdministrators(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "管理员列表暂时不可用"})
 		return
+	}
+	for i := range items {
+		items[i].Administrator = adminauth.WithBaselinePermissions(items[i].Administrator)
 	}
 	jsonResponse(w, 200, map[string]any{
 		"data":               items,
