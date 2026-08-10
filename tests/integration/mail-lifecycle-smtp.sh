@@ -72,11 +72,21 @@ done
 
 suffix=$(date +%s)
 user_email="mail-life-$suffix@example.test"
-reg=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"$user_email\",\"display_name\":\"邮件生命周期验收\",\"password\":\"MailLifecycle!2026\"}")" register)
+user_password='MailLifecycle!2026'
+reg=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"$user_email\",\"display_name\":\"邮件生命周期验收\",\"password\":\"$user_password\"}")" register)
 token=$(printf '%s' "$reg"|field "['token']")
 spaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$spaces"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
+
+# Password-recovery creation is security-sensitive: GoJet deliberately revokes
+# existing sessions. Assert that behavior before acquiring a fresh session for
+# the remaining billing/mail lifecycle checks.
 expect 202 "$(req POST /api/auth/forgot-password "{\"email\":\"$user_email\"}")" password-reset-mail >/dev/null
+expect 401 "$(req GET /api/me '' "$token")" forgot-password-revokes-old-session >/dev/null
+login=$(expect 200 "$(req POST /api/auth/login "{\"email\":\"$user_email\",\"password\":\"$user_password\"}")" relogin-after-password-recovery)
+token=$(printf '%s' "$login"|field "['token']")
+expect 200 "$(req GET /api/me '' "$token")" fresh-session-after-password-recovery >/dev/null
+
 invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" invoice-create)
 invoice_id=$(printf '%s' "$invoice_body"|field "['id']")
 
