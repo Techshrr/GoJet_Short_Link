@@ -47,6 +47,7 @@ jobs:
           grep -Fq 'AllowedAdministrator' app/adminauth/service.go
           grep -Fq 'return s.admin(permission, next)' services/platform-api/cmd/server/admin_identity.go
           test ! -e database/migrations/026_admin_step_up_session.sql
+          ! grep -R -Fq 'settingsMutationNeedsStepUp' services/platform-api/cmd/server
           grep -Fq 'POST /api/admin/users' services/platform-api/cmd/server/main.go
           grep -Fq 'DELETE /api/admin/users/{id}' services/platform-api/cmd/server/main.go
           grep -Fq 'POST /api/auth/forgot-password' services/platform-api/cmd/server/main.go
