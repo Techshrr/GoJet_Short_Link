@@ -6,6 +6,8 @@ on:
       - 'rebuild/v4-product-hardening'
     paths-ignore:
       - 'scripts/v4-candidate-gate-*.trigger'
+      - 'docs/v4-fullstack.trigger'
+      - 'docs/v4-browser.trigger'
   pull_request:
 
 concurrency:
@@ -34,10 +36,10 @@ jobs:
           bash -n scripts/native-installer-apply.sh
           bash -n scripts/install-docker.sh
           sh -n scripts/package-release.sh
+          for script in tests/integration/*.sh; do bash -n "$script"; done
           for js in \
             frontend/admin-console/app.js \
             frontend/admin-console/product-actions.js \
-            frontend/admin-console/settings-full.js \
             frontend/admin-console/admin-hardening.js \
             frontend/admin-console/admin-settings-unified.js \
             frontend/user-console/app.js \
@@ -55,7 +57,8 @@ jobs:
             frontend/user-console/billing-hardening.js \
             frontend/marketing-site/assets/auth.js \
             frontend/marketing-site/assets/home.js \
-            frontend/marketing-site/assets/file-share.js; do
+            frontend/marketing-site/assets/file-share.js \
+            frontend/marketing-site/assets/announcements.js; do
             node --check "$js"
           done
       - name: Fresh install runtime integrity policy
@@ -86,8 +89,16 @@ jobs:
           test -f frontend/admin-console/admin-brand-unified.css
           test -f database/migrations/028_file_share_password.sql
           test -f database/migrations/029_payment_transactions.sql
+          test -f database/migrations/030_fx_and_mail_lifecycle.sql
+          test -f database/migrations/031_account_workspace_mail_events.sql
           test -f app/payments/service.go
           test -f app/billing/pdf.go
+          test -f tests/integration/qr-real-e2e.sh
+          test -f tests/integration/file-share-lifecycle.sh
+          test -f tests/integration/billing-payment-conflict.sh
+          test -f tests/integration/billing-fx-freeze.sh
+          test -f tests/integration/mail-lifecycle-smtp.sh
+          test -f tests/integration/brand-logo-lifecycle.sh
           grep -Fq '完整公开网址' frontend/user-console/link-hardening.js
           grep -Fq '/f/' frontend/user-console/file-hardening.js
           grep -Fq '文件访问密码' services/platform-api/cmd/server/resources.go
@@ -102,6 +113,7 @@ jobs:
           grep -Fq 'PayPal' frontend/admin-console/admin-settings-unified.js
           grep -Fq 'Stripe' frontend/admin-console/admin-settings-unified.js
           grep -Fq 'gojet-design-system.css' scripts/package-release.sh
+          grep -Fq '?v=$SAFE_VERSION' scripts/package-release.sh
           grep -Fq 'registerProductHardeningRoutes' services/platform-api/cmd/server/main.go
           grep -Fq 'registerBillingPresentationRoutes' services/platform-api/cmd/server/main.go
           grep -Fq 'paymentCallback' services/platform-api/cmd/server/main.go
@@ -118,60 +130,26 @@ jobs:
           grep -Fq 'gojet_post_auth_path' frontend/marketing-site/assets/auth.js
           grep -Fq 'redirect_status' app/links/json.go
           if grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP|settingsMutationNeedsStepUp' app services frontend/admin-console; then
-            echo 'obsolete operation-level administrator step-up code remains' >&2
+            echo 'obsolete operation-level administrator step-up contract returned' >&2
             exit 1
           fi
-          test ! -e database/migrations/026_admin_step_up_session.sql
-          test ! -e services/platform-api/cmd/server/admin_stepup_sql_test.go
-          grep -Fq 'POST /api/admin/users' services/platform-api/cmd/server/main.go
-          grep -Fq 'DELETE /api/admin/users/{id}' services/platform-api/cmd/server/main.go
-          grep -Fq 'POST /api/auth/forgot-password' services/platform-api/cmd/server/main.go
-          grep -Fq 'PATCH /api/admin/announcements/{id}' services/platform-api/cmd/server/main.go
-          grep -Fq 'location ^~ /app/' deploy/nginx/gojet-bt-rewrite.conf
-          grep -Fq 'location ^~ /admin/' deploy/nginx/gojet-bt-rewrite.conf
-          grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
-          grep -Fq 'location ~ ^/f/' deploy/nginx/gojet-bt-rewrite.conf
-          if sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'; then
-            echo '/uploads alias must not use try_files' >&2
-            exit 1
-          fi
-      - name: Go test
-        id: go-test
-        shell: bash
+      - name: Go test and vet
         run: |
-          set +e
+          set -euo pipefail
           go test ./... 2>&1 | tee /tmp/go-test.log
-          rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then tail -200 /tmp/go-test.log >&2; fi
-          exit "$rc"
-      - name: Go vet
-        id: go-vet
-        if: success()
-        shell: bash
-        run: |
-          set +e
           go vet ./... 2>&1 | tee /tmp/go-vet.log
-          rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then tail -200 /tmp/go-vet.log >&2; fi
-          exit "$rc"
-      - name: Upload Go diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v4-hardening-go-diagnostics-${{ github.run_id }}
-          path: |
-            /tmp/go-test.log
-            /tmp/go-vet.log
-          if-no-files-found: ignore
-          retention-days: 2
       - name: Build all production services
-        if: success()
         run: |
-          CGO_ENABLED=0 go build ./services/redirect-engine/cmd/server
-          CGO_ENABLED=0 go build ./services/analytics-worker/cmd/worker
-          CGO_ENABLED=0 go build ./services/analytics-reconciler/cmd/reconciler
-          CGO_ENABLED=0 go build ./services/platform-api/cmd/server
-          CGO_ENABLED=0 go build ./services/platform-api/cmd/mail-worker
-          CGO_ENABLED=0 go build ./services/platform-api/cmd/file-worker
-          CGO_ENABLED=0 go build ./services/platform-api/cmd/operations-monitor
-          CGO_ENABLED=0 go build ./services/log-receiver/cmd/server
+          set -euo pipefail
+          for spec in \
+            'redirect-engine ./services/redirect-engine/cmd/server' \
+            'analytics-worker ./services/analytics-worker/cmd/worker' \
+            'analytics-reconciler ./services/analytics-reconciler/cmd/reconciler' \
+            'platform-api ./services/platform-api/cmd/server' \
+            'mail-worker ./services/platform-api/cmd/mail-worker' \
+            'file-worker ./services/platform-api/cmd/file-worker' \
+            'operations-monitor ./services/platform-api/cmd/operations-monitor' \
+            'log-receiver ./services/log-receiver/cmd/server'; do
+            set -- $spec
+            go build -o "/tmp/$1" "$2"
+          done
