@@ -1,0 +1,98 @@
+name: V4 package and release gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'rebuild/v4-product-hardening'
+    paths:
+      - 'docs/v4-package.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v4-package-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Lock hardening snapshot
+        run: git rev-parse HEAD | tee /tmp/gojet-package-tested-sha
+      - name: Validate release scripts
+        run: |
+          set -euo pipefail
+          sh -n scripts/package-release.sh
+          sh -n scripts/verify-release.sh
+          sh -n scripts/verify-hardening-release.sh
+          go test ./...
+          go vet ./...
+      - name: Build production RC10 archive
+        run: |
+          set -euo pipefail
+          ./scripts/package-release.sh 4.0.0-rc.10
+          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.10*linux-production.zip' | head -1)
+          test -n "$ZIP"
+          printf '%s\n' "$ZIP" | tee /tmp/gojet-package-zip
+      - name: Independently verify production archive
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-package-zip)
+          ./scripts/verify-release.sh "$ZIP"
+          ./scripts/verify-hardening-release.sh "$ZIP"
+          unzip -tq "$ZIP"
+          SHA_FILE="$ZIP.sha256"
+          test -f "$SHA_FILE"
+          (cd "$(dirname "$ZIP")" && sha256sum -c "$(basename "$SHA_FILE")")
+      - name: Inspect packaged Linux executables and metadata
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-package-zip)
+          TMP=$(mktemp -d)
+          unzip -q "$ZIP" -d "$TMP"
+          ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
+          test "$(cat "$ROOT/VERSION")" = '4.0.0-rc.10'
+          grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
+          for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
+            test -x "$ROOT/bin/$binary"
+            file "$ROOT/bin/$binary" | grep -Eq 'ELF 64-bit.*x86-64'
+          done
+          test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
+          test ! -e "$ROOT/tests"
+          rm -rf "$TMP"
+      - name: Write immutable release evidence
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-package-zip)
+          {
+            echo "tested_sha=$(cat /tmp/gojet-package-tested-sha)"
+            echo "version=4.0.0-rc.10"
+            echo "archive=$(basename "$ZIP")"
+            echo "size_bytes=$(wc -c < "$ZIP")"
+            echo "sha256=$(sha256sum "$ZIP" | awk '{print $1}')"
+          } | tee dist/RC10-RELEASE-EVIDENCE.txt
+      - name: Refuse stale package if branch moved
+        run: |
+          set -euo pipefail
+          TESTED=$(cat /tmp/gojet-package-tested-sha)
+          CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product-hardening | awk '{print $1}')
+          test "$TESTED" = "$CURRENT" || { echo "hardening branch moved: tested=$TESTED current=$CURRENT" >&2; exit 1; }
+      - name: Upload RC10 release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-4.0.0-rc.10-package-release
+          path: |
+            dist/*4.0.0-rc.10*linux-production.zip
+            dist/*4.0.0-rc.10*linux-production.zip.sha256
+            dist/RC10-RELEASE-EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 14
