@@ -80,12 +80,22 @@ jobs:
             echo "size_bytes=$(wc -c < "$ZIP")"
             echo "sha256=$(sha256sum "$ZIP" | awk '{print $1}')"
           } | tee dist/RC11-RELEASE-EVIDENCE.txt
-      - name: Refuse stale package if branch moved
+      - name: Refuse stale runtime/package content if branch moved
         run: |
           set -euo pipefail
           TESTED=$(cat /tmp/gojet-package-tested-sha)
           CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product-hardening | awk '{print $1}')
-          test "$TESTED" = "$CURRENT" || { echo "hardening branch moved: tested=$TESTED current=$CURRENT" >&2; exit 1; }
+          if [ "$TESTED" != "$CURRENT" ]; then
+            git fetch --no-tags origin "$CURRENT"
+            git diff --name-only "$TESTED".."$CURRENT" | tee /tmp/gojet-package-post-lock-files
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              case "$path" in
+                .github/workflows/product-rebuild-candidate-p0-debug.yml|scripts/v4-candidate-p0-debug.trigger) ;;
+                *) echo "runtime/package content changed while package gate was running: $path" >&2; exit 1 ;;
+              esac
+            done < /tmp/gojet-package-post-lock-files
+          fi
       - name: Upload RC11 release package
         uses: actions/upload-artifact@v4
         with:
