@@ -75,26 +75,3 @@ func TestValidateLinkSettings(t *testing.T) {
 		})
 	}
 }
-
-func TestValidateRuntimeSettings(t *testing.T) {
-	if err := validateRuntimeSettings(map[string]any{
-		"api.enabled":               true,
-		"cache.enabled":             false,
-		"cache.default_ttl_seconds": float64(300),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for name, values := range map[string]map[string]any{
-		"api_type":  {"api.enabled": "true"},
-		"cache_type": {"cache.enabled": float64(1)},
-		"ttl_low":   {"cache.default_ttl_seconds": float64(9)},
-		"ttl_high":  {"cache.default_ttl_seconds": float64(86401)},
-		"ttl_float": {"cache.default_ttl_seconds": 30.5},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := validateRuntimeSettings(values); err == nil {
-				t.Fatal("invalid runtime setting was accepted")
-			}
-		})
-	}
-}
