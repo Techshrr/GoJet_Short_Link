@@ -65,12 +65,15 @@ jobs:
         run: |
           set -euo pipefail
           ROOT=$(cat /tmp/gojet-debug-root-path)
-          mkdir -p /tmp/gojet-debug/uploads /tmp/gojet-debug/files
+          mkdir -p /tmp/gojet-debug/uploads /tmp/gojet-debug/files /tmp/gojet
           SETTINGS_KEY=$(python3 - <<'PY'
           import base64
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
+          printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$SETTINGS_KEY" > /tmp/gojet/test-env
+          cp "$ROOT/bin/mail-worker" /tmp/gojet/mail-worker
+          chmod 0755 /tmp/gojet/mail-worker
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_debug?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY='fresh-candidate-rc10-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18080' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-debug/uploads' FILE_STORAGE_PATH='/tmp/gojet-debug/files' "$ROOT/bin/platform-api" >/tmp/gojet-debug/platform-api.log 2>&1 &
           echo $! >/tmp/gojet-debug/platform-api.pid
           env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='fresh-candidate-visitor-key-2026' QR_TRACKING_KEY='fresh-candidate-rc10-qr-key-2026' "$ROOT/bin/redirect-engine" >/tmp/gojet-debug/redirect-engine.log 2>&1 &
@@ -122,6 +125,7 @@ jobs:
           cat /tmp/gojet-debug/platform-api.log 2>/dev/null || true
           cat /tmp/gojet-debug/redirect-engine.log 2>/dev/null || true
           cat /tmp/gojet-debug/analytics-worker.log 2>/dev/null || true
+          cat /tmp/gojet/mail-worker.log 2>/dev/null || true
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_debug -e 'SELECT id,email,status FROM users ORDER BY id; SELECT id,code,status FROM short_links ORDER BY id; SELECT id,invoice_number,status FROM billing_invoices ORDER BY id;' || true
       - name: Stop debug runtime
         if: always()
