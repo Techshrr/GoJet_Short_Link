@@ -32,7 +32,7 @@ func (s *server) createDomain(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
-	jsonResponse(w, 201, map[string]any{"domain": item, "dns_record": map[string]string{"type": "TXT", "name": "_gojet." + item.Hostname, "value": "gojet-verification=" + token}})
+	jsonResponse(w, 201, map[string]any{"domain": item, "dns_record": domainDNSRecord(item.Hostname, token)})
 }
 func (s *server) verifyDomain(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
@@ -41,9 +41,22 @@ func (s *server) verifyDomain(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "invalid domain"})
 		return
 	}
+	if r.URL.Query().Get("rotate") == "1" {
+		item, token, err := s.domains.RotateVerification(r.Context(), currentUser(r).ID, wid, domainID)
+		if err != nil {
+			jsonResponse(w, 422, map[string]string{"error": "无法重新生成域名验证记录"})
+			return
+		}
+		jsonResponse(w, 200, map[string]any{"domain": item, "dns_record": domainDNSRecord(item.Hostname, token)})
+		return
+	}
 	if err := s.domains.Verify(r.Context(), currentUser(r).ID, wid, domainID); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": "DNS 或 HTTPS 验证未通过，请查看域名状态原因"})
 		return
 	}
 	jsonResponse(w, 200, map[string]bool{"checked": true})
+}
+
+func domainDNSRecord(hostname, token string) map[string]string {
+	return map[string]string{"type": "TXT", "name": "_gojet." + hostname, "value": "gojet-verification=" + token}
 }
