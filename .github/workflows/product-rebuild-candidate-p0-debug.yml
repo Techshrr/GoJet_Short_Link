@@ -90,6 +90,7 @@ jobs:
           MYSQL_DATABASE: gojet_debug
           REDIS_ADDRESS: 127.0.0.1:6379
           UPLOAD_STORAGE_PATH: /tmp/gojet-debug/uploads
+          FILE_STORAGE_PATH: /tmp/gojet-debug/files
         run: bash -x tests/integration/product-rebuild-api.sh
       - name: P0 2 - Administrator permission boundary
         env: *p0env
