@@ -39,6 +39,7 @@ type Checkout struct {
 	RedirectURL   string `json:"redirect_url,omitempty"`
 	QRContent     string `json:"qr_content,omitempty"`
 	MerchantOrder string `json:"merchant_order_no"`
+	Reused        bool   `json:"reused,omitempty"`
 }
 
 type createResult struct {
@@ -61,17 +62,34 @@ func New(db *sql.DB, store *settings.Store, billingService *billing.Service, bas
 	}
 }
 
+func providerDefinition(code string) Method {
+	switch code {
+	case "alipay":
+		return Method{Code: code, Name: "支付宝", Mode: "redirect"}
+	case "wechat":
+		return Method{Code: code, Name: "微信支付", Mode: "qr"}
+	case "epay":
+		return Method{Code: code, Name: "易支付兼容协议", Mode: "redirect"}
+	case "paypal":
+		return Method{Code: code, Name: "PayPal", Mode: "redirect"}
+	case "stripe":
+		return Method{Code: code, Name: "Stripe", Mode: "redirect"}
+	default:
+		return Method{}
+	}
+}
+
 func (s *Service) Methods(ctx context.Context) ([]Method, error) {
 	master, _, err := s.boolSetting(ctx, "payments.enabled")
 	if err != nil {
 		return nil, err
 	}
 	defs := []Method{
-		{Code: "alipay", Name: "支付宝", Mode: "redirect"},
-		{Code: "wechat", Name: "微信支付", Mode: "qr"},
-		{Code: "epay", Name: "易支付兼容协议", Mode: "redirect"},
-		{Code: "paypal", Name: "PayPal", Mode: "redirect"},
-		{Code: "stripe", Name: "Stripe", Mode: "redirect"},
+		providerDefinition("alipay"),
+		providerDefinition("wechat"),
+		providerDefinition("epay"),
+		providerDefinition("paypal"),
+		providerDefinition("stripe"),
 	}
 	for i := range defs {
 		enabled, exists, e := s.boolSetting(ctx, "payments."+defs[i].Code+".enabled")
@@ -113,14 +131,14 @@ func (s *Service) CreateCheckout(ctx context.Context, userID, workspaceID, invoi
 	if err != nil {
 		return Checkout{}, err
 	}
-	var method Method
+	var selected Method
 	for _, candidate := range methods {
 		if candidate.Code == provider {
-			method = candidate
+			selected = candidate
 			break
 		}
 	}
-	if method.Code == "" {
+	if selected.Code == "" {
 		return Checkout{}, errors.New("所选支付方式当前不可用")
 	}
 	invoice, err := s.billing.InvoiceForPayment(ctx, userID, workspaceID, invoiceID)
@@ -133,27 +151,71 @@ func (s *Service) CreateCheckout(ctx context.Context, userID, workspaceID, invoi
 	if invoice.AmountCents <= 0 {
 		return Checkout{}, errors.New("金额为零的账单无需在线支付")
 	}
+
+	// The invoice row is the serialization point for checkout creation. A second
+	// tab/request can only reuse the existing active checkout; it cannot create a
+	// second externally payable order for the same invoice.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Checkout{}, err
+	}
+	defer tx.Rollback()
+	var currentStatus string
+	if err = tx.QueryRowContext(ctx, `SELECT status FROM billing_invoices WHERE id=? AND workspace_id=? FOR UPDATE`, invoiceID, workspaceID).Scan(&currentStatus); err != nil {
+		return Checkout{}, err
+	}
+	if currentStatus != "pending" && currentStatus != "overdue" {
+		return Checkout{}, errors.New("当前账单无需支付")
+	}
+
+	var existing Checkout
+	var existingStatus string
+	err = tx.QueryRowContext(ctx, `SELECT id,provider,merchant_order_no,status,COALESCE(checkout_url,''),COALESCE(qr_content,'') FROM payment_transactions WHERE invoice_id=? AND status IN ('created','pending') ORDER BY id DESC LIMIT 1`, invoiceID).Scan(&existing.TransactionID, &existing.Provider, &existing.MerchantOrder, &existingStatus, &existing.RedirectURL, &existing.QRContent)
+	if err == nil {
+		if err = tx.Commit(); err != nil {
+			return Checkout{}, err
+		}
+		definition := providerDefinition(existing.Provider)
+		existing.ProviderName = definition.Name
+		existing.Mode = definition.Mode
+		existing.Reused = true
+		if existingStatus == "created" || (existing.RedirectURL == "" && existing.QRContent == "") {
+			return Checkout{}, errors.New("这张账单的支付订单正在创建，请稍后再试")
+		}
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return Checkout{}, err
+	}
+
 	orderNo, err := merchantOrderNumber()
 	if err != nil {
 		return Checkout{}, err
 	}
-	result, err := s.db.ExecContext(ctx, `INSERT INTO payment_transactions(invoice_id,workspace_id,provider,merchant_order_no,amount_cents,currency,status) VALUES(?,?,?,?,?,?,'created')`, invoice.ID, workspaceID, provider, orderNo, invoice.AmountCents, strings.ToUpper(invoice.Currency))
+	result, err := tx.ExecContext(ctx, `INSERT INTO payment_transactions(invoice_id,workspace_id,provider,merchant_order_no,amount_cents,currency,status) VALUES(?,?,?,?,?,?,'created')`, invoice.ID, workspaceID, provider, orderNo, invoice.AmountCents, strings.ToUpper(invoice.Currency))
 	if err != nil {
 		return Checkout{}, err
 	}
 	transactionID, _ := result.LastInsertId()
+	if err = tx.Commit(); err != nil {
+		return Checkout{}, err
+	}
+
 	payment := invoicePayment{Invoice: invoice, OrderNo: orderNo}
 	created, err := s.createProviderCheckout(ctx, provider, payment)
 	if err != nil {
-		_, _ = s.db.ExecContext(ctx, `UPDATE payment_transactions SET status='failed',failure_reason=? WHERE id=?`, trimFailure(err.Error()), transactionID)
+		_, _ = s.db.ExecContext(ctx, `UPDATE payment_transactions SET status='failed',failure_reason=? WHERE id=? AND status='created'`, trimFailure(err.Error()), transactionID)
 		return Checkout{}, err
 	}
 	payload, _ := json.Marshal(created.Payload)
-	_, err = s.db.ExecContext(ctx, `UPDATE payment_transactions SET status='pending',provider_order_id=NULLIF(?,''),checkout_url=NULLIF(?,''),qr_content=NULLIF(?,''),provider_payload=? WHERE id=?`, created.ProviderOrderID, created.RedirectURL, created.QRContent, payload, transactionID)
+	res, err := s.db.ExecContext(ctx, `UPDATE payment_transactions SET status='pending',provider_order_id=NULLIF(?,''),checkout_url=NULLIF(?,''),qr_content=NULLIF(?,''),provider_payload=? WHERE id=? AND status='created'`, created.ProviderOrderID, created.RedirectURL, created.QRContent, payload, transactionID)
 	if err != nil {
 		return Checkout{}, err
 	}
-	return Checkout{TransactionID: transactionID, Provider: provider, ProviderName: method.Name, Mode: method.Mode, RedirectURL: created.RedirectURL, QRContent: created.QRContent, MerchantOrder: orderNo}, nil
+	if changed, _ := res.RowsAffected(); changed != 1 {
+		return Checkout{}, errors.New("支付订单状态已经变化，请刷新账单后重试")
+	}
+	return Checkout{TransactionID: transactionID, Provider: provider, ProviderName: selected.Name, Mode: selected.Mode, RedirectURL: created.RedirectURL, QRContent: created.QRContent, MerchantOrder: orderNo}, nil
 }
 
 func (s *Service) createProviderCheckout(ctx context.Context, provider string, payment invoicePayment) (createResult, error) {
