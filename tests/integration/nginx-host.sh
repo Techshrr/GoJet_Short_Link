@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-for command in nginx python3 curl grep; do
+for command in nginx python3 curl grep sed; do
   command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }
 done
 
@@ -44,18 +44,42 @@ class Handler(BaseHTTPRequestHandler):
 ThreadingHTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
 PY
 
-python3 "$tmp/upstream.py" 18080 redirect-engine >"$tmp/redirect.log" 2>&1 & redirect_pid=$!
-python3 "$tmp/upstream.py" 18090 platform-api >"$tmp/platform.log" 2>&1 & platform_pid=$!
-for port in 18080 18090; do
+# Full-stack acceptance already runs the real GoJet services on 18080/18090.
+# Use isolated upstream ports here so this routing test cannot accidentally hit
+# those processes and produce a false pass/failure.
+REDIRECT_TEST_PORT=18180
+PLATFORM_TEST_PORT=18190
+NGINX_TEST_PORT=18081
+python3 "$tmp/upstream.py" "$REDIRECT_TEST_PORT" redirect-engine >"$tmp/redirect.log" 2>&1 & redirect_pid=$!
+python3 "$tmp/upstream.py" "$PLATFORM_TEST_PORT" platform-api >"$tmp/platform.log" 2>&1 & platform_pid=$!
+for port in "$REDIRECT_TEST_PORT" "$PLATFORM_TEST_PORT"; do
   ready=0
   for _ in $(seq 1 30); do
     if curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1; then ready=1; break; fi
     sleep .2
   done
-  [[ "$ready" == 1 ]] || { echo "test upstream did not become ready on port $port" >&2; exit 1; }
+  if [[ "$ready" != 1 ]]; then
+    echo "isolated test upstream did not become ready on port $port" >&2
+    cat "$tmp/redirect.log" >&2 || true
+    cat "$tmp/platform.log" >&2 || true
+    exit 1
+  fi
 done
 
-sed -e "s|__GOJET_ROOT__|$(pwd)|g" -e 's/listen 80;/listen 127.0.0.1:18081;/' deploy/nginx/gojet-host.conf >"$tmp/gojet.conf"
+# Rewrite only the temporary runtime copy. The checked-in production config
+# remains pinned to the real native ports 18080/18090.
+sed \
+  -e "s|__GOJET_ROOT__|$(pwd)|g" \
+  -e "s/listen 80;/listen 127.0.0.1:$NGINX_TEST_PORT;/" \
+  -e "s/127\.0\.0\.1:18080/127.0.0.1:$REDIRECT_TEST_PORT/g" \
+  -e "s/127\.0\.0\.1:18090/127.0.0.1:$PLATFORM_TEST_PORT/g" \
+  deploy/nginx/gojet-host.conf >"$tmp/gojet.conf"
+
+# Guard the test fixture itself: both isolated ports must actually be present in
+# the generated Nginx config or the test would not prove upstream ownership.
+grep -Fq "127.0.0.1:$REDIRECT_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate redirect-engine upstream' >&2; exit 1; }
+grep -Fq "127.0.0.1:$PLATFORM_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate platform-api upstream' >&2; exit 1; }
+
 cat >"$tmp/nginx.conf" <<EOF2
 pid $tmp/nginx.pid;
 events {}
@@ -71,7 +95,7 @@ nginx -t -c "$tmp/nginx.conf" -p "$tmp"
 nginx -c "$tmp/nginx.conf" -p "$tmp" -g 'daemon off;' & nginx_pid=$!
 ready=0
 for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:18081/ >/dev/null 2>&1; then ready=1; break; fi
+  if curl -fsS "http://127.0.0.1:$NGINX_TEST_PORT/" >/dev/null 2>&1; then ready=1; break; fi
   sleep .2
 done
 [[ "$ready" == 1 ]] || { echo 'host Nginx did not become ready'; cat "$tmp/error.log" >&2 || true; exit 1; }
@@ -79,7 +103,7 @@ done
 assert_contains(){
   local path=$1 needle=$2 label=$3 body code
   body=$(mktemp "$tmp/body.XXXXXX")
-  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:18081$path")
+  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:$NGINX_TEST_PORT$path")
   if [[ "$code" != 200 ]] || ! grep -Fq "$needle" "$body"; then
     echo "host Nginx assertion failed: $label; path=$path status=$code expected text=[$needle]" >&2
     cat "$body" >&2 || true
@@ -88,9 +112,9 @@ assert_contains(){
   fi
 }
 assert_upstream(){
-  local path=$1 wanted=$2 label=$3 body code
+  local path=$1 wanted=$2 label=$3 body code actual
   body=$(mktemp "$tmp/upstream.XXXXXX")
-  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:18081$path")
+  code=$(curl -sS -o "$body" -w '%{http_code}' "http://127.0.0.1:$NGINX_TEST_PORT$path")
   actual=$(cat "$body")
   if [[ "$code" != 200 || "$actual" != "$wanted" ]]; then
     echo "host Nginx assertion failed: $label; path=$path status=$code expected=[$wanted] actual=[$actual]" >&2
