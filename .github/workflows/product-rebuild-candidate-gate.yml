@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: v4-fresh-install-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   candidate:
     runs-on: ubuntu-latest
@@ -44,7 +48,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
