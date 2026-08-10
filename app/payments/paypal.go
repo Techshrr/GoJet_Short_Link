@@ -112,9 +112,18 @@ func (s *Service) CompletePayPalReturn(ctx context.Context, merchantOrder, order
 	if merchantOrder == "" || orderID == "" {
 		return errors.New("PayPal 返回参数不完整")
 	}
-	var expectedOrder string
-	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(provider_order_id,'') FROM payment_transactions WHERE provider='paypal' AND merchant_order_no=?`, merchantOrder).Scan(&expectedOrder); err != nil || expectedOrder != orderID {
+	var expectedOrder, localStatus string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(provider_order_id,''),status FROM payment_transactions WHERE provider='paypal' AND merchant_order_no=?`, merchantOrder).Scan(&expectedOrder, &localStatus); err != nil || expectedOrder != orderID {
 		return errors.New("PayPal 订单不匹配")
+	}
+	// The webhook is authoritative too. If it won the race and already settled
+	// the invoice, the browser return is a successful no-op rather than a second
+	// capture attempt.
+	if localStatus == "paid" {
+		return nil
+	}
+	if localStatus != "pending" && localStatus != "created" {
+		return errors.New("PayPal 订单当前无法确认")
 	}
 	token, err := s.paypalToken(ctx)
 	if err != nil {
@@ -134,6 +143,11 @@ func (s *Service) CompletePayPalReturn(ctx context.Context, merchantOrder, order
 	defer response.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		// A verified webhook may settle while this capture request is in flight.
+		var status string
+		if s.db.QueryRowContext(ctx, `SELECT status FROM payment_transactions WHERE provider='paypal' AND merchant_order_no=?`, merchantOrder).Scan(&status) == nil && status == "paid" {
+			return nil
+		}
 		return fmt.Errorf("PayPal 确认支付失败 (%d)", response.StatusCode)
 	}
 	var result struct {
@@ -248,8 +262,12 @@ func decimalToCents(value string) (int64, error) {
 	fraction := "00"
 	if len(parts) == 2 {
 		fraction = parts[1]
-		if len(fraction) == 1 { fraction += "0" }
-		if len(fraction) != 2 { return 0, errors.New("支付金额精度无效") }
+		if len(fraction) == 1 {
+			fraction += "0"
+		}
+		if len(fraction) != 2 {
+			return 0, errors.New("支付金额精度无效")
+		}
 	}
 	minor, err := strconv.ParseInt(fraction, 10, 64)
 	if err != nil || minor < 0 {
