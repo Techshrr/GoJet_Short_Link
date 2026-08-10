@@ -46,7 +46,7 @@ grep -Fq 'CREATE TABLE administrator_permissions' "$ROOT/database/migrations/015
 grep -Fq "status ENUM('active','suspended','deleted')" "$ROOT/database/migrations/003_identity_and_workspaces.sql" || { echo 'user lifecycle schema is missing' >&2; exit 1; }
 grep -Fq '{{verification_url}}' "$ROOT/database/migrations/025_mail_templates.sql" || { echo 'verification mail link is missing' >&2; exit 1; }
 grep -Fq 'password_hash' "$ROOT/database/migrations/028_file_share_password.sql" || { echo 'protected file-share migration is missing' >&2; exit 1; }
-grep -Fq 'CREATE TABLE IF NOT EXISTS payment_transactions' "$ROOT/database/migrations/029_payment_transactions.sql" || { echo 'payment transaction migration is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE payment_transactions' "$ROOT/database/migrations/029_payment_transactions.sql" || { echo 'payment transaction migration is missing' >&2; exit 1; }
 grep -Fq 'fx_rate_cache' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'FX cache migration is missing' >&2; exit 1; }
 grep -Fq 'invoice_paid' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'billing lifecycle mail templates are missing' >&2; exit 1; }
 grep -Fq 'account_welcome' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'account lifecycle mail templates are missing' >&2; exit 1; }
