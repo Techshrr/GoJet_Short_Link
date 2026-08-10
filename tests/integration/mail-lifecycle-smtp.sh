@@ -114,9 +114,9 @@ expect 200 "$(req POST "/api/admin/invoices/$invoice_id/settle" '{"status":"paid
 start_worker; wait_type "$user_email" invoice_paid; wait_type "$user_email" subscription_changed
 
 # Cancellation scheduling and revocation each have their own customer notification.
-expect 200 "$(req POST "/api/workspaces/$wid/billing/cancellation" '{"cancel":true}' "$token")" cancel-schedule >/dev/null
+expect 200 "$(req PATCH "/api/workspaces/$wid/billing/cancellation" '{"cancel":true}' "$token")" cancel-schedule >/dev/null
 start_worker; wait_type "$user_email" subscription_cancellation_scheduled
-expect 200 "$(req POST "/api/workspaces/$wid/billing/cancellation" '{"cancel":false}' "$token")" cancel-revoke >/dev/null
+expect 200 "$(req PATCH "/api/workspaces/$wid/billing/cancellation" '{"cancel":false}' "$token")" cancel-revoke >/dev/null
 start_worker; wait_type "$user_email" subscription_cancellation_revoked
 
 # Period-expiry warning.
