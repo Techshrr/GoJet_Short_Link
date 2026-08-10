@@ -30,11 +30,18 @@ func main() {
 		log.Fatal(err)
 	}
 	service := appmail.NewService(db, store)
+	lastLifecycleScan := time.Time{}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+			if lastLifecycleScan.IsZero() || time.Since(lastLifecycleScan) >= time.Minute {
+				if err = service.QueueLifecycleNotifications(ctx); err != nil {
+					log.Printf("mail lifecycle scan failed: %v", err)
+				}
+				lastLifecycleScan = time.Now()
+			}
 			if err = service.ProcessOne(ctx); err != nil {
 				log.Printf("mail delivery failed: %v", err)
 			}
