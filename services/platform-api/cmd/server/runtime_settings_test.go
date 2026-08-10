@@ -38,8 +38,9 @@ func TestRuntimeGateCanPauseUserAPI(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/workspaces", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusServiceUnavailable || called || !strings.Contains(response.Body.String(), "API 已由管理员暂停") {
-		t.Fatalf("unexpected response %d %s called=%v", response.Code, response.Body.String(), called)
+	body := response.Body.String()
+	if response.Code != http.StatusServiceUnavailable || called || !strings.Contains(body, "服务接口已暂停") || !strings.Contains(body, "稍后重试") {
+		t.Fatalf("unexpected response %d %s called=%v", response.Code, body, called)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -54,6 +55,20 @@ func TestRuntimeGateKeepsRecoveryEndpointsAvailable(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/admin/diagnostics", nil))
 	if response.Code != http.StatusOK || !called {
 		t.Fatalf("admin recovery route was blocked: %d", response.Code)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimeGateKeepsPaymentCallbacksAvailable(t *testing.T) {
+	s, mock := runtimeTestServer(t)
+	called := false
+	handler := s.maintenance(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/payments/wechat/notify", nil))
+	if response.Code != http.StatusOK || !called {
+		t.Fatalf("payment callback route was blocked: %d", response.Code)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
