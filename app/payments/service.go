@@ -80,6 +80,13 @@ func (s *Service) Methods(ctx context.Context) ([]Method, error) {
 		}
 		defs[i].Enabled = master && exists && enabled && s.providerConfigured(ctx, defs[i].Code)
 	}
+	defaultProvider := strings.ToLower(strings.TrimSpace(s.setting(ctx, "payments.default_provider", "")))
+	for i := 1; i < len(defs); i++ {
+		if defs[i].Code == defaultProvider {
+			defs[0], defs[i] = defs[i], defs[0]
+			break
+		}
+	}
 	return defs, nil
 }
 
