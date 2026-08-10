@@ -2,13 +2,14 @@
 set -euo pipefail
 
 BASE=${GOJET_TEST_BASE:-http://127.0.0.1:18090}
+FILE_ROOT=${FILE_STORAGE_PATH:-/tmp/gojet/files}
 MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
 MYSQL_PORT=${MYSQL_PORT:-3306}
 MYSQL_USER=${MYSQL_USER:-root}
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-root}
 MYSQL_DATABASE=${MYSQL_DATABASE:-gojet_test}
 
-for command in curl python3 mysql mktemp date; do command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }; done
+for command in curl python3 mysql mktemp date cmp mkdir mv; do command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }; done
 mysqlq(){ MYSQL_PWD="$MYSQL_PASSWORD" mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" "$MYSQL_DATABASE" -N -B -e "$1"; }
 json(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
 api(){ local m=$1 p=$2 body=${3:-} token=${4:-}; local args=(-sS -X "$m" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [[ -n "$token" ]]&&args+=(-H "Authorization: Bearer $token"); [[ -n "$body" ]]&&args+=(--data "$body"); curl "${args[@]}" "$BASE$p"; }
@@ -28,9 +29,31 @@ upload(){
   [[ -z "$expires" ]] || args+=(-F "expires_at=$expires")
   curl "${args[@]}" "$BASE/api/workspaces/$wid/file-shares"
 }
+
+# This product-lifecycle test intentionally does not replace the separate real
+# ClamAV/EICAR acceptance. It simulates the successful scanner transition using
+# the same durable states and filesystem move used by FinishFileScan: pending ->
+# scanning -> clean, quarantine/<storage_name> -> clean/<storage_name>.
 activate(){
-  local id=$1
-  mysqlq "UPDATE file_shares SET scan_status='clean',scan_result='clean',status='active',object_key=quarantine_object_key,quarantine_object_key=NULL WHERE id=$id;"
+  local id=$1 storage source target changed
+  storage=$(mysqlq "SELECT storage_name FROM file_shares WHERE id=$id AND deleted_at IS NULL;")
+  [[ -n "$storage" && "$storage" != */* && "$storage" != .* ]] || { echo "invalid storage_name for file $id: $storage" >&2; exit 1; }
+  source="$FILE_ROOT/quarantine/$storage"
+  target="$FILE_ROOT/clean/$storage"
+  [[ -f "$source" ]] || { echo "quarantined object missing for file $id: $source" >&2; exit 1; }
+
+  changed=$(mysqlq "UPDATE file_shares SET scan_status='scanning',scan_attempts=scan_attempts+1,next_scan_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE) WHERE id=$id AND scan_status='pending'; SELECT ROW_COUNT();" | tail -n1)
+  [[ "$changed" == 1 ]] || { echo "file $id could not enter scanning state" >&2; exit 1; }
+
+  mkdir -p "$FILE_ROOT/clean"
+  mv "$source" "$target"
+  changed=$(mysqlq "UPDATE file_shares SET scan_status='clean',scan_result='clean',status='active',last_scanned_at=UTC_TIMESTAMP() WHERE id=$id AND scan_status='scanning'; SELECT ROW_COUNT();" | tail -n1)
+  if [[ "$changed" != 1 ]]; then
+    mv "$target" "$source" || true
+    echo "file $id could not finish clean scan state" >&2
+    exit 1
+  fi
+  [[ -f "$target" ]] || { echo "clean object missing for file $id: $target" >&2; exit 1; }
 }
 
 payload=$(mktemp)
