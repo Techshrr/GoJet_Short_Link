@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -154,5 +155,17 @@ func (s *server) deleteBioPage(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) readBioPage(w http.ResponseWriter,r *http.Request){item,err:=s.resources.ReadBio(r.Context(),r.PathValue("slug"));if err!=nil{jsonResponse(w,404,map[string]string{"error":"个人主页不存在或尚未发布"});return};jsonResponse(w,200,item)}
 func (s *server) createQRCode(w http.ResponseWriter,r *http.Request){wid,err:=pathID(r,"id");var in struct{LinkID int64 `json:"link_id"`;Name,Foreground,Background string;Size int};if decode(w,r,&in)!=nil{return};if err!=nil{jsonResponse(w,400,map[string]string{"error":"工作区编号无效"});return};item,err:=s.resources.CreateQR(r.Context(),currentUser(r).ID,wid,in.LinkID,in.Name,in.Foreground,in.Background,in.Size);if err!=nil{jsonResponse(w,422,map[string]string{"error":err.Error()});return};jsonResponse(w,201,item)}
-func (s *server) listQRCodes(w http.ResponseWriter,r *http.Request){workspaceID,err:=pathID(r,"id");if err!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"工作区编号无效"});return};items,err:=s.resources.ListQRs(r.Context(),currentUser(r).ID,workspaceID);if err!=nil{jsonResponse(w,http.StatusForbidden,map[string]string{"error":"无权查看二维码"});return};jsonResponse(w,http.StatusOK,map[string]any{"data":items})}
+func (s *server) listQRCodes(w http.ResponseWriter,r *http.Request){
+	workspaceID,err:=pathID(r,"id")
+	if err!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"工作区编号无效"});return}
+	userID:=currentUser(r).ID
+	if _,err=s.workspace.Role(r.Context(),workspaceID,userID);err!=nil{jsonResponse(w,http.StatusForbidden,map[string]string{"error":"无权查看二维码"});return}
+	items,err:=s.resources.ListQRs(r.Context(),userID,workspaceID)
+	if err!=nil{
+		log.Printf("list QR codes failed for workspace=%d user=%d: %v",workspaceID,userID,err)
+		jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"二维码列表暂时无法读取"})
+		return
+	}
+	jsonResponse(w,http.StatusOK,map[string]any{"data":items})
+}
 func (s *server) deleteQRCode(w http.ResponseWriter,r *http.Request){workspaceID,workspaceErr:=pathID(r,"id");qrID,qrErr:=pathID(r,"qr");if workspaceErr!=nil||qrErr!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"编号无效"});return};if err:=s.resources.DeleteQR(r.Context(),currentUser(r).ID,workspaceID,qrID);err!=nil{jsonResponse(w,http.StatusUnprocessableEntity,map[string]string{"error":"无法删除二维码"});return};w.WriteHeader(http.StatusNoContent)}
