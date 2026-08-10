@@ -111,7 +111,7 @@ jobs:
             tests/integration/brand-logo-lifecycle.sh; do
             check_file "$path"
           done
-          check_text '完整公开网址' frontend/user-console/link-hardening.js 'complete public link URL'
+          check_text 'const publicURL=' frontend/user-console/link-hardening.js 'public link URL builder'
           check_text '/f/' frontend/user-console/file-hardening.js 'public file route'
           check_text '文件访问密码' services/platform-api/cmd/server/resources.go 'file password API'
           check_text 'OpenDownloadWithPassword' app/resources/file_public.go 'file password service'
