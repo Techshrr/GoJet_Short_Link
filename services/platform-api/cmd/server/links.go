@@ -172,17 +172,44 @@ func (s *server) linkCreatePolicy(r *http.Request) links.CreatePolicy {
 		return 0
 	}
 	listValue := func(key string) []string {
-		raw, ok := get(key).([]any)
-		if !ok {
-			return nil
-		}
-		out := make([]string, 0, len(raw))
-		for _, value := range raw {
-			if text, ok := value.(string); ok {
+		switch raw := get(key).(type) {
+		case []any:
+			out := make([]string, 0, len(raw))
+			for _, value := range raw {
+				if text, ok := value.(string); ok {
+					text = strings.TrimSpace(text)
+					if text != "" {
+						out = append(out, text)
+					}
+				}
+			}
+			return out
+		case []string:
+			out := make([]string, 0, len(raw))
+			for _, text := range raw {
+				text = strings.TrimSpace(text)
+				if text != "" {
+					out = append(out, text)
+				}
+			}
+			return out
+		case string:
+			normalized := strings.NewReplacer("\r\n", "\n", "\r", "\n", ",", "\n").Replace(raw)
+			parts := strings.Split(normalized, "\n")
+			out := make([]string, 0, len(parts))
+			seen := map[string]bool{}
+			for _, text := range parts {
+				text = strings.TrimSpace(text)
+				if text == "" || seen[text] {
+					continue
+				}
+				seen[text] = true
 				out = append(out, text)
 			}
+			return out
+		default:
+			return nil
 		}
-		return out
 	}
 	clickLimit := intValue("links.default_click_limit")
 	return links.CreatePolicy{DefaultDomain: stringValue("links.default_domain"), AllowedCharacters: stringValue("links.allowed_characters"), DefaultRedirectStatus: intValue("links.default_redirect_status"), CodeLength: intValue("links.code_length"), DefaultExpiryDays: intValue("links.default_expiry_days"), DefaultClickLimit: int64(clickLimit), ReservedCodes: listValue("links.reserved_codes"), BlockedKeywords: listValue("links.blocked_keywords"), ForceHTTPS: get("links.force_https") == true}
