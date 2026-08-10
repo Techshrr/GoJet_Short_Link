@@ -70,6 +70,7 @@ jobs:
       - name: Build and start platform API
         run: |
           set -euo pipefail
+          mkdir -p /tmp/gojet-pdf/uploads /tmp/gojet-pdf/files
           go build -o /tmp/gojet-platform-api ./services/platform-api/cmd/server
           SETTINGS_KEY=$(python3 - <<'PY'
           import base64
@@ -82,8 +83,11 @@ jobs:
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
             ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='pdf-render-acceptance-qr-key-2026' \
             PUBLIC_BASE_URL='http://127.0.0.1:18090' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
+            UPLOAD_STORAGE_PATH='/tmp/gojet-pdf/uploads' \
+            FILE_STORAGE_PATH='/tmp/gojet-pdf/files' \
             /tmp/gojet-platform-api >/tmp/gojet-pdf-platform.log 2>&1 &
           echo $! >/tmp/gojet-pdf-platform.pid
           for i in $(seq 1 60); do
