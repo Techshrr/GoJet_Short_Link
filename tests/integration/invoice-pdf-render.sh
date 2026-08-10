@@ -65,10 +65,10 @@ grep -Fq 'GoJet' "$OUT_DIR/invoice.txt"
 grep -Fq 'USD 12.34' "$OUT_DIR/invoice.txt"
 grep -Fq "$amount" "$OUT_DIR/invoice.txt"
 
-# Render twice: PNG is retained as a human-inspectable artifact; PPM lets CI
-# inspect actual pixels using only Python's standard library.
+# Render twice: PNG is retained as a human-inspectable artifact; pdftoppm's
+# default PPM output lets CI inspect actual pixels using only Python stdlib.
 pdftoppm -f 1 -singlefile -r 144 -png "$pdf" "$OUT_DIR/invoice-page" >/dev/null
-pdftoppm -f 1 -singlefile -r 72 -ppm "$pdf" "$OUT_DIR/invoice-pixels" >/dev/null
+pdftoppm -f 1 -singlefile -r 72 "$pdf" "$OUT_DIR/invoice-pixels" >/dev/null
 
 python3 - "$OUT_DIR/invoice-pixels.ppm" <<'PY'
 import sys
