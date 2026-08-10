@@ -44,8 +44,7 @@ func (s *server) turnstileAllowedHostnames(ctx context.Context) []string {
 	out := make([]string, 0, len(items))
 	seen := map[string]bool{}
 	for _, item := range items {
-		item = strings.ToLower(strings.TrimSpace(item))
-		item = strings.TrimSuffix(item, ".")
+		item = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(item), "."))
 		if item != "" && !seen[item] {
 			seen[item] = true
 			out = append(out, item)
@@ -60,6 +59,7 @@ func hostnameAllowed(hostname string, allowed []string) bool {
 	}
 	hostname = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(hostname), "."))
 	for _, candidate := range allowed {
+		candidate = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(candidate), "."))
 		if hostname == candidate {
 			return true
 		}
@@ -67,44 +67,52 @@ func hostnameAllowed(hostname string, allowed []string) bool {
 	return false
 }
 
-func (s *server) verifyTurnstile(ctx context.Context, action, token, remoteIP string) error {
-	secret := registrationStringFromSettings(ctx, s, "turnstile.secret")
+// verifyTurnstileWithClient contains the complete external verification contract
+// without any database dependency so the security boundary is executable in CI.
+// failOpen is intentionally limited to transport errors and non-2xx upstream
+// responses. A negative, malformed, wrong-action or wrong-hostname challenge is
+// always rejected.
+func verifyTurnstileWithClient(ctx context.Context, client *http.Client, endpoint, secret, action, token, remoteIP string, allowedHostnames []string, failOpen bool) error {
+	secret = strings.TrimSpace(secret)
 	if secret == "" || secret == "********" {
 		return errors.New("Turnstile 已启用但 Secret Key 尚未配置")
 	}
-	if strings.TrimSpace(token) == "" {
+	token = strings.TrimSpace(token)
+	if token == "" {
 		return errors.New("请完成人机验证")
 	}
-	values := url.Values{"secret": {secret}, "response": {strings.TrimSpace(token)}}
-	if strings.TrimSpace(remoteIP) != "" {
-		values.Set("remoteip", remoteIP)
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		endpoint = defaultTurnstileVerifyURL
 	}
-	endpoint := strings.TrimSpace(getenv("TURNSTILE_VERIFY_URL", defaultTurnstileVerifyURL))
+	values := url.Values{"secret": {secret}, "response": {token}}
+	if strings.TrimSpace(remoteIP) != "" {
+		values.Set("remoteip", strings.TrimSpace(remoteIP))
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
 	if err != nil {
-		return err
+		return errors.New("人机验证请求无法创建")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{Timeout: 7 * time.Second}
+	if client == nil {
+		client = &http.Client{Timeout: 7 * time.Second}
+	}
 	res, err := client.Do(req)
 	if err != nil {
-		if s.registrationBool(ctx, "turnstile.fail_open", false) {
+		if failOpen {
 			return nil
 		}
 		return errors.New("人机验证服务暂时不可用")
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		if s.registrationBool(ctx, "turnstile.fail_open", false) {
+		if failOpen {
 			return nil
 		}
 		return errors.New("人机验证服务暂时不可用")
 	}
 	var result turnstileVerifyResponse
 	if err = json.NewDecoder(res.Body).Decode(&result); err != nil {
-		if s.registrationBool(ctx, "turnstile.fail_open", false) {
-			return nil
-		}
 		return errors.New("人机验证响应无效")
 	}
 	if !result.Success {
@@ -113,10 +121,24 @@ func (s *server) verifyTurnstile(ctx context.Context, action, token, remoteIP st
 	if result.Action != "" && action != "" && result.Action != action {
 		return errors.New("人机验证场景不匹配，请刷新页面重试")
 	}
-	if !hostnameAllowed(result.Hostname, s.turnstileAllowedHostnames(ctx)) {
+	if !hostnameAllowed(result.Hostname, allowedHostnames) {
 		return errors.New("人机验证域名不匹配")
 	}
 	return nil
+}
+
+func (s *server) verifyTurnstile(ctx context.Context, action, token, remoteIP string) error {
+	return verifyTurnstileWithClient(
+		ctx,
+		&http.Client{Timeout: 7 * time.Second},
+		getenv("TURNSTILE_VERIFY_URL", defaultTurnstileVerifyURL),
+		registrationStringFromSettings(ctx, s, "turnstile.secret"),
+		action,
+		token,
+		remoteIP,
+		s.turnstileAllowedHostnames(ctx),
+		s.registrationBool(ctx, "turnstile.fail_open", false),
+	)
 }
 
 func (s *server) enforceTurnstile(w http.ResponseWriter, r *http.Request, surface, action, token string) bool {
