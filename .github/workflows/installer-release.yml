@@ -40,8 +40,14 @@ jobs:
       - name: Fresh install release policy
         run: |
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
-          ! grep -Fq '"$ROOT/upgrade-native.sh"' scripts/package-release.sh
-          ! grep -Fq '"$ROOT/upgrade.sh"' scripts/package-release.sh
+          if grep -Fq '"$ROOT/upgrade-native.sh"' scripts/package-release.sh; then
+            echo 'fresh-install package must not ship upgrade-native.sh' >&2
+            exit 1
+          fi
+          if grep -Fq '"$ROOT/upgrade.sh"' scripts/package-release.sh; then
+            echo 'fresh-install package must not ship upgrade.sh' >&2
+            exit 1
+          fi
           grep -Fq '只支持全新安装' docs/v4-product-rebuild.zh-CN.md
       - name: Product rebuild regression checks
         run: |
@@ -49,7 +55,11 @@ jobs:
           grep -Fq 'AllowedAdministrator' app/adminauth/service.go
           grep -Fq 'return s.admin(permission, next)' services/platform-api/cmd/server/admin_identity.go
           test ! -e database/migrations/026_admin_step_up_session.sql
-          ! grep -R -Fq 'settingsMutationNeedsStepUp' services/platform-api/cmd/server
+          test ! -e services/platform-api/cmd/server/admin_stepup_sql_test.go
+          if grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP|settingsMutationNeedsStepUp' app services frontend/admin-console; then
+            echo 'obsolete operation-level administrator step-up code remains' >&2
+            exit 1
+          fi
           grep -Fq 'POST /api/admin/users' services/platform-api/cmd/server/main.go
           grep -Fq 'DELETE /api/admin/users/{id}' services/platform-api/cmd/server/main.go
           grep -Fq 'POST /api/auth/forgot-password' services/platform-api/cmd/server/main.go
@@ -59,7 +69,6 @@ jobs:
           grep -Fq 'Markdown 正文' frontend/admin-console/app.js
           grep -Fq '添加用户' frontend/admin-console/app.js
           grep -Fq 'permissionGrid' frontend/admin-console/app.js
-          ! grep -Fq 'step_up_required' frontend/admin-console/app.js
           test -f frontend/marketing-site/login/index.html
           test -f frontend/marketing-site/register/index.html
           test -f frontend/marketing-site/forgot-password/index.html
@@ -67,7 +76,10 @@ jobs:
           test -f frontend/marketing-site/verify-email/index.html
           grep -Fq 'location = /login' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
-          ! sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'
+          if sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'; then
+            echo '/uploads alias must not use try_files' >&2
+            exit 1
+          fi
       - name: Go test and vet
         run: |
           go test ./...
