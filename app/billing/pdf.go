@@ -9,22 +9,28 @@ import (
 )
 
 type InvoicePDFData struct {
-	BrandColor      string
-	SiteName        string
-	CompanyName     string
-	CompanyAddress  string
-	ContactEmail    string
-	WorkspaceName   string
-	InvoiceNumber   string
-	Status          string
-	PlanName        string
-	InvoiceType     string
-	Amount          string
-	CreatedAt       string
-	DueAt           string
-	PaidAt          string
-	PaymentMethod   string
-	PaymentReference string
+	BrandColor        string
+	SiteName          string
+	CompanyName       string
+	CompanyAddress    string
+	ContactEmail      string
+	WorkspaceName     string
+	InvoiceNumber     string
+	Status            string
+	PlanName          string
+	InvoiceType       string
+	SourceAmount      string
+	Amount            string
+	FXRate            string
+	FXProvider        string
+	FXMarkup          string
+	FXQuotedAt        string
+	Period            string
+	CreatedAt         string
+	DueAt             string
+	PaidAt            string
+	PaymentMethod     string
+	PaymentReference  string
 }
 
 func RenderInvoicePDF(data InvoicePDFData) []byte {
@@ -54,35 +60,57 @@ func RenderInvoicePDF(data InvoicePDFData) []byte {
 	writeChinese(&content, 330, 656, 12, data.WorkspaceName)
 
 	content.WriteString("0.95 0.97 0.96 rg 46 568 503 34 re f\n")
-	writeChinese(&content, 58, 579, 10, "项目")
-	writeChinese(&content, 300, 579, 10, "类型")
-	writeChinese(&content, 460, 579, 10, "金额")
+	writeChinese(&content, 58, 579, 10, "套餐")
+	writeChinese(&content, 245, 579, 10, "类型")
+	writeChinese(&content, 360, 579, 10, "服务周期")
+	writeChinese(&content, 465, 579, 10, "结算金额")
 	writeChinese(&content, 58, 544, 11, data.PlanName)
-	writeChinese(&content, 300, 544, 10, invoiceType)
-	writeASCII(&content, 443, 544, 12, data.Amount)
+	writeChinese(&content, 245, 544, 10, invoiceType)
+	writeChinese(&content, 360, 544, 10, data.Period)
+	writeASCII(&content, 446, 544, 11, data.Amount)
 	content.WriteString("0.86 0.90 0.88 RG 46 525 m 549 525 l S\n")
 
-	writeChinese(&content, 46, 488, 10, "开具时间")
-	writeChinese(&content, 160, 488, 10, data.CreatedAt)
-	writeChinese(&content, 46, 466, 10, "支付期限")
-	writeChinese(&content, 160, 466, 10, data.DueAt)
+	y := 492.0
+	if data.SourceAmount != "" && data.SourceAmount != data.Amount {
+		writeChinese(&content, 46, y, 10, "套餐计价")
+		writeASCII(&content, 160, y, 10, data.SourceAmount)
+		y -= 21
+		writeChinese(&content, 46, y, 10, "锁定汇率")
+		writeASCII(&content, 160, y, 9, data.FXRate)
+		writeChinese(&content, 350, y, 9, "来源："+data.FXProvider)
+		y -= 21
+		if data.FXMarkup != "" && data.FXMarkup != "0" {
+			writeChinese(&content, 46, y, 10, "汇率调整")
+			writeChinese(&content, 160, y, 10, data.FXMarkup+" 个基点")
+			y -= 21
+		}
+		if data.FXQuotedAt != "" {
+			writeChinese(&content, 46, y, 10, "汇率时间")
+			writeChinese(&content, 160, y, 10, data.FXQuotedAt)
+			y -= 26
+		}
+	}
+	writeChinese(&content, 46, y, 10, "开具时间")
+	writeChinese(&content, 160, y, 10, data.CreatedAt); y -= 22
+	writeChinese(&content, 46, y, 10, "支付期限")
+	writeChinese(&content, 160, y, 10, data.DueAt); y -= 22
 	if data.PaidAt != "" && data.PaidAt != "—" {
-		writeChinese(&content, 46, 444, 10, "支付时间")
-		writeChinese(&content, 160, 444, 10, data.PaidAt)
+		writeChinese(&content, 46, y, 10, "支付时间")
+		writeChinese(&content, 160, y, 10, data.PaidAt); y -= 22
 	}
 	if data.PaymentMethod != "" {
-		writeChinese(&content, 46, 422, 10, "支付方式")
-		writeChinese(&content, 160, 422, 10, data.PaymentMethod)
+		writeChinese(&content, 46, y, 10, "支付方式")
+		writeChinese(&content, 160, y, 10, data.PaymentMethod); y -= 22
 	}
 	if data.PaymentReference != "" {
-		writeChinese(&content, 46, 400, 10, "支付参考号")
-		writeASCII(&content, 160, 400, 9, data.PaymentReference)
+		writeChinese(&content, 46, y, 10, "支付参考号")
+		writeASCII(&content, 160, y, 9, data.PaymentReference)
 	}
 
-	content.WriteString(fmt.Sprintf("%.4f %.4f %.4f rg 46 324 503 84 re f\n", brandR*0.08+0.92, brandG*0.08+0.92, brandB*0.08+0.92))
-	writeChinese(&content, 62, 374, 10, "应付金额")
-	writeASCII(&content, 62, 344, 24, data.Amount)
-	writeChinese(&content, 46, 86, 9, "此账单由 GoJet 自动生成。请通过控制台查看最新支付状态。")
+	content.WriteString(fmt.Sprintf("%.4f %.4f %.4f rg 46 220 503 90 re f\n", brandR*0.08+0.92, brandG*0.08+0.92, brandB*0.08+0.92))
+	writeChinese(&content, 62, 274, 10, "最终结算金额")
+	writeASCII(&content, 62, 240, 24, data.Amount)
+	writeChinese(&content, 46, 86, 9, "此账单由 GoJet 自动生成。金额与汇率以账单生成时保存的快照为准。")
 	writeASCII(&content, 46, 66, 8, "GoJet")
 
 	stream := content.String()
