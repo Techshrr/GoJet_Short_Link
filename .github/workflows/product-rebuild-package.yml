@@ -47,8 +47,8 @@ jobs:
         run: |
           set -euo pipefail
           ZIP=$(cat /tmp/gojet-package-zip)
-          ./scripts/verify-release.sh "$ZIP"
-          ./scripts/verify-hardening-release.sh "$ZIP"
+          sh scripts/verify-release.sh "$ZIP"
+          sh scripts/verify-hardening-release.sh "$ZIP"
           unzip -tq "$ZIP"
           SHA_FILE="$ZIP.sha256"
           test -f "$SHA_FILE"
