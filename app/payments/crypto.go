@@ -12,8 +12,24 @@ import (
 	"strings"
 )
 
-func parseRSAPrivateKey(value string) (*rsa.PrivateKey, error) {
+func normalizedPEM(value, kind string) string {
 	value = strings.TrimSpace(strings.ReplaceAll(value, `\n`, "\n"))
+	if value == "" || strings.Contains(value, "-----BEGIN ") {
+		return value
+	}
+	compact := strings.Join(strings.Fields(value), "")
+	var builder strings.Builder
+	builder.WriteString("-----BEGIN " + kind + "-----\n")
+	for len(compact) > 64 {
+		builder.WriteString(compact[:64] + "\n")
+		compact = compact[64:]
+	}
+	builder.WriteString(compact + "\n-----END " + kind + "-----")
+	return builder.String()
+}
+
+func parseRSAPrivateKey(value string) (*rsa.PrivateKey, error) {
+	value = normalizedPEM(value, "PRIVATE KEY")
 	block, _ := pem.Decode([]byte(value))
 	if block == nil {
 		return nil, errors.New("私钥格式无效")
@@ -30,7 +46,7 @@ func parseRSAPrivateKey(value string) (*rsa.PrivateKey, error) {
 }
 
 func parseRSAPublicKey(value string) (*rsa.PublicKey, error) {
-	value = strings.TrimSpace(strings.ReplaceAll(value, `\n`, "\n"))
+	value = normalizedPEM(value, "PUBLIC KEY")
 	block, _ := pem.Decode([]byte(value))
 	if block == nil {
 		return nil, errors.New("公钥格式无效")
