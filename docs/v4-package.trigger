@@ -7,3 +7,4 @@ Package target: 4.0.0-rc.10
 Purpose: build and independently verify the production fresh-install archive before Fresh Install Candidate acceptance.
 Triggered: 2026-08-11 Asia/Singapore
 Retrigger: package workflow is now registered and active in GitHub Actions.
+Retry 2: align payment transaction migration assertion with the current formal migration.
