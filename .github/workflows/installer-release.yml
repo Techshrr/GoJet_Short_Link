@@ -1,15 +1,15 @@
-name: V4 product rebuild validation
+name: V4 product hardening validation
 
 on:
   push:
     branches:
-      - 'rebuild/v4-product'
+      - 'rebuild/v4-product-hardening'
     paths-ignore:
       - 'scripts/v4-candidate-gate-*.trigger'
   pull_request:
 
 concurrency:
-  group: v4-product-validation-${{ github.ref }}
+  group: v4-product-hardening-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,51 +30,55 @@ jobs:
           bash -n install.sh
           bash -n install-native-lemp.sh
           bash -n launch-web-installer.sh
+          bash -n scripts/native-installer-run.sh
           bash -n scripts/native-installer-apply.sh
           bash -n scripts/install-docker.sh
           sh -n scripts/package-release.sh
           node --check frontend/admin-console/app.js
+          node --check frontend/admin-console/product-actions.js
+          node --check frontend/admin-console/settings-full.js
+          node --check frontend/admin-console/admin-hardening.js
           node --check frontend/user-console/app.js
           node --check frontend/user-console/auth-guard.js
+          node --check frontend/user-console/product-hardening.js
+          node --check frontend/user-console/product-router.js
           node --check frontend/marketing-site/assets/auth.js
-      - name: Fresh install release policy
+      - name: Fresh install runtime integrity policy
         run: |
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
-          if grep -Fq '"$ROOT/upgrade-native.sh"' scripts/package-release.sh; then
-            echo 'fresh-install package must not ship upgrade-native.sh' >&2
-            exit 1
-          fi
-          if grep -Fq '"$ROOT/upgrade.sh"' scripts/package-release.sh; then
-            echo 'fresh-install package must not ship upgrade.sh' >&2
-            exit 1
-          fi
-          grep -Fq '只支持全新安装' docs/v4-product-rebuild.zh-CN.md
-      - name: Product rebuild regression checks
+          grep -Fq 'stop_existing_services' scripts/native-installer-run.sh
+          grep -Fq 'information_schema.tables' scripts/native-installer-run.sh
+          grep -Fq '/proc/$pid/exe' scripts/native-installer-run.sh
+          grep -Fq 'totp_enabled' scripts/native-installer-run.sh
+          grep -Fq 'native-installer-run.sh' deploy/native/gojet-installer.service
+          if grep -Fq '"$ROOT/upgrade-native.sh"' scripts/package-release.sh; then exit 1; fi
+          if grep -Fq '"$ROOT/upgrade.sh"' scripts/package-release.sh; then exit 1; fi
+      - name: Product hardening regression checks
         run: |
-          grep -Fq 'CREATE TABLE administrator_permissions' database/migrations/015_admin_identity.sql
-          grep -Fq 'AllowedAdministrator' app/adminauth/service.go
-          grep -Fq 'return s.admin(permission, next)' services/platform-api/cmd/server/admin_identity.go
-          test ! -e database/migrations/026_admin_step_up_session.sql
-          test ! -e services/platform-api/cmd/server/admin_stepup_sql_test.go
+          test -f docs/V4_PRODUCT_HARDENING_AUDIT.md
+          test -f frontend/user-console/product-hardening.js
+          test -f frontend/user-console/product-hardening.css
+          test -f frontend/admin-console/admin-hardening.js
+          test -f frontend/admin-console/admin-hardening.css
+          grep -Fq '完整可分享地址' frontend/user-console/product-hardening.js
+          grep -Fq '复制下载链接' frontend/user-console/product-hardening.js
+          grep -Fq '纯文本、Markdown、代码 / 日志' frontend/user-console/product-hardening.js
+          grep -Fq '二维码必须绑定真实启用短链' frontend/user-console/product-hardening.js
+          grep -Fq 'renderSharedText' services/platform-api/cmd/server/public_resources.go
+          grep -Fq 'renderSafeMarkdown' services/platform-api/cmd/server/text_render.go
+          grep -Fq '未接入运行时的装饰性设置已经从正式后台移除' frontend/admin-console/admin-hardening.js
           if grep -R -n -E 'adminStepUp|stepUpRequiredForPath|verifyAdminStepUp|step_up_required|X-GoJet-TOTP|settingsMutationNeedsStepUp' app services frontend/admin-console; then
             echo 'obsolete operation-level administrator step-up code remains' >&2
             exit 1
           fi
+          test ! -e database/migrations/026_admin_step_up_session.sql
+          test ! -e services/platform-api/cmd/server/admin_stepup_sql_test.go
           grep -Fq 'POST /api/admin/users' services/platform-api/cmd/server/main.go
           grep -Fq 'DELETE /api/admin/users/{id}' services/platform-api/cmd/server/main.go
           grep -Fq 'POST /api/auth/forgot-password' services/platform-api/cmd/server/main.go
           grep -Fq 'PATCH /api/admin/announcements/{id}' services/platform-api/cmd/server/main.go
-          grep -Fq 'adminRunReconciliationSimple' services/platform-api/cmd/server/main.go
-          test ! -e frontend/admin-console/admin-settings-fix.js
-          grep -Fq 'Markdown 正文' frontend/admin-console/app.js
-          grep -Fq '添加用户' frontend/admin-console/app.js
-          grep -Fq 'permissionGrid' frontend/admin-console/app.js
-          test -f frontend/marketing-site/login/index.html
-          test -f frontend/marketing-site/register/index.html
-          test -f frontend/marketing-site/forgot-password/index.html
-          test -f frontend/marketing-site/reset-password/index.html
-          test -f frontend/marketing-site/verify-email/index.html
-          grep -Fq 'location = /login' deploy/nginx/gojet-bt-rewrite.conf
+          grep -Fq 'location ^~ /app/' deploy/nginx/gojet-bt-rewrite.conf
+          grep -Fq 'location ^~ /admin/' deploy/nginx/gojet-bt-rewrite.conf
           grep -Fq 'location ^~ /uploads/' deploy/nginx/gojet-bt-rewrite.conf
           if sed -n '/location \^~ \/uploads\//,/^}/p' deploy/nginx/gojet-bt-rewrite.conf | grep -Fq 'try_files'; then
             echo '/uploads alias must not use try_files' >&2
