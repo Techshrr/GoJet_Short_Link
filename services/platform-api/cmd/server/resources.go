@@ -17,7 +17,7 @@ func (s *server) createTextShare(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if decode(w, r, &in) != nil { return }
-	if err != nil { jsonResponse(w, 400, map[string]string{"error":"invalid workspace"}); return }
+	if err != nil { jsonResponse(w, 400, map[string]string{"error":"工作区编号无效"}); return }
 	item, err := s.resources.CreateText(r.Context(), currentUser(r).ID, wid, in.TextShare, in.Password)
 	if err != nil { jsonResponse(w, 422, map[string]string{"error":err.Error()}); return }
 	item.Content = ""
@@ -61,22 +61,22 @@ func (s *server) deleteTextShare(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) createFileShare(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")
-	if err != nil { jsonResponse(w, 400, map[string]string{"error":"invalid workspace"}); return }
+	if err != nil { jsonResponse(w, 400, map[string]string{"error":"工作区编号无效"}); return }
 	r.Body = http.MaxBytesReader(w, r.Body, appresources.MaxFileSize+(1<<20))
-	if err = r.ParseMultipartForm(1 << 20); err != nil { jsonResponse(w, 413, map[string]string{"error":"文件必须大于零且不超过 100MB"}); return }
+	if err = r.ParseMultipartForm(1 << 20); err != nil { jsonResponse(w, 413, map[string]string{"error":"文件必须大于零且不超过 100 MB"}); return }
 	file, header, err := r.FormFile("file")
 	if err != nil { jsonResponse(w, 422, map[string]string{"error":"请选择文件"}); return }
 	defer file.Close()
 	var expiresAt *time.Time
 	if raw := strings.TrimSpace(r.FormValue("expires_at")); raw != "" {
-		parsed, parseErr := time.Parse(time.RFC3339, raw); if parseErr != nil { jsonResponse(w, 422, map[string]string{"error":"有效期必须为 RFC3339 时间"}); return }; expiresAt=&parsed
+		parsed, parseErr := time.Parse(time.RFC3339, raw); if parseErr != nil { jsonResponse(w, 422, map[string]string{"error":"有效期格式无效，请重新选择时间"}); return }; expiresAt=&parsed
 	}
 	var maxDownloads *int64
 	if raw := strings.TrimSpace(r.FormValue("max_downloads")); raw != "" {
 		parsed, parseErr := strconv.ParseInt(raw,10,64); if parseErr != nil { jsonResponse(w,422,map[string]string{"error":"最大下载次数无效"}); return }; maxDownloads=&parsed
 	}
 	password := strings.TrimSpace(r.FormValue("password"))
-	if password != "" && (len(password) < 6 || len(password) > 128) { jsonResponse(w,422,map[string]string{"error":"文件访问密码必须为 6-128 位"}); return }
+	if password != "" && (len(password) < 6 || len(password) > 128) { jsonResponse(w,422,map[string]string{"error":"文件访问密码必须为 6 到 128 位"}); return }
 	item, err := s.resources.CreateFile(r.Context(), currentUser(r).ID, wid, header.Filename, header.Header.Get("Content-Type"), file, expiresAt, maxDownloads)
 	if err != nil { jsonResponse(w,422,map[string]string{"error":err.Error()}); return }
 	if password != "" {
@@ -90,7 +90,7 @@ func (s *server) createFileShare(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) listFileShares(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")
-	if err != nil { jsonResponse(w,400,map[string]string{"error":"invalid workspace"}); return }
+	if err != nil { jsonResponse(w,400,map[string]string{"error":"工作区编号无效"}); return }
 	items, err := s.resources.ListFiles(r.Context(), currentUser(r).ID, wid)
 	if err != nil { jsonResponse(w,403,map[string]string{"error":"无权查看该工作区文件"}); return }
 	protection, _ := s.resources.FileProtectionMap(r.Context(), wid)
@@ -135,7 +135,7 @@ func (s *server) readTextShare(w http.ResponseWriter, r *http.Request) {
 func (s *server) createBioPage(w http.ResponseWriter, r *http.Request) {
 	wid,err:=pathID(r,"id"); var item appresources.BioPage
 	if decode(w,r,&item)!=nil { return }
-	if err!=nil { jsonResponse(w,400,map[string]string{"error":"invalid workspace"}); return }
+	if err!=nil { jsonResponse(w,400,map[string]string{"error":"工作区编号无效"}); return }
 	item,err=s.resources.CreateBio(r.Context(),currentUser(r).ID,wid,item)
 	if err!=nil { jsonResponse(w,422,map[string]string{"error":err.Error()}); return }
 	jsonResponse(w,201,item)
@@ -153,6 +153,6 @@ func (s *server) deleteBioPage(w http.ResponseWriter, r *http.Request) {
 	workspaceID,workspaceErr:=pathID(r,"id");pageID,pageErr:=pathID(r,"page");if workspaceErr!=nil||pageErr!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"编号无效"});return};if err:=s.resources.DeleteBio(r.Context(),currentUser(r).ID,workspaceID,pageID);err!=nil{jsonResponse(w,http.StatusUnprocessableEntity,map[string]string{"error":"无法删除个人主页"});return};w.WriteHeader(http.StatusNoContent)
 }
 func (s *server) readBioPage(w http.ResponseWriter,r *http.Request){item,err:=s.resources.ReadBio(r.Context(),r.PathValue("slug"));if err!=nil{jsonResponse(w,404,map[string]string{"error":"个人主页不存在或尚未发布"});return};jsonResponse(w,200,item)}
-func (s *server) createQRCode(w http.ResponseWriter,r *http.Request){wid,err:=pathID(r,"id");var in struct{LinkID int64 `json:"link_id"`;Name,Foreground,Background string;Size int};if decode(w,r,&in)!=nil{return};if err!=nil{jsonResponse(w,400,map[string]string{"error":"invalid workspace"});return};item,err:=s.resources.CreateQR(r.Context(),currentUser(r).ID,wid,in.LinkID,in.Name,in.Foreground,in.Background,in.Size);if err!=nil{jsonResponse(w,422,map[string]string{"error":err.Error()});return};jsonResponse(w,201,item)}
+func (s *server) createQRCode(w http.ResponseWriter,r *http.Request){wid,err:=pathID(r,"id");var in struct{LinkID int64 `json:"link_id"`;Name,Foreground,Background string;Size int};if decode(w,r,&in)!=nil{return};if err!=nil{jsonResponse(w,400,map[string]string{"error":"工作区编号无效"});return};item,err:=s.resources.CreateQR(r.Context(),currentUser(r).ID,wid,in.LinkID,in.Name,in.Foreground,in.Background,in.Size);if err!=nil{jsonResponse(w,422,map[string]string{"error":err.Error()});return};jsonResponse(w,201,item)}
 func (s *server) listQRCodes(w http.ResponseWriter,r *http.Request){workspaceID,err:=pathID(r,"id");if err!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"工作区编号无效"});return};items,err:=s.resources.ListQRs(r.Context(),currentUser(r).ID,workspaceID);if err!=nil{jsonResponse(w,http.StatusForbidden,map[string]string{"error":"无权查看二维码"});return};jsonResponse(w,http.StatusOK,map[string]any{"data":items})}
 func (s *server) deleteQRCode(w http.ResponseWriter,r *http.Request){workspaceID,workspaceErr:=pathID(r,"id");qrID,qrErr:=pathID(r,"qr");if workspaceErr!=nil||qrErr!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"编号无效"});return};if err:=s.resources.DeleteQR(r.Context(),currentUser(r).ID,workspaceID,qrID);err!=nil{jsonResponse(w,http.StatusUnprocessableEntity,map[string]string{"error":"无法删除二维码"});return};w.WriteHeader(http.StatusNoContent)}
