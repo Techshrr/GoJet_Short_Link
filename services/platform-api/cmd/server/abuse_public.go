@@ -35,8 +35,13 @@ func normalizeReportedURL(raw string) (string, string, string, bool) {
 		return "", "", "", false
 	}
 	code, err := url.PathUnescape(path)
-	if err != nil || strings.TrimSpace(code) == "" || len(code) > 64 {
+	if err != nil || strings.TrimSpace(code) == "" || len(code) > 64 || strings.ContainsAny(code, "/\\") {
 		return "", "", "", false
+	}
+	for _, r := range code {
+		if r < 0x20 || r == 0x7f {
+			return "", "", "", false
+		}
 	}
 	u.Path = "/" + code
 	u.RawPath = ""
