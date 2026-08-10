@@ -58,7 +58,7 @@ jobs:
           while IFS= read -r path; do
             [ -n "$path" ] || continue
             case "$path" in
-              .github/workflows/product-rebuild-candidate-gate.yml|scripts/v4-candidate-gate-rc11.trigger|.github/workflows/product-rebuild-candidate-p0-debug.yml|scripts/v4-candidate-p0-debug.trigger) ;;
+              .github/workflows/product-rebuild-candidate-gate.yml|scripts/v4-candidate-gate-rc11.trigger) ;;
               *) echo "runtime/package content changed after Package gate: $path" >&2; exit 1 ;;
             esac
           done < /tmp/gojet-post-package-files
@@ -151,15 +151,16 @@ jobs:
         run: |
           set -euo pipefail
           ROOT=$(cat /tmp/gojet-candidate-root-path)
-          mkdir -p /tmp/gojet-candidate/uploads /tmp/gojet-candidate/files
+          mkdir -p /tmp/gojet-candidate/uploads /tmp/gojet-candidate/files /tmp/gojet
           SETTINGS_KEY=$(python3 - <<'PY'
           import base64
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
-          cat > /tmp/gojet-candidate/test-env <<EOF2
-          SETTINGS_ENCRYPTION_KEY=$SETTINGS_KEY
-          EOF2
+          printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$SETTINGS_KEY" > /tmp/gojet-candidate/test-env
+          printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$SETTINGS_KEY" > /tmp/gojet/test-env
+          cp "$ROOT/bin/mail-worker" /tmp/gojet/mail-worker
+          chmod 0755 /tmp/gojet/mail-worker
           env \
             MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' \
             REDIS_ADDRESS='127.0.0.1:6379' \
@@ -206,6 +207,7 @@ jobs:
           MYSQL_DATABASE: gojet_candidate
           REDIS_ADDRESS: 127.0.0.1:6379
           UPLOAD_STORAGE_PATH: /tmp/gojet-candidate/uploads
+          FILE_STORAGE_PATH: /tmp/gojet-candidate/files
         run: |
           set -euo pipefail
           bash tests/integration/product-rebuild-api.sh
@@ -348,26 +350,16 @@ jobs:
           set -euo pipefail
           TESTED=$(cat /tmp/gojet-candidate-control-sha)
           CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product-hardening | awk '{print $1}')
-          if [ "$TESTED" != "$CURRENT" ]; then
-            git fetch --no-tags origin "$CURRENT"
-            git diff --name-only "$TESTED".."$CURRENT" | tee /tmp/gojet-candidate-post-lock-files
-            while IFS= read -r path; do
-              [ -n "$path" ] || continue
-              case "$path" in
-                .github/workflows/product-rebuild-candidate-p0-debug.yml|scripts/v4-candidate-p0-debug.trigger) ;;
-                *) echo "candidate controls/runtime changed during validation: $path" >&2; exit 1 ;;
-              esac
-            done < /tmp/gojet-candidate-post-lock-files
-          fi
+          test "$TESTED" = "$CURRENT" || { echo "hardening branch moved during candidate validation: tested=$TESTED current=$CURRENT" >&2; exit 1; }
 
       - name: Diagnostics on failure
         if: failure()
         run: |
           echo '===== post-package changed files ====='; cat /tmp/gojet-post-package-files 2>/dev/null || true
-          echo '===== candidate post-lock changed files ====='; cat /tmp/gojet-candidate-post-lock-files 2>/dev/null || true
           echo '===== primary platform API ====='; cat /tmp/gojet-candidate/platform-api.log 2>/dev/null || true
           echo '===== redirect engine ====='; cat /tmp/gojet-candidate/redirect-engine.log 2>/dev/null || true
           echo '===== analytics worker ====='; cat /tmp/gojet-candidate/analytics-worker.log 2>/dev/null || true
+          echo '===== mail worker ====='; cat /tmp/gojet/mail-worker.log 2>/dev/null || true
           echo '===== auth API ====='; cat /tmp/gojet-auth.log 2>/dev/null || true
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,ticket_number,status,priority FROM support_tickets ORDER BY id DESC LIMIT 20; SELECT id,reported_url,reason,status FROM abuse_reports ORDER BY id DESC LIMIT 20;' || true
 
