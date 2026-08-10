@@ -9,3 +9,4 @@ Triggered: 2026-08-11 Asia/Singapore
 Retrigger: package workflow is now registered and active in GitHub Actions.
 Retry 2: align payment transaction migration assertion with the current formal migration.
 Retry 3: align account lifecycle assertions across migrations 030/031.
+Retry 4: replace development asset query strings with the release version and package the hardening verifier.
