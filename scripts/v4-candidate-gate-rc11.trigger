@@ -9,3 +9,4 @@ Package ZIP SHA-256: 80e6d7c2370f8642b3b7196666a1ac3ac1500f2820b72eb33bcfd991747
 Purpose: validate the exact packaged RC11 archive on fresh MySQL/Redis, run P0 business acceptance, support-ticket lifecycle, Turnstile settings/security, abuse intake and packaged authentication policy.
 Triggered: 2026-08-11 Asia/Singapore
 Retry 2: align FILE_STORAGE_PATH with packaged runtime quarantine/clean storage and provide packaged mail-worker harness parity; RC11 package remains immutable.
+Retry 3: restore candidate P0 debug helper files byte-for-byte to the RC11 package snapshot so provenance diff contains only this candidate gate and trigger.
