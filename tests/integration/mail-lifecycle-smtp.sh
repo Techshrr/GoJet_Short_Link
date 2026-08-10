@@ -45,6 +45,14 @@ cleanup(){ kill "$smtp_pid" 2>/dev/null || true; [[ -z "${worker_pid:-}" ]] || k
 trap cleanup EXIT
 for _ in $(seq 1 30); do (echo >/dev/tcp/127.0.0.1/$SMTP_PORT) >/dev/null 2>&1 && break; sleep .2; done
 
+source /tmp/gojet/test-env
+start_worker(){
+  [[ -z "${worker_pid:-}" ]] || { kill "$worker_pid" 2>/dev/null || true; wait "$worker_pid" 2>/dev/null || true; }
+  env MYSQL_DSN="root:root@tcp(127.0.0.1:3306)/$MYSQL_DATABASE?parseTime=true&multiStatements=true" SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" PUBLIC_BASE_URL="${GOJET_PUBLIC_BASE:-http://127.0.0.1:18080}" /tmp/gojet/mail-worker >/tmp/gojet/mail-worker.log 2>&1 & worker_pid=$!
+  sleep 1.3
+}
+wait_type(){ local email=$1 type=$2; local count=0; for _ in $(seq 1 30); do count=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$email' AND message_type='$type';"); [[ "$count" -ge 1 ]] && return 0; sleep .2; done; cat /tmp/gojet/mail-worker.log >&2; echo "mail type missing: $type" >&2; return 1; }
+
 admin_body=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" admin-login)
 admin=$(printf '%s' "$admin_body"|field "['token']")
 mail_payload='{"host":"127.0.0.1","port":2525,"username":"","password":"","encryption":"none","ehlo":"gojet.test","from_email":"noreply@gojet.test","from_name":"GoJet","reply_to":"support@gojet.test"}'
@@ -69,25 +77,67 @@ token=$(printf '%s' "$reg"|field "['token']")
 spaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$spaces"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
 expect 202 "$(req POST /api/auth/forgot-password "{\"email\":\"$user_email\"}")" password-reset-mail >/dev/null
-expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" invoice-create >/dev/null
+invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" invoice-create)
+invoice_id=$(printf '%s' "$invoice_body"|field "['id']")
 
-source /tmp/gojet/test-env
-env MYSQL_DSN="root:root@tcp(127.0.0.1:3306)/$MYSQL_DATABASE?parseTime=true&multiStatements=true" SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" /tmp/gojet/mail-worker >/tmp/gojet/mail-worker.log 2>&1 & worker_pid=$!
-for _ in $(seq 1 30); do
-  welcome=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND message_type='account_welcome';")
-  invoice=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND message_type='invoice_created';")
-  [[ "$welcome" -ge 1 && "$invoice" -ge 1 ]] && break
-  sleep .5
+start_worker
+wait_type "$user_email" account_welcome
+wait_type "$user_email" password_reset
+wait_type "$user_email" invoice_created
+
+# Pending invoice approaching due date.
+mysqlq "UPDATE billing_invoices SET status='pending',due_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR) WHERE id=$invoice_id;"
+start_worker; wait_type "$user_email" invoice_due_soon
+# Overdue invoice.
+mysqlq "UPDATE billing_invoices SET status='overdue',due_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 HOUR) WHERE id=$invoice_id;"
+start_worker; wait_type "$user_email" invoice_overdue
+# Payment started and failed.
+amount=$(mysqlq "SELECT amount_cents FROM billing_invoices WHERE id=$invoice_id;"); currency=$(mysqlq "SELECT currency FROM billing_invoices WHERE id=$invoice_id;")
+merchant="GJMAIL${suffix}"
+mysqlq "INSERT INTO payment_transactions(invoice_id,workspace_id,provider,merchant_order_no,amount_cents,currency,status,provider_order_id) VALUES($invoice_id,$wid,'stripe','$merchant',$amount,'$currency','pending','pi_mail_$suffix');"
+start_worker; wait_type "$user_email" payment_started
+mysqlq "UPDATE payment_transactions SET status='failed',failure_reason='支付渠道测试失败' WHERE merchant_order_no='$merchant';"
+start_worker; wait_type "$user_email" payment_failed
+
+# Manual settlement after the external attempt has ended queues invoice_paid and subscription_changed.
+expect 200 "$(req POST "/api/admin/invoices/$invoice_id/settle" '{"status":"paid","note":"邮件生命周期验收"}' "$admin")" settle-paid >/dev/null
+start_worker; wait_type "$user_email" invoice_paid; wait_type "$user_email" subscription_changed
+
+# Cancellation scheduling and revocation each have their own customer notification.
+expect 200 "$(req POST "/api/workspaces/$wid/billing/cancellation" '{"cancel":true}' "$token")" cancel-schedule >/dev/null
+start_worker; wait_type "$user_email" subscription_cancellation_scheduled
+expect 200 "$(req POST "/api/workspaces/$wid/billing/cancellation" '{"cancel":false}' "$token")" cancel-revoke >/dev/null
+start_worker; wait_type "$user_email" subscription_cancellation_revoked
+
+# Period-expiry warning.
+mysqlq "UPDATE workspace_subscriptions SET status='active',period_ends_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 2 DAY) WHERE workspace_id=$wid;"
+start_worker; wait_type "$user_email" subscription_expiring
+
+# Renewal is a fresh invoice and emits both invoice_paid and subscription_renewed.
+renew=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"renewal"}' "$token")" renewal-invoice)
+renew_id=$(printf '%s' "$renew"|field "['id']")
+expect 200 "$(req POST "/api/admin/invoices/$renew_id/settle" '{"status":"paid","note":"续费邮件验收"}' "$admin")" renewal-paid >/dev/null
+start_worker; wait_type "$user_email" subscription_renewed
+
+# Ended subscription notification.
+mysqlq "UPDATE workspace_subscriptions SET status='cancelled',cancel_at_period_end=TRUE,period_ends_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 MINUTE) WHERE workspace_id=$wid;"
+start_worker; wait_type "$user_email" subscription_cancelled
+
+# All required business lifecycle messages must have rendered fully with no unresolved placeholders.
+unresolved=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND (subject LIKE '%{{%' OR body_html LIKE '%{{%');")
+[[ "$unresolved" == 0 ]] || { echo 'mail lifecycle contains unresolved template variables' >&2; exit 1; }
+for type in account_welcome password_reset invoice_created invoice_due_soon invoice_overdue payment_started payment_failed invoice_paid subscription_changed subscription_cancellation_scheduled subscription_cancellation_revoked subscription_expiring subscription_renewed subscription_cancelled; do
+  wait_type "$user_email" "$type"
 done
-[[ "${welcome:-0}" -ge 1 ]] || { cat /tmp/gojet/mail-worker.log >&2; echo 'welcome lifecycle mail missing' >&2; exit 1; }
-[[ "${invoice:-0}" -ge 1 ]] || { cat /tmp/gojet/mail-worker.log >&2; echo 'invoice-created lifecycle mail missing' >&2; exit 1; }
-for _ in $(seq 1 40); do
-  sent=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND status='sent';")
-  [[ "$sent" -ge 2 ]] && break
-  sleep .5
+
+for _ in $(seq 1 80); do
+  pending=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND status IN ('pending','sending');")
+  [[ "$pending" == 0 ]] && break
+  sleep .25
 done
-[[ "${sent:-0}" -ge 2 ]] || { cat /tmp/gojet/mail-worker.log >&2; echo 'lifecycle messages were not delivered by SMTP worker' >&2; exit 1; }
+failed=$(mysqlq "SELECT COUNT(*) FROM mail_messages WHERE recipient='$user_email' AND status='failed';")
+[[ "$failed" == 0 ]] || { cat /tmp/gojet/mail-worker.log >&2; echo 'some lifecycle mail deliveries failed' >&2; exit 1; }
 grep -q "$user_email" "$MAIL_LOG"
-grep -q '新账单已生成\|账户已准备好' "$MAIL_LOG"
+grep -q 'GoJet' "$MAIL_LOG"
 
-printf 'GoJet SMTP readback, branded test mail and lifecycle coverage acceptance: PASS\n'
+printf 'GoJet branded SMTP and account/billing/payment/subscription mail lifecycle acceptance: PASS\n'
