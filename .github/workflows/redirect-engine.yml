@@ -1,7 +1,9 @@
 name: Redirect engine
+
 on:
-  push:
+  workflow_dispatch:
   pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -10,7 +12,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - run: go test -race ./...
       - run: go vet ./...
       - run: go build ./services/redirect-engine/cmd/server
