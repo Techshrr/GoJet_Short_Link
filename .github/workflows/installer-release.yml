@@ -84,11 +84,43 @@ jobs:
             echo '/uploads alias must not use try_files' >&2
             exit 1
           fi
-      - name: Go test and vet
+      - name: Go test
+        id: go-test
+        shell: bash
         run: |
-          go test ./...
-          go vet ./...
+          set +e
+          go test ./... 2>&1 | tee /tmp/go-test.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo '--- Go test failure tail ---' >&2
+            tail -120 /tmp/go-test.log >&2
+          fi
+          exit "$rc"
+      - name: Go vet
+        id: go-vet
+        if: success()
+        shell: bash
+        run: |
+          set +e
+          go vet ./... 2>&1 | tee /tmp/go-vet.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo '--- Go vet failure tail ---' >&2
+            tail -120 /tmp/go-vet.log >&2
+          fi
+          exit "$rc"
+      - name: Upload Go diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-hardening-go-diagnostics-${{ github.run_id }}
+          path: |
+            /tmp/go-test.log
+            /tmp/go-vet.log
+          if-no-files-found: ignore
+          retention-days: 2
       - name: Build all production services
+        if: success()
         run: |
           CGO_ENABLED=0 go build ./services/redirect-engine/cmd/server
           CGO_ENABLED=0 go build ./services/analytics-worker/cmd/worker
