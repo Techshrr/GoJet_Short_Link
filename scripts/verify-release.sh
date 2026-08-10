@@ -16,12 +16,12 @@ for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh ins
   public/assets/auth.js public/assets/auth.css public/assets/home.js public/assets/home.css \
   public/app/index.html public/app/app.js public/app/auth-guard.js public/app/pending-link.js public/app/product-router.js public/app/product.css \
   public/admin/index.html public/admin/app.js public/admin/product-actions.js public/admin/settings-full.js public/admin/styles.css \
-  scripts/verify-published-release.sh scripts/native-installer-apply.sh scripts/install-docker.sh \
+  scripts/verify-published-release.sh scripts/native-installer-run.sh scripts/native-installer-apply.sh scripts/install-docker.sh \
   deploy/compose.production.yaml deploy/compose.host-nginx.yaml deploy/.env.production.example \
   deploy/nginx/gojet.conf deploy/nginx/gojet-host.conf deploy/nginx/gojet-native.conf deploy/nginx/gojet-bt-rewrite.conf \
   deploy/native/gojet.env.example deploy/native/gojet@.service deploy/native/gojet-installer.service deploy/native/gojet-installer.path \
   database/migrations/003_identity_and_workspaces.sql database/migrations/015_admin_identity.sql database/migrations/025_mail_templates.sql \
-  docs/v4-product-rebuild.zh-CN.md app frontend services go.mod go.sum; do
+  docs/v4-product-rebuild.zh-CN.md docs/V4_PRODUCT_HARDENING_AUDIT.md app frontend services go.mod go.sum; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
 
@@ -63,6 +63,12 @@ grep -Fq 'location ^~ /uploads/' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" || {
 if sed -n '/location \^~ \/uploads\//,/^}/p' "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" | grep -Fq 'try_files'; then
   echo 'upload alias must not use try_files' >&2; exit 1
 fi
+
+grep -Fq 'ExecStart=__GOJET_ROOT__/scripts/native-installer-run.sh' "$ROOT/deploy/native/gojet-installer.service" || { echo 'privileged installer runtime guard is not wired' >&2; exit 1; }
+grep -Fq 'stop_existing_services' "$ROOT/scripts/native-installer-run.sh" || { echo 'installer does not stop stale GoJet services' >&2; exit 1; }
+grep -Fq 'information_schema.tables' "$ROOT/scripts/native-installer-run.sh" || { echo 'fresh installer does not reject a non-empty database' >&2; exit 1; }
+grep -Fq '/proc/$pid/exe' "$ROOT/scripts/native-installer-run.sh" || { echo 'fresh installer does not verify running executables' >&2; exit 1; }
+grep -Fq 'totp_enabled' "$ROOT/scripts/native-installer-run.sh" || { echo 'fresh installer does not verify initial administrator MFA state' >&2; exit 1; }
 
 (cd "$ROOT" && sha256sum -c MANIFEST.sha256 >/dev/null)
 actual=$(sed -n '/^services:$/,/^volumes:$/p' "$ROOT/deploy/compose.production.yaml" | sed -n 's/^  \([a-z][a-z0-9-]*\):$/\1/p' | sort | tr '\n' ' ')
