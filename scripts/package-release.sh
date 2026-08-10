@@ -45,9 +45,9 @@ cp "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" "$TARGET/deploy/nginx/gojet-bt-rew
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" \
    "$ROOT/deploy/native/gojet-installer.service" "$ROOT/deploy/native/gojet-installer.path" "$TARGET/deploy/native/"
 cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$ROOT/scripts/verify-published-release.sh" \
-   "$ROOT/scripts/native-installer-apply.sh" "$ROOT/scripts/install-docker.sh" "$TARGET/scripts/"
+   "$ROOT/scripts/native-installer-run.sh" "$ROOT/scripts/native-installer-apply.sh" "$ROOT/scripts/install-docker.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zh-CN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/object-storage.zh-CN.md" \
-   "$ROOT/docs/operations-alerting.zh-CN.md" "$ROOT/docs/v4-product-rebuild.zh-CN.md" "$TARGET/docs/"
+   "$ROOT/docs/operations-alerting.zh-CN.md" "$ROOT/docs/v4-product-rebuild.zh-CN.md" "$ROOT/docs/V4_PRODUCT_HARDENING_AUDIT.md" "$TARGET/docs/"
 cp "$ROOT/go.mod" "$ROOT/go.sum" "$ROOT/Dockerfile" "$ROOT/install.sh" "$ROOT/install-host-nginx.sh" \
    "$ROOT/install-native-lemp.sh" "$ROOT/launch-web-installer.sh" "$ROOT/LICENSE" "$TARGET/"
 cp "$ROOT/deploy/INSTALL.zh-CN.md" "$TARGET/INSTALL.md"
@@ -55,8 +55,8 @@ printf '%s\n' "$VERSION" > "$TARGET/VERSION"
 printf '%s\n' 'FRESH_INSTALL_ONLY=1' > "$TARGET/FRESH_INSTALL_ONLY"
 
 chmod 0755 "$TARGET/install.sh" "$TARGET/install-host-nginx.sh" "$TARGET/install-native-lemp.sh" "$TARGET/launch-web-installer.sh" \
-  "$TARGET/scripts/verify-release.sh" "$TARGET/scripts/verify-published-release.sh" "$TARGET/scripts/native-installer-apply.sh" \
-  "$TARGET/scripts/install-docker.sh" "$TARGET"/bin/*
+  "$TARGET/scripts/verify-release.sh" "$TARGET/scripts/verify-published-release.sh" "$TARGET/scripts/native-installer-run.sh" \
+  "$TARGET/scripts/native-installer-apply.sh" "$TARGET/scripts/install-docker.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type f \( -name '*_test.go' -o -name '*_integration_test.go' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'test-results' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +
