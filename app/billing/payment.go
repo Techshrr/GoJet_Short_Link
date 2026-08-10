@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
 )
