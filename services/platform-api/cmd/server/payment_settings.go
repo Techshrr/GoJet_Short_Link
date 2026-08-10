@@ -15,6 +15,7 @@ func init() {
 		"payments.wechat.mch_serial_no": true,
 		"payments.wechat.private_key": true,
 		"payments.wechat.api_v3_key": true,
+		"payments.wechat.platform_serial_no": true,
 		"payments.wechat.platform_public_key": true,
 		"payments.epay.enabled": true,
 		"payments.epay.gateway": true,
