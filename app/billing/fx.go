@@ -48,9 +48,16 @@ func NewFXService(db *sql.DB, store *settings.Store) *FXService {
 }
 
 func (f *FXService) setting(ctx context.Context, key, fallback string) string {
-	if f == nil || f.settings == nil { return fallback }
-	value,exists,err:=f.settings.Get(ctx,key)
-	if err!=nil || !exists || strings.TrimSpace(value)=="" { return fallback }
+	if f == nil || f.db == nil { return fallback }
+	var value string
+	if f.settings != nil {
+		stored,exists,err:=f.settings.Get(ctx,key)
+		if err!=nil || !exists || strings.TrimSpace(stored)=="" { return fallback }
+		value=stored
+	} else {
+		var encrypted bool
+		if err:=f.db.QueryRowContext(ctx,`SELECT setting_value,is_encrypted FROM system_settings WHERE setting_key=?`,key).Scan(&value,&encrypted);err!=nil || encrypted || strings.TrimSpace(value)=="" { return fallback }
+	}
 	var decoded string
 	if json.Unmarshal([]byte(value),&decoded)==nil { return strings.TrimSpace(decoded) }
 	return strings.TrimSpace(value)
@@ -123,7 +130,7 @@ func (f *FXService) cachedRate(ctx context.Context,source,target,provider string
 
 func (f *FXService) storeRate(ctx context.Context,source,target,provider string,rate *big.Rat,observed time.Time) error {
 	hours:=f.settingInt(ctx,"billing.fx.cache_hours",24,1,168)
-	_,err:=f.db.ExecContext(ctx,`INSERT INTO fx_rate_cache(base_currency,quote_currency,provider,rate,observed_at,expires_at) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE rate=VALUES(rate),observed_at=VALUES(observed_at),expires_at=VALUES(expires_at)`,source,target,provider,rate.FloatString(12),observed, time.Now().UTC().Add(time.Duration(hours)*time.Hour))
+	_,err:=f.db.ExecContext(ctx,`INSERT INTO fx_rate_cache(base_currency,quote_currency,provider,rate,observed_at,expires_at) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE rate=VALUES(rate),observed_at=VALUES(observed_at),expires_at=VALUES(expires_at)`,source,target,provider,rate.FloatString(12),observed,time.Now().UTC().Add(time.Duration(hours)*time.Hour))
 	return err
 }
 
