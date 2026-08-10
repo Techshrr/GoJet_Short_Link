@@ -1,42 +1,10 @@
-name: Apply V4 frontend convergence
+name: Archived V4 frontend convergence
 
 on:
-  push:
-    branches:
-      - 'rebuild/v4-product'
-    paths:
-      - 'scripts/v4-frontend-convergence.trigger'
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  apply:
+  archived:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: rebuild/v4-product
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Apply frontend convergence
-        run: |
-          python3 scripts/apply-v4-frontend-convergence.py
-          node --check frontend/admin-console/settings-full.js
-          node --check frontend/user-console/product-router.js
-          node --check frontend/admin-console/app.js
-          node --check frontend/admin-console/product-actions.js
-          sh -n scripts/verify-release.sh
-          grep -Fq '/admin/settings-full.js' frontend/admin-console/index.html
-          grep -Fq 'data-console-view="analytics"' frontend/user-console/index.html
-          grep -Fq '/app/analytics' frontend/user-console/product-router.js
-      - name: Commit converged frontend
-        run: |
-          if git diff --quiet; then exit 0; fi
-          git config user.name 'gojet-ci'
-          git config user.email 'gojet-ci@users.noreply.github.com'
-          git add frontend/admin-console/index.html frontend/admin-console/settings-full.js frontend/user-console/index.html frontend/user-console/product-router.js .github/workflows/installer-release.yml scripts/verify-release.sh tests/e2e/product-rebuild.spec.js
-          git commit -m 'frontend: converge complete settings and analytics navigation'
-          git push origin HEAD:rebuild/v4-product
+      - run: echo "Archived one-shot workflow. Do not use for V4 validation."
