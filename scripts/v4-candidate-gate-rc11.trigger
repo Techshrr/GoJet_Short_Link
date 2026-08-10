@@ -10,3 +10,4 @@ Purpose: validate the exact packaged RC11 archive on fresh MySQL/Redis, run P0 b
 Triggered: 2026-08-11 Asia/Singapore
 Retry 2: align FILE_STORAGE_PATH with packaged runtime quarantine/clean storage and provide packaged mail-worker harness parity; RC11 package remains immutable.
 Retry 3: restore candidate P0 debug helper files byte-for-byte to the RC11 package snapshot so provenance diff contains only this candidate gate and trigger.
+Retry 4: align packaged authentication runtime bootstrap administrator with auth-policy.sh credentials; production RC11 package remains unchanged.
