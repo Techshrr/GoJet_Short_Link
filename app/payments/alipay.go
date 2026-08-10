@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Service) createAlipay(ctx context.Context, payment invoicePayment) (createResult, error) {
+	if !strings.EqualFold(payment.Invoice.Currency, "CNY") {
+		return createResult{}, errors.New("支付宝当前仅支持人民币账单")
+	}
 	appID := s.setting(ctx, "payments.alipay.app_id", "")
 	privateKey, err := parseRSAPrivateKey(s.setting(ctx, "payments.alipay.private_key", ""))
 	if err != nil || appID == "" {
