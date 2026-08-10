@@ -3,6 +3,11 @@ name: V4 product full-stack acceptance
 on:
   workflow_dispatch:
   pull_request:
+  push:
+    branches:
+      - 'rebuild/v4-product-hardening'
+    paths:
+      - 'docs/v4-fullstack.trigger'
 
 jobs:
   api-acceptance:
