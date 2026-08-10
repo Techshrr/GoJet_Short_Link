@@ -36,11 +36,11 @@ jobs:
           sh -n scripts/verify-hardening-release.sh
           go test ./...
           go vet ./...
-      - name: Build production RC10 archive
+      - name: Build production RC11 archive
         run: |
           set -euo pipefail
-          ./scripts/package-release.sh 4.0.0-rc.10
-          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.10*linux-production.zip' | head -1)
+          ./scripts/package-release.sh 4.0.0-rc.11
+          ZIP=$(find dist -maxdepth 1 -type f -name '*4.0.0-rc.11*linux-production.zip' | head -1)
           test -n "$ZIP"
           printf '%s\n' "$ZIP" | tee /tmp/gojet-package-zip
       - name: Independently verify production archive
@@ -60,7 +60,7 @@ jobs:
           TMP=$(mktemp -d)
           unzip -q "$ZIP" -d "$TMP"
           ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
-          test "$(cat "$ROOT/VERSION")" = '4.0.0-rc.10'
+          test "$(cat "$ROOT/VERSION")" = '4.0.0-rc.11'
           grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
           for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
             test -x "$ROOT/bin/$binary"
@@ -75,24 +75,24 @@ jobs:
           ZIP=$(cat /tmp/gojet-package-zip)
           {
             echo "tested_sha=$(cat /tmp/gojet-package-tested-sha)"
-            echo "version=4.0.0-rc.10"
+            echo "version=4.0.0-rc.11"
             echo "archive=$(basename "$ZIP")"
             echo "size_bytes=$(wc -c < "$ZIP")"
             echo "sha256=$(sha256sum "$ZIP" | awk '{print $1}')"
-          } | tee dist/RC10-RELEASE-EVIDENCE.txt
+          } | tee dist/RC11-RELEASE-EVIDENCE.txt
       - name: Refuse stale package if branch moved
         run: |
           set -euo pipefail
           TESTED=$(cat /tmp/gojet-package-tested-sha)
           CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-product-hardening | awk '{print $1}')
           test "$TESTED" = "$CURRENT" || { echo "hardening branch moved: tested=$TESTED current=$CURRENT" >&2; exit 1; }
-      - name: Upload RC10 release package
+      - name: Upload RC11 release package
         uses: actions/upload-artifact@v4
         with:
-          name: gojet-4.0.0-rc.10-package-release
+          name: gojet-4.0.0-rc.11-package-release
           path: |
-            dist/*4.0.0-rc.10*linux-production.zip
-            dist/*4.0.0-rc.10*linux-production.zip.sha256
-            dist/RC10-RELEASE-EVIDENCE.txt
+            dist/*4.0.0-rc.11*linux-production.zip
+            dist/*4.0.0-rc.11*linux-production.zip.sha256
+            dist/RC11-RELEASE-EVIDENCE.txt
           if-no-files-found: error
           retention-days: 14
