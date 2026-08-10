@@ -85,6 +85,8 @@ func main() {
 	}
 	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService).WithFileStore(fileStore), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminAuth: adminAuth, analyticsGroup: getenv("ANALYTICS_GROUP", "gojet-mysql")}
 	mux := http.NewServeMux()
+	s.registerProductHardeningRoutes(mux)
+	s.registerBillingPresentationRoutes(mux)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
 	mux.HandleFunc("GET /api/public/status", s.publicStatus)
@@ -242,7 +244,8 @@ func main() {
 
 func (s *server) maintenance(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || strings.HasPrefix(r.URL.Path, "/api/admin/")
+		paymentCallback := strings.HasPrefix(r.URL.Path, "/api/payments/")
+		allowed := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || strings.HasPrefix(r.URL.Path, "/api/admin/") || paymentCallback
 		if !allowed {
 			maintenance, exists, err := s.runtimeFlag(r.Context(), "system.maintenance_mode")
 			if err != nil {
@@ -255,16 +258,16 @@ func (s *server) maintenance(next http.Handler) http.Handler {
 				return
 			}
 		}
-		publicControl := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || r.URL.Path == "/api/public/settings" || r.URL.Path == "/api/public/announcements" || strings.HasPrefix(r.URL.Path, "/api/admin/")
+		publicControl := r.URL.Path == "/health" || r.URL.Path == "/api/public/status" || r.URL.Path == "/api/public/settings" || r.URL.Path == "/api/public/announcements" || strings.HasPrefix(r.URL.Path, "/api/admin/") || paymentCallback
 		if strings.HasPrefix(r.URL.Path, "/api/") && !publicControl {
 			enabled, exists, err := s.runtimeFlag(r.Context(), "api.enabled")
 			if err != nil {
-				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "API 状态暂时无法确认"})
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "接口状态暂时无法确认"})
 				return
 			}
 			if exists && !enabled {
 				w.Header().Set("Retry-After", "300")
-				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "GoJet API 已由管理员暂停"})
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "GoJet 服务接口已暂停，请稍后重试"})
 				return
 			}
 		}
@@ -309,13 +312,13 @@ func (s *server) saveMail(w http.ResponseWriter, r *http.Request) {
 	values := map[string]string{"mail.host": in.Host, "mail.port": strconv.Itoa(in.Port), "mail.username": in.Username, "mail.encryption": in.Encryption, "mail.ehlo": in.EHLO, "mail.from_email": in.FromEmail, "mail.from_name": in.FromName, "mail.reply_to": in.ReplyTo}
 	for k, v := range values {
 		if err := s.settings.Set(r.Context(), k, v, false); err != nil {
-			jsonResponse(w, 503, map[string]string{"error": "settings storage unavailable"})
+			jsonResponse(w, 503, map[string]string{"error": "邮件设置保存失败"})
 			return
 		}
 	}
 	if in.Password != "" {
 		if err := s.settings.Set(r.Context(), "mail.password", in.Password, true); err != nil {
-			jsonResponse(w, 503, map[string]string{"error": "settings storage unavailable"})
+			jsonResponse(w, 503, map[string]string{"error": "邮件设置保存失败"})
 			return
 		}
 	}
@@ -329,7 +332,7 @@ func (s *server) testMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !strings.Contains(in.Recipient, "@") {
-		jsonResponse(w, 422, map[string]string{"error": "valid recipient is required"})
+		jsonResponse(w, 422, map[string]string{"error": "请填写有效的收件邮箱"})
 		return
 	}
 	if err := s.mail.Test(r.Context(), in.Recipient, true); err != nil {
@@ -362,7 +365,7 @@ func (s *server) queueVerification(w http.ResponseWriter, r *http.Request) {
 func (s *server) mailLogs(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id,message_type,recipient,subject,status,COALESCE(message_id,''),attempts,COALESCE(last_error,''),created_at FROM mail_messages ORDER BY id DESC LIMIT 100`)
 	if err != nil {
-		jsonResponse(w, 503, map[string]string{"error": "mail logs unavailable"})
+		jsonResponse(w, 503, map[string]string{"error": "邮件记录暂时不可用"})
 		return
 	}
 	defer rows.Close()
@@ -382,17 +385,17 @@ func (s *server) mailLogs(w http.ResponseWriter, r *http.Request) {
 func (s *server) retryMail(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		jsonResponse(w, 400, map[string]string{"error": "invalid id"})
+		jsonResponse(w, 400, map[string]string{"error": "邮件记录编号无效"})
 		return
 	}
 	result, err := s.db.ExecContext(r.Context(), `UPDATE mail_messages SET status='pending',available_at=NOW(),last_error=NULL WHERE id=? AND status='failed'`, id)
 	if err != nil {
-		jsonResponse(w, 503, map[string]string{"error": "retry unavailable"})
+		jsonResponse(w, 503, map[string]string{"error": "暂时无法重新发送"})
 		return
 	}
 	n, _ := result.RowsAffected()
 	if n == 0 {
-		jsonResponse(w, 404, map[string]string{"error": "failed message not found"})
+		jsonResponse(w, 404, map[string]string{"error": "没有找到可重新发送的失败邮件"})
 		return
 	}
 	jsonResponse(w, 202, map[string]bool{"queued": true})
@@ -411,7 +414,7 @@ func (s *server) publicSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	values, err := s.settings.Public(r.Context())
 	if err != nil {
-		jsonResponse(w, 503, map[string]string{"error": "settings unavailable"})
+		jsonResponse(w, 503, map[string]string{"error": "站点设置暂时不可用"})
 		return
 	}
 	if cacheEnabled && s.redis != nil {
@@ -438,7 +441,7 @@ func (s *server) invalidatePublicSettings(ctx context.Context) {
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(v)
 	if err != nil {
-		jsonResponse(w, 400, map[string]string{"error": "invalid JSON"})
+		jsonResponse(w, 400, map[string]string{"error": "请求内容格式无效"})
 	}
 	return err
 }
