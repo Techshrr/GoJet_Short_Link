@@ -125,6 +125,13 @@ func (s *Service) renderTemplate(ctx context.Context, key string, values map[str
 }
 
 func (s *Service) brandWrap(ctx context.Context, body string) string {
+	// Tests and narrowly scoped callers may intentionally construct the mail
+	// service without the settings store. In that case preserve the rendered
+	// template body rather than panicking or inventing configuration. Production
+	// services always provide the settings store and receive the branded wrapper.
+	if s == nil || s.settings == nil {
+		return body
+	}
 	get := func(key, fallback string) string {
 		value, exists, err := s.settings.Get(ctx, key)
 		if err != nil || !exists || strings.TrimSpace(value) == "" {
