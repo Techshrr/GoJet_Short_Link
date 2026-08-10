@@ -39,20 +39,30 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y default-mysql-client nginx zbar-tools
-      - name: Apply fresh MySQL 8 migrations
+      - name: Apply fresh MySQL 8 migrations and verify P0 schema
         env:
           MYSQL_PWD: root
         run: |
           set -euo pipefail
-          count=0
           for f in database/migrations/*.sql; do
             echo "Applying $f"
             mysql -h127.0.0.1 -P3306 -uroot gojet_test < "$f"
-            count=$((count+1))
           done
-          applied=$(mysql -h127.0.0.1 -P3306 -uroot gojet_test -N -B -e 'SELECT COUNT(*) FROM schema_migrations;')
-          test "$applied" -eq "$count"
-          mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW CREATE TABLE payment_transactions\G; SHOW CREATE TABLE fx_rate_cache\G;'
+          mysql -h127.0.0.1 -P3306 -uroot gojet_test -N -B <<'SQL' >/tmp/gojet-schema-check
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='file_shares' AND COLUMN_NAME='password_hash';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='payment_transactions';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='fx_rate_cache';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='billing_invoices' AND COLUMN_NAME='fx_rate';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='mail_messages' AND COLUMN_NAME='dedupe_key';
+          SELECT COUNT(*) FROM mail_templates WHERE template_key IN ('verification','account_welcome','password_reset','invoice_created','invoice_due_soon','invoice_overdue','invoice_paid','payment_started','payment_failed','subscription_changed','subscription_renewed','subscription_expiring','subscription_cancelled');
+          SQL
+          mapfile -t schema < /tmp/gojet-schema-check
+          test "${schema[0]}" = 1
+          test "${schema[1]}" = 1
+          test "${schema[2]}" = 1
+          test "${schema[3]}" = 1
+          test "${schema[4]}" = 1
+          test "${schema[5]}" -ge 13
       - name: Build production services used by P0 acceptance
         run: |
           set -euo pipefail
@@ -60,6 +70,7 @@ jobs:
           go build -o /tmp/gojet/platform-api ./services/platform-api/cmd/server
           go build -o /tmp/gojet/redirect-engine ./services/redirect-engine/cmd/server
           go build -o /tmp/gojet/analytics-worker ./services/analytics-worker/cmd/worker
+          go build -o /tmp/gojet/mail-worker ./services/platform-api/cmd/mail-worker
       - name: Start platform, redirect and analytics services
         run: |
           set -euo pipefail
@@ -129,6 +140,9 @@ jobs:
       - name: Protected file share lifecycle
         env: *integration-env
         run: bash tests/integration/file-share-lifecycle.sh
+      - name: SMTP readback, branded test mail and lifecycle coverage
+        env: *integration-env
+        run: bash tests/integration/mail-lifecycle-smtp.sh
       - name: Billing external-payment conflict protection
         env: *integration-env
         run: bash tests/integration/billing-payment-conflict.sh
@@ -144,7 +158,8 @@ jobs:
           echo '===== platform-api ====='; cat /tmp/gojet/platform-api.log 2>/dev/null || true
           echo '===== redirect-engine ====='; cat /tmp/gojet/redirect-engine.log 2>/dev/null || true
           echo '===== analytics-worker ====='; cat /tmp/gojet/analytics-worker.log 2>/dev/null || true
-          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20;' || true
+          echo '===== mail-worker ====='; cat /tmp/gojet/mail-worker.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
       - name: Stop acceptance services
         if: always()
         run: |
