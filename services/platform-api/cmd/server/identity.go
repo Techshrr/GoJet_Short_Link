@@ -41,11 +41,15 @@ func (s *server) revokeUserSessions(ctx context.Context, userID int64) error {
 
 func (s *server) register(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email       string `json:"email"`
-		Password    string `json:"password"`
-		DisplayName string `json:"display_name"`
+		Email           string `json:"email"`
+		Password        string `json:"password"`
+		DisplayName     string `json:"display_name"`
+		TurnstileToken  string `json:"turnstile_token"`
 	}
 	if decode(w, r, &in) != nil {
+		return
+	}
+	if !s.enforceTurnstile(w, r, "registration", "register", in.TurnstileToken) {
 		return
 	}
 	ctx := r.Context()
@@ -98,10 +102,14 @@ func (s *server) register(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email          string `json:"email"`
+		Password       string `json:"password"`
+		TurnstileToken string `json:"turnstile_token"`
 	}
 	if decode(w, r, &in) != nil {
+		return
+	}
+	if !s.enforceTurnstile(w, r, "login", "login", in.TurnstileToken) {
 		return
 	}
 	ctx := r.Context()
@@ -282,15 +290,19 @@ func (s *server) removeMember(w http.ResponseWriter, r *http.Request) {
 // {token,password} consumes it.
 func (s *server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email    string `json:"email"`
-		Token    string `json:"token"`
-		Password string `json:"password"`
+		Email          string `json:"email"`
+		Token          string `json:"token"`
+		Password       string `json:"password"`
+		TurnstileToken string `json:"turnstile_token"`
 	}
 	if decode(w, r, &in) != nil {
 		return
 	}
 	ctx := r.Context()
 	if strings.TrimSpace(in.Token) == "" {
+		if !s.enforceTurnstile(w, r, "forgot_password", "forgot_password", in.TurnstileToken) {
+			return
+		}
 		if !s.registrationBool(ctx, "registration.forgot_password", true) {
 			jsonResponse(w, 403, map[string]string{"error": "密码找回功能当前已关闭"})
 			return
@@ -314,6 +326,9 @@ func (s *server) resetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonResponse(w, 202, map[string]bool{"queued": true})
+		return
+	}
+	if !s.enforceTurnstile(w, r, "reset_password", "reset_password", in.TurnstileToken) {
 		return
 	}
 	minPassword := s.registrationInt(ctx, "registration.password_min_length", 10, 10, 72)

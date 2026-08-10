@@ -1,0 +1,11 @@
+(()=>{
+const form=document.querySelector('#abuseReportForm');if(!form)return;
+const message=document.querySelector('#abuseMessage');const slot=document.querySelector('#abuseTurnstile');let policy={enabled:false,surfaces:{}},widget=null,scriptPromise=null;
+const params=new URLSearchParams(location.search);if(params.get('url'))form.elements.url.value=params.get('url');
+function show(text,ok=false){message.textContent=text;message.className=ok?'message show success':'message show error'}
+async function json(path,options={}){const r=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'提交失败，请稍后重试。');return data}
+function loadTurnstile(){if(window.turnstile)return Promise.resolve();if(scriptPromise)return scriptPromise;scriptPromise=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.async=true;s.defer=true;s.onload=resolve;s.onerror=()=>reject(new Error('人机验证组件加载失败，请刷新页面重试。'));document.head.appendChild(s)});return scriptPromise}
+async function prepare(){policy=await json('/api/public/turnstile').catch(()=>({enabled:false,surfaces:{}}));if(!policy.enabled||!policy.surfaces?.abuse_report)return;if(!policy.site_key)throw new Error('人机验证已启用，但 Site Key 尚未配置。');await loadTurnstile();widget=window.turnstile.render(slot,{sitekey:policy.site_key,action:'abuse_report',theme:'auto'})}
+prepare().catch(err=>show(err.message));
+form.addEventListener('submit',async e=>{e.preventDefault();message.textContent='';const button=form.querySelector('button[type="submit"]');button.disabled=true;const payload=Object.fromEntries(new FormData(form));try{if(policy.enabled&&policy.surfaces?.abuse_report){if(widget===null)await prepare();payload.turnstile_token=window.turnstile.getResponse(widget);if(!payload.turnstile_token)throw new Error('请先完成人机验证。')}const result=await json('/api/public/abuse-reports',{method:'POST',body:JSON.stringify(payload)});form.reset();if(widget!==null&&window.turnstile)window.turnstile.reset(widget);show(`举报已提交，参考编号 #${result.reference}。安全团队会按证据进行审核。`,true)}catch(err){show(err.message);if(widget!==null&&window.turnstile)window.turnstile.reset(widget)}finally{button.disabled=false}});
+})();
