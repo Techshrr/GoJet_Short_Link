@@ -4,7 +4,7 @@ CREATE TABLE payment_transactions (
     workspace_id BIGINT UNSIGNED NOT NULL,
     provider VARCHAR(32) NOT NULL,
     merchant_order_no VARCHAR(64) NOT NULL,
-    provider_order_id VARCHAR(128) NOT NULL DEFAULT '',
+    provider_order_id VARCHAR(128) NULL,
     amount_cents BIGINT UNSIGNED NOT NULL,
     currency CHAR(3) NOT NULL,
     status ENUM('created','pending','paid','failed','cancelled','refunded') NOT NULL DEFAULT 'created',
