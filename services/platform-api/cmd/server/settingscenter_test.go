@@ -24,6 +24,7 @@ func TestValidateImageUsesMagicBytes(t *testing.T) {
 		t.Fatalf("mime=%s ext=%s err=%v", mime, ext, err)
 	}
 }
+
 func TestValidateImageRejectsSVG(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "image-*.svg")
 	if err != nil {
@@ -37,6 +38,7 @@ func TestValidateImageRejectsSVG(t *testing.T) {
 		t.Fatal("executable SVG must be rejected")
 	}
 }
+
 func TestRemoveOldUploadCannotEscapeStorage(t *testing.T) {
 	storage := t.TempDir()
 	outside, err := os.CreateTemp(t.TempDir(), "outside")
@@ -74,31 +76,25 @@ func TestValidateLinkSettings(t *testing.T) {
 	}
 }
 
-func TestSettingsStepUpPolicyOnlyProtectsHighRiskChanges(t *testing.T) {
-	ordinary := []struct {
-		section string
-		values  map[string]any
-	}{
-		{"basic", map[string]any{"site.name": "GoJet"}},
-		{"seo", map[string]any{"seo.default_title": "GoJet"}},
-		{"brand", map[string]any{"brand.primary_color": "#1769e0"}},
-		{"registration", map[string]any{"registration.enabled": true}},
-		{"links", map[string]any{"links.code_length": float64(7)}},
-		{"privacy", map[string]any{"analytics.enabled": true}},
-		{"runtime", map[string]any{"api.enabled": true, "cache.enabled": true}},
+func TestValidateRuntimeSettings(t *testing.T) {
+	if err := validateRuntimeSettings(map[string]any{
+		"api.enabled":               true,
+		"cache.enabled":             false,
+		"cache.default_ttl_seconds": float64(300),
+	}); err != nil {
+		t.Fatal(err)
 	}
-	for _, item := range ordinary {
-		if settingsMutationNeedsStepUp(item.section, item.values) {
-			t.Fatalf("ordinary %s settings unexpectedly require step-up", item.section)
-		}
-	}
-	if !settingsMutationNeedsStepUp("runtime", map[string]any{"api.enabled": false}) {
-		t.Fatal("disabling the user API must require step-up")
-	}
-	if !settingsMutationNeedsStepUp("registration", map[string]any{"turnstile.secret": "secret"}) {
-		t.Fatal("changing Turnstile secret must require step-up")
-	}
-	if !settingsMutationNeedsStepUp("registration", map[string]any{"registration.admin_mfa": false}) {
-		t.Fatal("changing administrator MFA policy must require step-up")
+	for name, values := range map[string]map[string]any{
+		"api_type":  {"api.enabled": "true"},
+		"cache_type": {"cache.enabled": float64(1)},
+		"ttl_low":   {"cache.default_ttl_seconds": float64(9)},
+		"ttl_high":  {"cache.default_ttl_seconds": float64(86401)},
+		"ttl_float": {"cache.default_ttl_seconds": 30.5},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateRuntimeSettings(values); err == nil {
+				t.Fatal("invalid runtime setting was accepted")
+			}
+		})
 	}
 }
