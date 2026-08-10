@@ -3,7 +3,8 @@ const page=document.body.dataset.authPage||'';
 const qs=new URLSearchParams(location.search);
 function showMessage(text,type='error'){const el=$('#message');if(!el)return;el.className=`message show ${type}`;el.textContent=text}
 function setBusy(form,busy){const btn=form?.querySelector('button[type="submit"]');if(btn){btn.disabled=busy;btn.dataset.label||=btn.textContent;btn.textContent=busy?'处理中…':btn.dataset.label}}
-async function request(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||`请求失败 (${response.status})`),{data,status:response.status});return data}
+function fallbackMessage(status){if(status===429)return'操作过于频繁，请稍后再试。';if(status===401||status===403)return'邮箱或密码不正确，请重新检查。';if(status>=500)return'服务暂时不可用，请稍后再试。';return'当前操作未能完成，请检查填写内容后重试。'}
+async function request(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||fallbackMessage(response.status)),{data,status:response.status});return data}
 function validLocalPath(target){return typeof target==='string'&&target.startsWith('/')&&!target.startsWith('//')}
 function safeRedirect(){const queryTarget=qs.get('redirect'),stored=localStorage.getItem('gojet_post_auth_path');if(validLocalPath(queryTarget))return queryTarget;if(validLocalPath(stored)){localStorage.removeItem('gojet_post_auth_path');return stored}return'/app/dashboard'}
 
@@ -22,10 +23,10 @@ if(page==='forgot'){
 }
 
 if(page==='reset'){
-  const token=qs.get('token')||'';if(!token)showMessage('重置链接缺少 token，请重新发起找回密码。');
-  $('#resetForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;const body=Object.fromEntries(new FormData(form));if(body.password!==body.password_confirmation){showMessage('两次输入的密码不一致');return}delete body.password_confirmation;body.token=token;setBusy(form,true);try{await request('/api/auth/reset-password',{method:'POST',body:JSON.stringify(body)});localStorage.removeItem('gojet_token');form.reset();showMessage('密码已更新，所有旧会话均已失效。现在可以使用新密码登录。','success');setTimeout(()=>location.replace('/login'),1200)}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
+  const token=qs.get('token')||'';if(!token)showMessage('这个密码重置链接无效或不完整，请重新发起找回密码。');
+  $('#resetForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;const body=Object.fromEntries(new FormData(form));if(body.password!==body.password_confirmation){showMessage('两次输入的密码不一致');return}delete body.password_confirmation;body.token=token;setBusy(form,true);try{await request('/api/auth/reset-password',{method:'POST',body:JSON.stringify(body)});localStorage.removeItem('gojet_token');form.reset();showMessage('密码已更新。其他已登录设备会失效，现在可以使用新密码登录。','success');setTimeout(()=>location.replace('/login'),1200)}catch(err){showMessage(err.message)}finally{setBusy(form,false)}})
 }
 
 if(page==='verify'){
-  const token=qs.get('token')||'';const action=$('#verifyAction');if(!token){showMessage('验证链接缺少 token。');if(action)action.disabled=true}else{action?.addEventListener('click',async()=>{action.disabled=true;try{await request('/api/auth/verify-email',{method:'POST',body:JSON.stringify({token})});showMessage('邮箱验证成功，现在可以登录 GoJet。','success');action.textContent='验证成功';$('#loginLink')?.classList.remove('hidden')}catch(err){showMessage(err.message);action.disabled=false}})}
+  const token=qs.get('token')||'';const action=$('#verifyAction');if(!token){showMessage('这个邮箱验证链接无效或不完整。');if(action)action.disabled=true}else{action?.addEventListener('click',async()=>{action.disabled=true;try{await request('/api/auth/verify-email',{method:'POST',body:JSON.stringify({token})});showMessage('邮箱验证成功，现在可以登录 GoJet。','success');action.textContent='验证成功';$('#loginLink')?.classList.remove('hidden')}catch(err){showMessage(err.message);action.disabled=false}})}
 }
