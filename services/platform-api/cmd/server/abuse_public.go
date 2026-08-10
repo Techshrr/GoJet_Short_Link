@@ -121,13 +121,6 @@ func (s *server) createPublicAbuseReport(w http.ResponseWriter, r *http.Request)
 	jsonResponse(w, http.StatusAccepted, map[string]any{"accepted": true, "reference": id})
 }
 
-func nullableString(value string) any {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return strings.TrimSpace(value)
-}
-
 func formatInt64(value int64) string {
 	if value == 0 {
 		return "0"
