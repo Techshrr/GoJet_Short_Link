@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'rebuild/v4-product'
+    paths-ignore:
+      - 'scripts/v4-candidate-gate-*.trigger'
   pull_request:
 
 concurrency:
