@@ -7,6 +7,6 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
-ExecStart=__GOJET_ROOT__/scripts/native-installer-apply.sh
+ExecStart=__GOJET_ROOT__/scripts/native-installer-run.sh
 UMask=0077
 NoNewPrivileges=false
