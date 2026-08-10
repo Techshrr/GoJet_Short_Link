@@ -39,6 +39,7 @@ jobs:
             frontend/admin-console/product-actions.js \
             frontend/admin-console/settings-full.js \
             frontend/admin-console/admin-hardening.js \
+            frontend/admin-console/admin-settings-unified.js \
             frontend/user-console/app.js \
             frontend/user-console/auth-guard.js \
             frontend/user-console/product-hardening.js \
@@ -49,6 +50,9 @@ jobs:
             frontend/user-console/bio-hardening.js \
             frontend/user-console/domain-hardening.js \
             frontend/user-console/analytics-hardening.js \
+            frontend/user-console/team-hardening.js \
+            frontend/user-console/organization-hardening.js \
+            frontend/user-console/billing-hardening.js \
             frontend/marketing-site/assets/auth.js \
             frontend/marketing-site/assets/home.js \
             frontend/marketing-site/assets/file-share.js; do
@@ -68,15 +72,22 @@ jobs:
       - name: Product hardening regression checks
         run: |
           test -f docs/V4_PRODUCT_HARDENING_AUDIT.md
+          test -f frontend/shared/gojet-design-system.css
           test -f frontend/user-console/shell-hardening.css
           test -f frontend/user-console/link-hardening.js
           test -f frontend/user-console/file-hardening.js
           test -f frontend/user-console/bio-hardening.js
           test -f frontend/user-console/domain-hardening.js
           test -f frontend/user-console/analytics-hardening.js
-          test -f frontend/admin-console/admin-hardening.js
-          test -f frontend/marketing-site/assets/home-hardening.css
+          test -f frontend/user-console/team-hardening.js
+          test -f frontend/user-console/organization-hardening.js
+          test -f frontend/user-console/billing-hardening.js
+          test -f frontend/admin-console/admin-settings-unified.js
+          test -f frontend/admin-console/admin-brand-unified.css
           test -f database/migrations/028_file_share_password.sql
+          test -f database/migrations/029_payment_transactions.sql
+          test -f app/payments/service.go
+          test -f app/billing/pdf.go
           grep -Fq '完整公开网址' frontend/user-console/link-hardening.js
           grep -Fq '/f/' frontend/user-console/file-hardening.js
           grep -Fq '文件访问密码' services/platform-api/cmd/server/resources.go
@@ -86,7 +97,21 @@ jobs:
           grep -Fq '手机实时预览' frontend/user-console/bio-hardening.js
           grep -Fq '重新生成 TXT' frontend/user-console/domain-hardening.js
           grep -Fq 'QR 扫码访问' frontend/user-console/analytics-hardening.js
-          grep -Fq '未接入运行时的装饰性设置已经从正式后台移除' frontend/admin-console/admin-hardening.js
+          grep -Fq '支付宝' frontend/admin-console/admin-settings-unified.js
+          grep -Fq '微信支付' frontend/admin-console/admin-settings-unified.js
+          grep -Fq 'PayPal' frontend/admin-console/admin-settings-unified.js
+          grep -Fq 'Stripe' frontend/admin-console/admin-settings-unified.js
+          grep -Fq 'gojet-design-system.css' scripts/package-release.sh
+          grep -Fq 'registerProductHardeningRoutes' services/platform-api/cmd/server/main.go
+          grep -Fq 'registerBillingPresentationRoutes' services/platform-api/cmd/server/main.go
+          grep -Fq 'paymentCallback' services/platform-api/cmd/server/main.go
+          grep -Fq 'ApplyPayment' app/billing/payment.go
+          grep -Fq 'HandleWeChatNotification' app/payments/wechat.go
+          grep -Fq 'HandleStripeWebhook' app/payments/stripe.go
+          grep -Fq 'HandlePayPalWebhook' app/payments/paypal.go
+          grep -Fq 'HandleAlipayNotification' app/payments/alipay.go
+          grep -Fq 'HandleEPayNotification' app/payments/epay.go
+          grep -Fq 'Content-Type", "application/pdf' services/platform-api/cmd/server/billing_pdf.go
           grep -Fq 'data-demo-tab="url"' frontend/marketing-site/index.html
           grep -Fq 'data-demo-tab="text"' frontend/marketing-site/index.html
           grep -Fq 'data-demo-tab="file"' frontend/marketing-site/index.html
@@ -117,7 +142,7 @@ jobs:
           set +e
           go test ./... 2>&1 | tee /tmp/go-test.log
           rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then tail -160 /tmp/go-test.log >&2; fi
+          if [ "$rc" -ne 0 ]; then tail -200 /tmp/go-test.log >&2; fi
           exit "$rc"
       - name: Go vet
         id: go-vet
@@ -127,7 +152,7 @@ jobs:
           set +e
           go vet ./... 2>&1 | tee /tmp/go-vet.log
           rc=${PIPESTATUS[0]}
-          if [ "$rc" -ne 0 ]; then tail -160 /tmp/go-vet.log >&2; fi
+          if [ "$rc" -ne 0 ]; then tail -200 /tmp/go-vet.log >&2; fi
           exit "$rc"
       - name: Upload Go diagnostics
         if: failure()
