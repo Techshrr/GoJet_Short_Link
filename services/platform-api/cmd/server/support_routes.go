@@ -4,6 +4,8 @@ import "net/http"
 
 func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/turnstile", s.publicBotProtection)
+	mux.HandleFunc("POST /api/public/abuse-reports", s.createPublicAbuseReport)
+
 	mux.HandleFunc("GET /api/support/departments", s.user(s.supportDepartments))
 	mux.HandleFunc("GET /api/support/tickets", s.user(s.listSupportTickets))
 	mux.HandleFunc("POST /api/support/tickets", s.user(s.turnstileGuard("ticket_create", "support_ticket_create", s.createSupportTicket)))
