@@ -10,6 +10,22 @@ async function adminLogin(page){
   await expect(page.getByText('平台概览',{exact:true}).first()).toBeVisible();
 }
 
+test('admin login fails closed without JavaScript and never exposes credentials in URL',async({browser})=>{
+  const context=await browser.newContext({javaScriptEnabled:false});
+  const page=await context.newPage();
+  await page.goto(base+'/admin/');
+  const form=page.locator('#loginForm');
+  await expect(form).toHaveAttribute('method','post');
+  await expect(form).toHaveAttribute('action','/api/admin/auth/login');
+  await page.getByLabel('管理员邮箱').fill('fallback@example.test');
+  await page.getByLabel('密码').fill('FallbackPassword!2026');
+  await page.getByRole('button',{name:'登录后台'}).click();
+  await page.waitForURL(/\/api\/admin\/auth\/login$/);
+  expect(page.url()).not.toContain('email=');
+  expect(page.url()).not.toContain('password=');
+  await context.close();
+});
+
 test('public account routes are dedicated pages',async({page})=>{
   await page.goto(base+'/login');
   await expect(page).toHaveURL(/\/login$/);
@@ -102,7 +118,6 @@ test('mail templates and SMTP save are ordinary admin operations',async({page})=
   await expect(page.locator('#toast')).toContainText('SMTP 设置已保存');
   await expect(page.locator('#modal')).toHaveClass(/hidden/);
 });
-
 
 test('system settings expose the full editable policy surface',async({page})=>{
   await adminLogin(page);
