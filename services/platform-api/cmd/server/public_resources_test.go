@@ -2,19 +2,52 @@ package main
 
 import (
 	"bytes"
+	"html/template"
 	"strings"
 	"testing"
 )
 
-func TestTextPageTemplateEscapesSharedContent(t *testing.T) {
+func TestTextPageTemplateEscapesTitleAndRenderedContentIsSanitized(t *testing.T) {
 	var output bytes.Buffer
-	data := map[string]any{"Title": `Release <script>alert(1)</script>`, "Format": "plain", "Views": 2, "Protected": false, "Content": `<img src=x onerror=alert(1)>`}
+	rendered := renderSharedText("plain", `<img src=x onerror=alert(1)>`)
+	data := map[string]any{
+		"Title":     `Release <script>alert(1)</script>`,
+		"Format":    "plain",
+		"Views":     2,
+		"Protected": false,
+		"Rendered":  template.HTML(rendered),
+	}
 	if err := textPageTemplate.Execute(&output, data); err != nil {
 		t.Fatal(err)
 	}
 	html := output.String()
-	if strings.Contains(html, "<script>alert") || strings.Contains(html, "<img src=x") || !strings.Contains(html, "&lt;img") {
-		t.Fatalf("unsafe output %s", html)
+	if strings.Contains(html, "<script>alert") || strings.Contains(html, "<img src=x") {
+		t.Fatalf("unsafe raw HTML escaped its boundary: %s", html)
+	}
+	if !strings.Contains(html, "&lt;script&gt;alert(1)&lt;/script&gt;") || !strings.Contains(html, "&lt;img src=x onerror=alert(1)&gt;") {
+		t.Fatalf("expected escaped title/body are missing: %s", html)
+	}
+}
+
+func TestMarkdownTextPageAllowsControlledMarkupButNotRawScript(t *testing.T) {
+	var output bytes.Buffer
+	rendered := renderSharedText("markdown", "# Heading\n\n**bold**\n\n<script>alert(1)</script>")
+	data := map[string]any{
+		"Title":     "Markdown",
+		"Format":    "markdown",
+		"Views":     1,
+		"Protected": false,
+		"Rendered":  rendered,
+	}
+	if err := textPageTemplate.Execute(&output, data); err != nil {
+		t.Fatal(err)
+	}
+	html := output.String()
+	if !strings.Contains(html, "<h1>Heading</h1>") || !strings.Contains(html, "<strong>bold</strong>") {
+		t.Fatalf("controlled Markdown markup was not rendered: %s", html)
+	}
+	if strings.Contains(html, "<script>alert") || !strings.Contains(html, "&lt;script&gt;alert(1)&lt;/script&gt;") {
+		t.Fatalf("Markdown raw HTML was not escaped: %s", html)
 	}
 }
 
