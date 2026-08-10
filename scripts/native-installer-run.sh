@@ -30,9 +30,10 @@ stop_existing_services(){
   done
 }
 
-# Fresh-install means fresh database. Inspect the selected schema before the
-# migration helper creates schema_migrations. This intentionally rejects an old
-# GoJet database even when its schema would otherwise be migration-compatible.
+reenable_installer_path(){
+  systemctl enable --now gojet-installer.path >/dev/null 2>&1 || true
+}
+
 preflight_empty_database(){
   [[ -f "$REQUEST" ]] || return 0
   declare -A request_cfg
@@ -66,9 +67,6 @@ preflight_empty_database(){
   existing=$(MYSQL_PWD="${request_cfg[MYSQL_PASSWORD]}" "$mysql" -N -s \
     -h 127.0.0.1 -P "${request_cfg[MYSQL_PORT]}" -u "${request_cfg[MYSQL_USER]}" \
     -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${request_cfg[MYSQL_DATABASE]}'" 2>/dev/null) || {
-      # The canonical helper owns the friendly connection error if the database
-      # cannot be reached; do not turn a connectivity issue into an emptiness
-      # error here.
       return 0
     }
   if [[ "$existing" != "0" ]]; then
@@ -126,7 +124,7 @@ verify_fresh_admin(){
   local actual_email actual_role actual_status actual_totp
   IFS=$'\t' read -r actual_email actual_role actual_status actual_totp <<< "$admin_row"
   if [[ "${actual_email,,}" != "${ADMIN_BOOTSTRAP_EMAIL,,}" || "$actual_role" != 'super_admin' || "$actual_status" != 'active' || "$actual_totp" != '0' ]]; then
-    write_failure "安装后管理员校验失败：初始管理员状态不符合 Fresh Install 约束"
+    write_failure '安装后管理员校验失败：初始管理员状态不符合 Fresh Install 约束'
     return 1
   fi
 }
@@ -135,21 +133,27 @@ if [[ -f "$LOCK" ]]; then
   exec "$ROOT/scripts/native-installer-apply.sh"
 fi
 
-preflight_empty_database || exit 1
+if ! preflight_empty_database; then
+  exit 1
+fi
 
-# A previous GoJet installation may still have live processes even if its
-# directory was moved/deleted. Stop them before the canonical helper installs
-# the current unit/environment; otherwise `systemctl enable --now` can keep an
-# old executable alive and produce a false health-check success.
 stop_existing_services
 
-if ! "$ROOT/scripts/native-installer-apply.sh"; then
-  exit $?
+set +e
+"$ROOT/scripts/native-installer-apply.sh"
+helper_rc=$?
+set -e
+if [[ "$helper_rc" -ne 0 ]]; then
+  # The canonical helper normally leaves the path active on failure. Re-enable
+  # defensively so the browser can resubmit after correcting the cause.
+  reenable_installer_path
+  exit "$helper_rc"
 fi
 
 if ! verify_current_runtime || ! verify_fresh_admin; then
   rm -f "$LOCK"
   stop_existing_services
+  reenable_installer_path
   exit 1
 fi
 
