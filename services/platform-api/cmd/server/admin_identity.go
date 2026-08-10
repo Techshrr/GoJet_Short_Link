@@ -52,6 +52,14 @@ func currentAdmin(r *http.Request) adminauth.Administrator {
 	return r.Context().Value(adminKey{}).(adminauth.Administrator)
 }
 
+func requireSuperAdministrator(w http.ResponseWriter, r *http.Request) bool {
+	if currentAdmin(r).Role == "super_admin" {
+		return true
+	}
+	jsonResponse(w, http.StatusForbidden, map[string]string{"error": "只有超级管理员可以执行此操作"})
+	return false
+}
+
 func (s *server) adminLogin(w http.ResponseWriter, r *http.Request) {
 	var input struct{ Email, Password, Code string }
 	if decode(w, r, &input) != nil {
@@ -113,6 +121,9 @@ func (s *server) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]bool{"updated": true})
 }
 func (s *server) adminRevokeSessions(w http.ResponseWriter, r *http.Request) {
+	if !requireSuperAdministrator(w, r) {
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		jsonResponse(w, 400, map[string]string{"error": "管理员编号无效"})
@@ -152,6 +163,9 @@ func (s *server) adminListAdministrators(w http.ResponseWriter, r *http.Request)
 	})
 }
 func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request) {
+	if !requireSuperAdministrator(w, r) {
+		return
+	}
 	var input struct {
 		Email       string   `json:"email"`
 		DisplayName string   `json:"display_name"`
@@ -162,11 +176,6 @@ func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request
 	if decode(w, r, &input) != nil {
 		return
 	}
-	actor := currentAdmin(r)
-	if input.Role == "super_admin" && actor.Role != "super_admin" {
-		jsonResponse(w, http.StatusForbidden, map[string]string{"error": "只有超级管理员可以创建新的超级管理员"})
-		return
-	}
 	id, err := s.adminAuth.Create(r.Context(), input.Email, input.DisplayName, input.Password, input.Role, input.Permissions)
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
@@ -175,6 +184,9 @@ func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request
 	jsonResponse(w, 201, map[string]int64{"id": id})
 }
 func (s *server) adminUpdateAdministrator(w http.ResponseWriter, r *http.Request) {
+	if !requireSuperAdministrator(w, r) {
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	var input struct {
 		Role        string   `json:"role"`
@@ -188,12 +200,7 @@ func (s *server) adminUpdateAdministrator(w http.ResponseWriter, r *http.Request
 		jsonResponse(w, 400, map[string]string{"error": "管理员编号无效"})
 		return
 	}
-	actor := currentAdmin(r)
-	if input.Role == "super_admin" && actor.Role != "super_admin" {
-		jsonResponse(w, http.StatusForbidden, map[string]string{"error": "只有超级管理员可以授予超级管理员权限"})
-		return
-	}
-	if err = s.adminAuth.Update(r.Context(), actor.ID, id, input.Role, input.Status, input.Permissions); err != nil {
+	if err = s.adminAuth.Update(r.Context(), currentAdmin(r).ID, id, input.Role, input.Status, input.Permissions); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
