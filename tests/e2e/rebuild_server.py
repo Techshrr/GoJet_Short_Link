@@ -40,6 +40,10 @@ class H(BaseHTTPRequestHandler):
             return APP/rel
         if p=='/admin' or p=='/admin/': return ADMIN/'index.html'
         if p.startswith('/admin/'): return ADMIN/p[len('/admin/'):]
+        rel=p.lstrip('/')
+        candidate=MARKETING/rel
+        if candidate.is_dir(): return candidate/'index.html'
+        if candidate.is_file(): return candidate
         return None
     def do_GET(self):
         p=urlparse(self.path).path
@@ -86,6 +90,7 @@ class H(BaseHTTPRequestHandler):
         if p=='/api/admin/support/tickets/1/replies': return self.send_json({'saved':True},201)
         if p=='/api/support/tickets': return self.send_json({'id':1,'ticket_number':TICKET['ticket_number'],'status':'open'},201)
         if p=='/api/support/tickets/1/replies': return self.send_json({'saved':True},201)
+        if p=='/api/public/abuse-reports': return self.send_json({'accepted':True,'reference':42},202)
         if p=='/api/auth/login': return self.send_json({'user':{'id':1,'email':'user@example.test','display_name':'Browser User'},'token':'u'*64})
         if p=='/api/auth/register': return self.send_json({'user':{'id':2},'token':'r'*64},201)
         if p=='/api/auth/forgot-password': return self.send_json({'queued':True},202)
