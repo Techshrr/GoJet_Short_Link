@@ -14,6 +14,7 @@ ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
 [ -n "$ROOT" ] || { echo "release root is missing" >&2; exit 1; }
 
 for path in \
+  scripts/verify-hardening-release.sh \
   public/report-abuse/index.html \
   public/assets/report-abuse.js \
   public/app/support-hardening.js \
@@ -30,6 +31,7 @@ for path in \
   app/adminauth/support_permissions.go; do
   [ -e "$ROOT/$path" ] || { echo "hardening release is missing $path" >&2; exit 1; }
 done
+[ -x "$ROOT/scripts/verify-hardening-release.sh" ] || { echo 'packaged hardening verifier is not executable' >&2; exit 1; }
 
 grep -Fq 'CREATE TABLE support_tickets' "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support ticket schema is missing' >&2; exit 1; }
 grep -Fq 'CREATE TABLE support_ticket_messages' "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support ticket conversation schema is missing' >&2; exit 1; }
