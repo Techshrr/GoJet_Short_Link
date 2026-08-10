@@ -1,2 +1,2 @@
 V4 full-stack P0 acceptance trigger
-Rerun with QR authorization/data failure separation and backend diagnostics.
+Rerun after numeric QR analytics link-id comparison removed collation dependency.
