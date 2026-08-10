@@ -35,10 +35,10 @@ cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
 cp "$ROOT/frontend/shared/gojet-design-system.css" "$TARGET/public/assets/gojet-design-system.css"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 
-# Version every local CSS/JavaScript URL in the production web root. Distinct
-# release URLs prevent CDN/browser caches from reusing assets from an older
-# deployment. find -exec keeps this compatible with /bin/sh.
-find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(['\"])#\1?v=$SAFE_VERSION\4#g" {} \;
+# Every local CSS/JavaScript URL in the production web root receives exactly
+# the release version. Existing development cache keys such as ?v=brand-2 are
+# replaced instead of being preserved, preventing stale CDN/browser assets.
+find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(\?[^'\"]*)?(['\"])#\1?v=$SAFE_VERSION\5#g" {} \;
 
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
 cp "$ROOT/deploy/compose.host-nginx.yaml" "$TARGET/deploy/compose.host-nginx.yaml"
@@ -49,7 +49,7 @@ cp "$ROOT/deploy/nginx/gojet-native.conf" "$TARGET/deploy/nginx/gojet-native.con
 cp "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" "$TARGET/deploy/nginx/gojet-bt-rewrite.conf"
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" \
    "$ROOT/deploy/native/gojet-installer.service" "$ROOT/deploy/native/gojet-installer.path" "$TARGET/deploy/native/"
-cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$ROOT/scripts/verify-published-release.sh" \
+cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$ROOT/scripts/verify-hardening-release.sh" "$ROOT/scripts/verify-published-release.sh" \
    "$ROOT/scripts/native-installer-run.sh" "$ROOT/scripts/native-installer-apply.sh" "$ROOT/scripts/install-docker.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zh-CN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/object-storage.zh-CN.md" \
    "$ROOT/docs/operations-alerting.zh-CN.md" "$ROOT/docs/v4-product-rebuild.zh-CN.md" "$ROOT/docs/V4_PRODUCT_HARDENING_AUDIT.md" "$TARGET/docs/"
@@ -60,7 +60,7 @@ printf '%s\n' "$VERSION" > "$TARGET/VERSION"
 printf '%s\n' 'FRESH_INSTALL_ONLY=1' > "$TARGET/FRESH_INSTALL_ONLY"
 
 chmod 0755 "$TARGET/install.sh" "$TARGET/install-host-nginx.sh" "$TARGET/install-native-lemp.sh" "$TARGET/launch-web-installer.sh" \
-  "$TARGET/scripts/verify-release.sh" "$TARGET/scripts/verify-published-release.sh" "$TARGET/scripts/native-installer-run.sh" \
+  "$TARGET/scripts/verify-release.sh" "$TARGET/scripts/verify-hardening-release.sh" "$TARGET/scripts/verify-published-release.sh" "$TARGET/scripts/native-installer-run.sh" \
   "$TARGET/scripts/native-installer-apply.sh" "$TARGET/scripts/install-docker.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type f \( -name '*_test.go' -o -name '*_integration_test.go' \) -delete
