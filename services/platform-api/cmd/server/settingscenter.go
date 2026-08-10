@@ -348,6 +348,7 @@ func validateRuntimeSettings(values map[string]any) error {
 			if _, valid := value.(bool); !valid {
 				return fmt.Errorf("%s 必须为布尔值", key)
 			}
+		}
 	}
 	if value, ok := values["cache.default_ttl_seconds"]; ok {
 		raw, valid := value.(float64)
