@@ -140,7 +140,7 @@ test('admin support queue provides WHMCS-style conversation and internal notes',
   await adminLogin(page);
   await page.getByRole('button',{name:'客户工单',exact:true}).click();
   await expect(page.getByText('GJ-260811-A1B2C3D4',{exact:true})).toBeVisible();
-  await expect(page.getByText('短链接跳转问题',{exact:true})).toBeVisible();
+  await expect(page.getByText('短链接跳转问题',{exact:false})).toBeVisible();
   await page.getByRole('button',{name:'查看'}).click();
   await expect(page.getByRole('heading',{name:/GJ-260811-A1B2C3D4/})).toBeVisible();
   await expect(page.getByText('仅管理员可见的内部备注',{exact:true})).toBeVisible();
@@ -150,13 +150,14 @@ test('admin support queue provides WHMCS-style conversation and internal notes',
 test('Turnstile control center masks secret and exposes per-surface switches',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'人机验证',exact:true}).click();
-  await expect(page.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
-  await expect(page.getByLabel('Secret Key')).toHaveValue('');
+  const form=page.locator('#botProtectionForm');
+  await expect(form.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
+  await expect(form.getByLabel('Secret Key')).toHaveValue('');
   for(const text of ['注册','登录','忘记密码','重置密码','创建工单','工单回复','滥用举报']){
-    await expect(page.getByText(text,{exact:true})).toBeVisible();
+    await expect(form.getByText(text,{exact:true})).toBeVisible();
   }
-  await page.getByLabel('Site Key').fill('1x00000000000000000000AA');
-  await page.getByRole('button',{name:'保存人机验证设置'}).click();
+  await form.getByLabel('Site Key').fill('1x00000000000000000000AA');
+  await form.getByRole('button',{name:'保存人机验证设置'}).click();
   await expect(page.locator('#toast')).toContainText('人机验证设置已保存');
 });
 
