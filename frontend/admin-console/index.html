@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GoJet 管理后台</title>
 <meta name="robots" content="noindex,nofollow">
-<link rel="stylesheet" href="/admin/styles.css">
+<link rel="stylesheet" href="/admin/styles.css?v=hardening-1">
+<link rel="stylesheet" href="/admin/admin-hardening.css?v=hardening-1">
 </head>
 <body>
 <div id="loginView" class="login-view">
   <form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">
     <a href="/" class="login-brand">GoJet<span>.</span><small>ADMIN</small></a>
     <h1>管理后台</h1>
-    <p>使用管理员账户登录。若账户启用了双因素认证，验证码只在登录时输入一次。</p>
+    <p>使用管理员账户登录。双因素认证只在管理员主动绑定验证器后用于登录。</p>
     <div id="loginError" class="alert hidden"></div>
     <label><span>管理员邮箱</span><input name="email" type="email" autocomplete="username" required></label>
     <label><span>密码</span><input name="password" type="password" autocomplete="current-password" required></label>
@@ -24,7 +25,7 @@
 <div id="adminView" class="admin-shell hidden">
   <aside class="sidebar">
     <a href="/" class="brand">GoJet<span>.</span><small>ADMIN</small></a>
-    <div class="side-label">平台</div>
+    <div class="side-label">平台管理</div>
     <nav id="nav">
       <button data-view="overview" data-permission="platform.read" class="active">平台概览</button>
       <button data-view="users" data-permission="users.manage">用户管理</button>
@@ -64,8 +65,9 @@
 
 <div id="modal" class="modal-layer hidden" aria-hidden="true"><div class="modal" id="modalBody"></div></div>
 <div id="toast" class="toast hidden"></div>
-<script src="/admin/app.js"></script>
-<script src="/admin/product-actions.js"></script>
-<script src="/admin/settings-full.js"></script>
+<script src="/admin/app.js?v=hardening-1"></script>
+<script src="/admin/product-actions.js?v=hardening-1"></script>
+<script src="/admin/settings-full.js?v=hardening-1"></script>
+<script src="/admin/admin-hardening.js?v=hardening-1"></script>
 </body>
 </html>
