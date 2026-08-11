@@ -47,19 +47,30 @@ test('public account routes are dedicated pages',async({page})=>{
   await expect(page.getByRole('heading',{name:'重置密码'})).toBeVisible();
 });
 
-test('marketing homepage is product-first and shortener keeps the pending URL',async({page})=>{
+test('marketing homepage and legal pages use the canonical customer-facing shell',async({page})=>{
   await page.goto(base+'/');
-  await expect(page.getByRole('heading',{name:/管理每一个链接/})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/管理每一个重要入口/})).toBeVisible();
   for(const text of ['短链接','访问分析','二维码','个人主页','文本分享','文件分享']){
     await expect(page.getByText(text,{exact:true}).first()).toBeVisible();
   }
-  await page.getByPlaceholder(/粘贴需要缩短的网址/).fill('https://example.com/landing');
-  await page.getByRole('button',{name:/创建短链接/}).click();
-  await expect(page.locator('#shortResult')).toContainText('创建账户后会自动带入刚才的长网址');
-  await page.waitForURL(/\/register\?redirect=/);
-  expect(new URL(page.url()).searchParams.get('redirect')).toBe('/app/links');
-  const pending=await page.evaluate(()=>localStorage.getItem('gojet_pending_url'));
-  expect(pending).toBe('https://example.com/landing');
+  await expect(page.locator('header.siteHeader .logo')).toBeVisible();
+  await expect(page.getByRole('link',{name:'套餐价格'})).toBeVisible();
+  await expect(page.getByRole('link',{name:'隐私政策'}).last()).toHaveAttribute('href','/privacy/');
+  await expect(page.getByRole('link',{name:'服务条款'}).last()).toHaveAttribute('href','/terms/');
+  const homeText=await page.locator('body').innerText();
+  for(const forbidden of ['Fresh Install','Worker','Redis','MySQL','V4 产品重构基线','真实后端闭环'])expect(homeText).not.toContain(forbidden);
+
+  await page.goto(base+'/privacy/');
+  await expect(page.getByRole('heading',{name:'隐私政策'})).toBeVisible();
+  await expect(page.getByText('我们处理的信息',{exact:true})).toBeVisible();
+  await expect(page.locator('header.siteHeader .logo')).toBeVisible();
+  await expect(page.getByRole('link',{name:'服务条款'}).last()).toBeVisible();
+
+  await page.goto(base+'/terms/');
+  await expect(page.getByRole('heading',{name:'服务条款'})).toBeVisible();
+  await expect(page.getByText('禁止行为',{exact:true})).toBeVisible();
+  await expect(page.locator('header.siteHeader .logo')).toBeVisible();
+  await expect(page.getByRole('link',{name:'隐私政策'}).last()).toBeVisible();
 });
 
 test('/app is never the interactive login page',async({page})=>{
@@ -124,12 +135,36 @@ test('mail templates and SMTP save are ordinary admin operations',async({page})=
   await expect(page.locator('#modal')).toHaveClass(/hidden/);
 });
 
+test('SMTP test send shows pending, prevents duplicate submit and reports success/failure',async({page})=>{
+  await adminLogin(page);
+  await page.getByRole('button',{name:'邮件服务',exact:true}).click();
+  await page.getByRole('button',{name:'发送测试',exact:true}).click();
+  const modal=page.locator('#modal');
+  await modal.getByLabel('测试收件人').fill('ok@example.test');
+  const send=modal.getByRole('button',{name:'发送测试',exact:true});
+  await send.click();
+  await expect(modal.getByRole('button',{name:'发送中…'})).toBeDisabled();
+  await expect(modal.getByText('正在连接 SMTP 服务器并发送测试邮件，请稍候…')).toBeVisible();
+  await expect(modal.getByText('测试邮件已发送。请检查收件箱；如未收到，也请检查垃圾邮件目录。')).toBeVisible();
+  await expect(modal.getByRole('button',{name:'重新发送测试'})).toBeEnabled();
+  await modal.getByRole('button',{name:'关闭'}).click();
+
+  await page.getByRole('button',{name:'发送测试',exact:true}).click();
+  const failed=page.locator('#modal');
+  await failed.getByLabel('测试收件人').fill('fail@example.test');
+  await failed.getByRole('button',{name:'发送测试',exact:true}).click();
+  await expect(failed.getByText('SMTP 连接失败')).toBeVisible();
+  await expect(failed.getByRole('button',{name:'发送测试',exact:true})).toBeEnabled();
+});
+
 test('system settings expose the current editable policy surface',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'系统设置',exact:true}).click();
   for(const text of ['站点信息','搜索与分享','注册与账户','短链接','支付方式','品牌与视觉']){
     await expect(page.getByRole('button',{name:new RegExp(text)})).toBeVisible();
   }
+  await page.getByRole('button',{name:/搜索与分享/}).click();
+  await expect(page.getByText('生成站点地图',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:/注册与账户/}).click();
   await expect(page.getByText('允许新用户注册',{exact:true})).toBeVisible();
   await expect(page.getByText('注册后验证邮箱',{exact:true})).toBeVisible();
