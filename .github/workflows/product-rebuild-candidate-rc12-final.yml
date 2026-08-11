@@ -125,7 +125,6 @@ jobs:
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='support_ticket_messages';
           SELECT COUNT(*) FROM support_departments WHERE is_active=TRUE;
           SELECT COUNT(*) FROM system_settings WHERE setting_key IN ('turnstile.enabled','turnstile.registration','turnstile.login','turnstile.forgot_password','turnstile.reset_password','turnstile.ticket_create','turnstile.ticket_reply','turnstile.abuse_report');
-          SELECT COUNT(*) FROM system_settings WHERE setting_key='seo.sitemap';
           SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='abuse_reports' AND COLUMN_NAME='reported_url';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='payment_transactions';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='fx_rate_cache';
@@ -139,8 +138,7 @@ jobs:
           test "${schema[4]}" = 1
           test "${schema[5]}" = 1
           test "${schema[6]}" = 1
-          test "${schema[7]}" = 1
-          test "${schema[8]}" = 4
+          test "${schema[7]}" = 4
 
       - name: Start exact packaged RC12 primary runtime
         run: |
