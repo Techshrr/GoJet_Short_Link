@@ -2,7 +2,7 @@
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
-import json, mimetypes
+import json, mimetypes, time
 
 ROOT=Path(__file__).resolve().parents[2]
 MARKETING=ROOT/'frontend'/'marketing-site'
@@ -47,7 +47,7 @@ class H(BaseHTTPRequestHandler):
         return None
     def do_GET(self):
         p=urlparse(self.path).path
-        if p=='/api/public/settings': return self.send_json({'registration.enabled':True})
+        if p=='/api/public/settings': return self.send_json({'registration.enabled':True,'site.name':'GoJet','site.support_email':'support@example.test','brand.primary_color':'#16A66A'})
         if p=='/api/public/turnstile': return self.send_json({'enabled':False,'site_key':'','surfaces':{'registration':False,'login':False,'forgot_password':False,'reset_password':False,'ticket_create':False,'ticket_reply':False,'abuse_report':False}})
         if p=='/api/public/announcements': return self.send_json({'data':[]})
         if p=='/api/admin/auth/me': return self.send_json(ADMINISTRATORS[0])
@@ -85,7 +85,11 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         p=urlparse(self.path).path
         if p=='/api/admin/auth/login': return self.send_json({'administrator':ADMINISTRATORS[0],'token':'a'*64})
-        if p in ['/api/admin/auth/logout','/api/admin/diagnostics/reconcile','/api/admin/diagnostics/cache/flush','/api/admin/mail/test','/api/auth/logout']: return self.send_json({'ok':True})
+        if p=='/api/admin/mail/test':
+            body=self.body(); time.sleep(.35)
+            if body.get('recipient')=='fail@example.test': return self.send_json({'error':'SMTP 连接失败'},503)
+            return self.send_json({'ok':True})
+        if p in ['/api/admin/auth/logout','/api/admin/diagnostics/reconcile','/api/admin/diagnostics/cache/flush','/api/auth/logout']: return self.send_json({'ok':True})
         if p=='/api/admin/announcements': return self.send_json({'id':2},201)
         if p=='/api/admin/support/tickets/1/replies': return self.send_json({'saved':True},201)
         if p=='/api/support/tickets': return self.send_json({'id':1,'ticket_number':TICKET['ticket_number'],'status':'open'},201)
