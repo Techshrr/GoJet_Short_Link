@@ -114,23 +114,27 @@ test.describe.serial('real product surface',()=>{
     await expect(page.getByText('Failed to fetch')).toHaveCount(0);
   });
 
-  test('analytics drawer never exceeds the viewport or creates page-level horizontal scrolling',async({page,request})=>{
+  test('analytics page stays within the viewport after opening a link analysis',async({page,request})=>{
     if(!user)user=await bootstrapUser(request);
     if(!link)link=await createLink(request,user);
-    const code=link.Code??link.code;
+    const id=Number(link.ID??link.id),code=link.Code??link.code;
     await request.get(base+'/'+code);
     await request.get(base+'/'+code);
-    await expect.poll(async()=>{const a=await json(request,'GET',`/api/workspaces/${user.workspace}/links/${Number(link.ID??link.id)}/analytics`,undefined,user.token);return Number(a?.summary?.clicks??a?.clicks??0)},{timeout:10000}).toBeGreaterThanOrEqual(1);
+    await expect.poll(async()=>{const a=await json(request,'GET',`/api/workspaces/${user.workspace}/links/${id}/analytics`,undefined,user.token);return Number(a?.clicks??0)},{timeout:10000}).toBeGreaterThanOrEqual(1);
     await setUserSession(page,user.token);
     await page.goto(base+'/app/links');
     await expect(page.getByRole('heading',{name:'短链接'})).toBeVisible();
     await page.getByRole('button',{name:'访问分析'}).first().click();
-    const drawer=page.locator('#analyticsModal .drawer.analytics');
-    await expect(drawer).toBeVisible();
-    const dims=await drawer.evaluate(node=>({client:node.clientWidth,scroll:node.scrollWidth,right:node.getBoundingClientRect().right,viewport:innerWidth,bodyScroll:document.documentElement.scrollWidth,bodyClient:document.documentElement.clientWidth}));
-    expect(dims.scroll).toBeLessThanOrEqual(dims.client+1);
-    expect(dims.right).toBeLessThanOrEqual(dims.viewport+1);
-    expect(dims.bodyScroll).toBeLessThanOrEqual(dims.bodyClient+1);
+    await expect(page).toHaveURL(new RegExp(`/app/analytics\\?link=${id}$`));
+    await expect(page.getByRole('heading',{name:'访问分析'})).toBeVisible();
+    const surface=page.locator('#analyticsPage');
+    await expect(surface).toBeVisible();
+    await expect(page.locator('#analyticsLinkSelect')).toHaveValue(String(id));
+    await expect(page.locator('#analyticsLinkResult .analyticsLinkHead')).toBeVisible();
+    const measurements=await surface.evaluate(node=>({client:node.clientWidth,scroll:node.scrollWidth,right:node.getBoundingClientRect().right,viewport:innerWidth,bodyScroll:document.documentElement.scrollWidth,bodyClient:document.documentElement.clientWidth}));
+    expect(measurements.scroll).toBeLessThanOrEqual(measurements.client+1);
+    expect(measurements.right).toBeLessThanOrEqual(measurements.viewport+1);
+    expect(measurements.bodyScroll).toBeLessThanOrEqual(measurements.bodyClient+1);
   });
 
   test('public abuse report fields have stable non-overlapping layout',async({page})=>{
