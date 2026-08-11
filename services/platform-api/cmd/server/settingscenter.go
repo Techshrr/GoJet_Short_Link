@@ -212,33 +212,31 @@ func (s *server) uploadBrandAsset(w http.ResponseWriter, r *http.Request) {
 
 	storage := getenv("SYSTEM_IMAGE_PATH", "/data/system/images")
 	if err = os.MkdirAll(storage, 0755); err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片目录不可用"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌图片目录不可用"})
 		return
 	}
-	// Brand slots use stable, human-readable filenames. Replacement is atomic;
-	// users and user-resource cleanup never operate in this directory.
 	name := asset + ext
 	target := filepath.Join(storage, name)
 	tmp := target + ".uploading"
 	output, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片存储失败"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌图片存储失败"})
 		return
 	}
 	_, copyErr := io.Copy(output, file)
 	closeErr := output.Close()
 	if copyErr != nil || closeErr != nil {
 		_ = os.Remove(tmp)
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片存储失败"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌图片存储失败"})
 		return
 	}
 	if err = os.Rename(tmp, target); err != nil {
 		_ = os.Remove(tmp)
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片替换失败"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌图片替换失败"})
 		return
 	}
 
-	publicURL := "/system-images/" + name
+	publicURL := "/assets/images/" + name
 	old, _, _ := s.settings.Get(r.Context(), settingKey)
 	if err = s.settings.Set(r.Context(), settingKey, publicURL, false); err != nil {
 		_ = os.Remove(target)
@@ -294,17 +292,18 @@ func validateImage(file multipart.File, header *multipart.FileHeader) (string, s
 	return mimeType, ext, nil
 }
 
-func removeOldBrandAsset(systemStorage, legacyUploadStorage, oldPublicURL, keepPublicURL string) {
+func removeOldBrandAsset(brandStorage, uploadStorage, oldPublicURL, keepPublicURL string) {
 	if oldPublicURL == "" || oldPublicURL == keepPublicURL {
 		return
 	}
 	var storage, prefix string
 	switch {
+	case strings.HasPrefix(oldPublicURL, "/assets/images/"):
+		storage, prefix = brandStorage, "/assets/images/"
 	case strings.HasPrefix(oldPublicURL, "/system-images/"):
-		storage, prefix = systemStorage, "/system-images/"
+		storage, prefix = brandStorage, "/system-images/"
 	case strings.HasPrefix(oldPublicURL, "/uploads/"):
-		// RC11 compatibility cleanup only. New system images are never written here.
-		storage, prefix = legacyUploadStorage, "/uploads/"
+		storage, prefix = uploadStorage, "/uploads/"
 	default:
 		return
 	}
@@ -380,7 +379,7 @@ func validateLinkSettings(values map[string]any) error {
 			if char > 127 || strings.ContainsRune(" /?#", char) {
 				return fmt.Errorf("短码字符集只能使用安全 ASCII 字符")
 			}
-	}
+		}
 	}
 	return nil
 }

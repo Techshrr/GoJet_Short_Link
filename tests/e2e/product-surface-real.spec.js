@@ -60,9 +60,11 @@ test.describe.serial('real product surface',()=>{
     const chooser=await chooserPromise;
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR42mNk+M/wHwMDAwMjIACmBgB9ewQ/u2+z0AAAAABJRU5ErkJggg==','base64');
     await chooser.setFiles({name:'gojet-logo.png',mimeType:'image/png',buffer:png});
-    await expect(page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img')).toBeVisible();
-    await expect.poll(async()=>page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img').evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
-    const response=await request.get(base+'/system-images/logo.png');
+    const preview=page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img');
+    await expect(preview).toBeVisible();
+    await expect.poll(async()=>preview.evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
+    expect(await preview.getAttribute('src')).toBe('/assets/images/logo.png');
+    const response=await request.get(base+'/assets/images/logo.png');
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']||'').toContain('image/png');
   });

@@ -11,7 +11,7 @@ services:
       - ../frontend/user-console:/usr/share/nginx/html/app:ro
       - ../frontend/admin-console:/usr/share/nginx/html/admin:ro
       - ../frontend/marketing-site:/usr/share/nginx/html/site:ro
-      - ./data/system/images:/usr/share/nginx/html/system-images:ro
+      - ./data/system/images:/usr/share/nginx/html/assets/images:ro
       - ./data/generated/qr:/usr/share/nginx/html/generated/qr:ro
       - ./data/uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
