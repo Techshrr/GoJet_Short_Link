@@ -2,7 +2,8 @@
 set -euo pipefail
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 DEST=${PDF_FONT_DIR:-$ROOT/resources/fonts}
-FONT="$DEST/NotoSansSC-VF.ttf"
+VARIABLE_FONT="$DEST/NotoSansSC-VF.ttf"
+REGULAR_FONT="$DEST/NotoSansSC-Regular.ttf"
 LICENSE="$DEST/OFL.txt"
 NOTO_COMMIT='f8d157532fbfaeda587e826d4cd5b21a49186f7c'
 FONT_BLOB='5371a543be5fc670c7cdee9760c03554ee3e9b8e'
@@ -11,9 +12,13 @@ FONT_SIZE='17773132'
 FONT_URL="https://raw.githubusercontent.com/notofonts/noto-cjk/$NOTO_COMMIT/Sans/Variable/TTF/Subset/NotoSansSC-VF.ttf"
 LICENSE_URL="https://raw.githubusercontent.com/notofonts/noto-cjk/$NOTO_COMMIT/Sans/LICENSE"
 
-for tool in curl git stat; do
+for tool in curl git stat python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required to prepare PDF fonts" >&2; exit 1; }
 done
+python3 - <<'PY' >/dev/null 2>&1 || { echo 'Python FontTools is required to build the static PDF font' >&2; exit 1; }
+from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
+PY
 mkdir -p "$DEST"
 
 verify_blob(){
@@ -35,10 +40,40 @@ download_verified(){
   mv -f "$tmp" "$target"
 }
 
-download_verified "$FONT_URL" "$FONT" "$FONT_BLOB" 'Noto Sans SC font'
-[[ "$(stat -c %s "$FONT")" == "$FONT_SIZE" ]] || { echo "unexpected Noto Sans SC font size" >&2; exit 1; }
+download_verified "$FONT_URL" "$VARIABLE_FONT" "$FONT_BLOB" 'Noto Sans SC variable font'
+[[ "$(stat -c %s "$VARIABLE_FONT")" == "$FONT_SIZE" ]] || { echo "unexpected Noto Sans SC font size" >&2; exit 1; }
 # TrueType/OpenType sfnt magic: 00 01 00 00 or 'true'. This pinned file uses 00 01 00 00.
-[[ "$(od -An -tx1 -N4 "$FONT" | tr -d ' \n')" == '00010000' ]] || { echo 'downloaded PDF font is not a TrueType sfnt file' >&2; exit 1; }
+[[ "$(od -An -tx1 -N4 "$VARIABLE_FONT" | tr -d ' \n')" == '00010000' ]] || { echo 'downloaded PDF font is not a TrueType sfnt file' >&2; exit 1; }
 download_verified "$LICENSE_URL" "$LICENSE" "$LICENSE_BLOB" 'Noto Sans CJK license'
-chmod 0644 "$FONT" "$LICENSE"
-printf 'PDF font resources ready: %s\n' "$FONT"
+
+# gopdf expects a concrete font face for a concrete weight. It does not select
+# an OpenType variable-font wght axis when SetFont is called. Freeze every axis
+# at its default value except wght=400 so the shipped runtime font is a true
+# static Regular TTF with deterministic CJK/Latin stroke weight.
+python3 - "$VARIABLE_FONT" "$REGULAR_FONT" <<'PY'
+import os
+import sys
+from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
+
+source, target = sys.argv[1:3]
+font = TTFont(source, recalcTimestamp=False)
+if "fvar" not in font:
+    raise SystemExit("pinned source font is unexpectedly not variable")
+axes = {axis.axisTag: axis.defaultValue for axis in font["fvar"].axes}
+if "wght" not in axes:
+    raise SystemExit("pinned source font does not expose a wght axis")
+axes["wght"] = 400
+instantiateVariableFont(font, axes, inplace=True, optimize=True)
+font.recalcTimestamp = False
+font.save(target, reorderTables=False)
+check = TTFont(target, lazy=True)
+if "fvar" in check:
+    raise SystemExit("generated PDF font is still variable")
+if os.path.getsize(target) < 1_000_000:
+    raise SystemExit("generated static PDF font is unexpectedly small")
+PY
+
+[[ "$(od -An -tx1 -N4 "$REGULAR_FONT" | tr -d ' \n')" == '00010000' ]] || { echo 'generated PDF font is not a TrueType sfnt file' >&2; exit 1; }
+chmod 0644 "$VARIABLE_FONT" "$REGULAR_FONT" "$LICENSE"
+printf 'PDF font resources ready: %s (static Regular derived from pinned %s)\n' "$REGULAR_FONT" "$VARIABLE_FONT"
