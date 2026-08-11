@@ -15,21 +15,7 @@ expect 200 "$(req PUT /api/admin/settings/privacy '{"analytics.enabled":true,"an
 expect 200 "$(req PUT /api/admin/settings/runtime '{"api.enabled":true,"cache.enabled":true,"cache.default_ttl_seconds":300}' "$admin")" save-runtime >/dev/null
 
 all=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback)
-printf '%s' "$all" | python3 - <<'PY'
-import json,sys
-d=json.load(sys.stdin)
-assert d['basic']['site.name']=='GoJet'
-assert d['basic']['site.support_email']=='support@example.test'
-assert d['seo']['seo.sitemap'] is True
-assert d['seo']['seo.verification']=='acceptance-token'
-assert d['registration']['registration.password_min_length']==12
-assert d['registration']['registration.login_rate_limit']==10
-assert d['links']['links.code_length']==7
-assert d['links']['links.default_redirect_status']==302
-assert d['privacy']['analytics.retention_days']==90
-assert d['privacy']['analytics.record_full_referer'] is False
-assert d['runtime']['cache.default_ttl_seconds']==300
-PY
+printf '%s' "$all" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['basic']['site.name']=='GoJet'; assert d['basic']['site.support_email']=='support@example.test'; assert d['seo']['seo.sitemap'] is True; assert d['seo']['seo.verification']=='acceptance-token'; assert d['registration']['registration.password_min_length']==12; assert d['registration']['registration.login_rate_limit']==10; assert d['links']['links.code_length']==7; assert d['links']['links.default_redirect_status']==302; assert d['privacy']['analytics.retention_days']==90; assert d['privacy']['analytics.record_full_referer'] is False; assert d['runtime']['cache.default_ttl_seconds']==300"
 
 # A valid key submitted through an older/stale UI section must be canonicalized
 # instead of falsely rejected; an actually unknown key must still be denied.
