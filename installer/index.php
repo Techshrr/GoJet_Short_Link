@@ -66,17 +66,15 @@ function redisCheck(int $port, string $password): array {
 }
 function clamavCheck(): array {
     global $state;
-    $socketPath = '/run/clamav/clamd.ctl';
-    if (is_file($state . '/clamav.ready') && file_exists($socketPath)) return [true, 'ClamAV Unix Socket 已由 Root 准备程序验证'];
-    if (!file_exists($socketPath)) return [false, '未检测到 ClamAV；文件分享安装后暂不可用'];
-    $errno = 0; $errstr = '';
-    $socket = @stream_socket_client('unix://' . $socketPath, $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
-    if (!$socket) return [false, 'ClamAV Socket 存在但当前不可连接'];
-    fwrite($socket, "PING\n");
-    stream_set_timeout($socket, 2);
-    $reply = fgets($socket);
-    fclose($socket);
-    return [is_string($reply) && str_contains($reply, 'PONG'), 'ClamAV 未返回 PONG'];
+    // Root-owned install.sh is the trust boundary for ClamAV discovery. It only
+    // writes this marker after checking both the real Unix socket type and the
+    // active clamav-daemon.service. PHP-FPM must not probe /run directly because
+    // aaPanel open_basedir intentionally blocks that path.
+    $readyFile = $state . '/clamav.ready';
+    if (!is_file($readyFile)) return [false, '未检测到可用的 ClamAV；文件分享安装后暂不可用'];
+    $endpoint = trim((string)@file_get_contents($readyFile));
+    if ($endpoint !== 'unix:///run/clamav/clamd.ctl') return [false, 'ClamAV Root 验证标记无效，请重新运行安装准备程序'];
+    return [true, 'ClamAV Unix Socket 已由 Root 安装准备程序验证'];
 }
 function writeRequest(string $state, array $values): bool {
     $allowed = ['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_PORT','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL'];
@@ -93,8 +91,12 @@ function writeRequest(string $state, array $values): bool {
 $checks = [
     'bootstrap' => [is_file($state . '/bootstrap.ready'), 'Root 安装准备程序'],
     'php' => [version_compare(PHP_VERSION, '8.3.0', '>='), 'PHP 8.3+（当前 ' . PHP_VERSION . '）'],
-    'pdo' => [extension_loaded('pdo_mysql'), 'PDO MySQL 扩展'],
-    'openssl' => [extension_loaded('openssl'), 'OpenSSL 扩展'],
+    'pdo' => [extension_loaded('pdo_mysql'), 'PHP 扩展：PDO MySQL'],
+    'openssl' => [extension_loaded('openssl'), 'PHP 扩展：OpenSSL'],
+    'session' => [extension_loaded('session'), 'PHP 扩展：Session'],
+    'filter' => [extension_loaded('filter'), 'PHP 扩展：Filter'],
+    'json' => [extension_loaded('json'), 'PHP 扩展：JSON'],
+    'hash' => [extension_loaded('hash'), 'PHP 扩展：Hash'],
     'arch' => [PHP_INT_SIZE === 8, '64 位 PHP'],
     'binaries' => [count(array_filter(['redirect-engine','analytics-worker','analytics-reconciler','platform-api','mail-worker','file-worker','operations-monitor','log-receiver'], fn($b) => is_executable($root . '/bin/' . $b))) === 8, '8 个 GoJet Linux 服务程序'],
     'state' => [is_dir($state) && is_writable($state), '安装状态目录可写'],
