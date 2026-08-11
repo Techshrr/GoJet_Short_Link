@@ -11,8 +11,10 @@ Candidate policy:
 - consume the exact verified RC12 Package artifact; do not rebuild production binaries
 - allow only the RC12 Candidate workflow and this trigger after the Package-tested SHA
 - apply packaged migrations to independent fresh databases
+- verify registered settings such as seo.sitemap by real packaged-runtime save/readback, not by requiring seed rows
 - execute settings, QR, protected files, isolated system images, branded SMTP/mail lifecycle, billing conflict and USD FX freeze against packaged runtime binaries
 - execute support tickets, central Turnstile secret boundary, public abuse intake and authentication policy
 - upload the exact same RC12 production ZIP plus candidate evidence only if every gate passes
 
+Retry: 2
 Triggered: 2026-08-11 Asia/Singapore
