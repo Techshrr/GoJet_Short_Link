@@ -8,10 +8,12 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 TARGET="$STAGE/$NAME"
 
-for tool in go zip sha256sum sed python3; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+for tool in go zip sha256sum sed python3 curl git; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+"$ROOT/scripts/prepare-pdf-fonts.sh"
 mkdir -p "$TARGET/app" "$TARGET/bin" "$TARGET/frontend" "$TARGET/installer" "$TARGET/services" \
   "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/scripts" "$TARGET/docs" \
-  "$TARGET/public" "$TARGET/public/assets" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer"
+  "$TARGET/public" "$TARGET/public/assets" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer" \
+  "$TARGET/resources/fonts"
 
 build() { (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$TARGET/bin/$1" "$2"); }
 build redirect-engine ./services/redirect-engine/cmd/server
@@ -23,9 +25,6 @@ build file-worker ./services/platform-api/cmd/file-worker
 build operations-monitor ./services/platform-api/cmd/operations-monitor
 build log-receiver ./services/log-receiver/cmd/server
 
-# Production marketing pages are regenerated from canonical source before they
-# enter the archive. This prevents stale engineering copy, old navigation or an
-# older visual shell from leaking into a release package.
 python3 "$ROOT/scripts/rebuild-public-product-pages.py"
 python3 "$ROOT/scripts/rebuild-marketing-pages.py"
 
@@ -34,6 +33,8 @@ cp -R "$ROOT/frontend/." "$TARGET/frontend/"
 cp -R "$ROOT/installer/." "$TARGET/installer/"
 cp -R "$ROOT/services/." "$TARGET/services/"
 cp -R "$ROOT/database/migrations/." "$TARGET/database/migrations/"
+cp "$ROOT/resources/fonts/NotoSansSC-VF.ttf" "$TARGET/resources/fonts/NotoSansSC-VF.ttf"
+cp "$ROOT/resources/fonts/OFL.txt" "$TARGET/resources/fonts/OFL.txt"
 
 cp -R "$ROOT/frontend/marketing-site/." "$TARGET/public/"
 cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
@@ -41,9 +42,6 @@ cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
 cp "$ROOT/frontend/shared/gojet-design-system.css" "$TARGET/public/assets/gojet-design-system.css"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 
-# Every local CSS/JavaScript URL in the production web root receives exactly
-# the release version. Existing development cache keys such as ?v=brand-2 are
-# replaced instead of being preserved, preventing stale CDN/browser assets.
 find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(\?[^'\"]*)?(['\"])#\1?v=$SAFE_VERSION\5#g" {} \;
 
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
@@ -71,6 +69,9 @@ chmod 0755 "$TARGET/install.sh" "$TARGET/install-host-nginx.sh" "$TARGET/install
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type f \( -name '*_test.go' -o -name '*_integration_test.go' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'test-results' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +
+
+test -s "$TARGET/resources/fonts/NotoSansSC-VF.ttf" || { echo 'PDF Unicode font missing from production package' >&2; exit 1; }
+test -s "$TARGET/resources/fonts/OFL.txt" || { echo 'PDF font license missing from production package' >&2; exit 1; }
 
 (cd "$TARGET" && find . -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256)
 mkdir -p "$ROOT/dist"

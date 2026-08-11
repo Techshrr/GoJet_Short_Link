@@ -51,6 +51,14 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Prepare pinned PDF font resources
+        run: |
+          set -euo pipefail
+          chmod 0755 scripts/prepare-pdf-fonts.sh
+          scripts/prepare-pdf-fonts.sh
+          go mod download
+          grep -E 'signintech/gopdf|phpdave11/gofpdi|pkg/errors' go.sum || true
+
       - name: Build canonical public pages
         run: |
           set -euo pipefail
@@ -95,7 +103,7 @@ jobs:
             QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-surface/uploads' \
             BRAND_ASSET_PATH='/tmp/gojet-surface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
-            FILE_STORAGE_PATH='/tmp/gojet-surface/files' \
+            FILE_STORAGE_PATH='/tmp/gojet-surface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSC-VF.ttf" \
             /tmp/gojet-surface/bin/platform-api >/tmp/gojet-surface/platform-api.log 2>&1 &
           echo $! >/tmp/gojet-surface/platform-api.pid
           env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' \
@@ -128,7 +136,6 @@ jobs:
             root /tmp/gojet-web;
             index index.html;
             client_max_body_size 110m;
-
             location ^~ /api/ { proxy_pass http://127.0.0.1:18090; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
             location ^~ /assets/images/ { alias /tmp/gojet-surface/brand/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
             location ^~ /generated/qr/ { alias /tmp/gojet-surface/generated/qr/; autoindex off; add_header Cache-Control 'public, max-age=60'; }

@@ -10,3 +10,5 @@ node_modules/
 test-results/
 playwright-report/
 dist/
+/resources/fonts/*.ttf
+/resources/fonts/OFL.txt

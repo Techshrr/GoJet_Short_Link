@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -41,13 +43,31 @@ func (s *server) invoicePDF(w http.ResponseWriter, r *http.Request) {
 		WorkspaceName: workspaceName, InvoiceNumber: number, Status: status, PlanName: planName, InvoiceType: invoiceType,
 		SourceAmount: formatMoney(sourceCurrency,sourceAmount), Amount: formatMoney(currency,amount), FXRate: "1 "+strings.ToUpper(sourceCurrency)+" = "+fxRate+" "+strings.ToUpper(currency), FXProvider: fxName, FXMarkup: strconv.Itoa(fxMarkup), FXQuotedAt: quotedText,
 		Period: fmt.Sprintf("%d 天",periodDays), CreatedAt: createdAt.Format("2006-01-02 15:04"), DueAt: dueAt.Format("2006-01-02 15:04"), PaidAt: paidText, PaymentMethod: method, PaymentReference: reference,
+		FontPath: strings.TrimSpace(os.Getenv("PDF_FONT_PATH")), LogoPath: s.invoiceBrandLogoPath(r.Context()),
 	}
-	pdf := billing.RenderInvoicePDF(data)
+	pdf, renderErr := billing.RenderInvoicePDF(data)
+	if renderErr != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "账单 PDF 资源不可用，请联系管理员", "code": "invoice_pdf_unavailable"})
+		return
+	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="GoJet-Invoice-`+safeInvoiceFilename(number)+`.pdf"`)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(pdf)))
 	_, _ = w.Write(pdf)
+}
+
+func (s *server) invoiceBrandLogoPath(ctx context.Context) string {
+	logoURL := strings.TrimSpace(s.stringSetting(ctx, "brand.logo_url", ""))
+	if !strings.HasPrefix(logoURL, "/assets/images/") { return "" }
+	name := strings.TrimPrefix(logoURL, "/assets/images/")
+	if name == "" || filepath.Base(name) != name { return "" }
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" { return "" }
+	root := strings.TrimSpace(os.Getenv("BRAND_ASSET_PATH")); if root == "" { root = "/data/brand" }
+	path := filepath.Join(root, name)
+	if info, err := os.Stat(path); err != nil || info.IsDir() { return "" }
+	return path
 }
 
 func (s *server) stringSetting(ctx context.Context, key, fallback string) string {
