@@ -40,6 +40,7 @@ jobs:
           for js in \
             frontend/admin-console/app.js \
             frontend/admin-console/admin-smtp-status.js \
+            frontend/admin-console/admin-mail-template-ui.js \
             frontend/admin-console/product-actions.js \
             frontend/admin-console/admin-hardening.js \
             frontend/admin-console/admin-settings-unified.js \
@@ -65,6 +66,11 @@ jobs:
             frontend/marketing-site/assets/announcements.js; do
             node --check "$js"
           done
+          python3 -m py_compile scripts/rebuild-public-product-pages.py scripts/rebuild-marketing-pages.py
+      - name: Generate canonical public pages
+        run: |
+          python3 scripts/rebuild-public-product-pages.py
+          python3 scripts/rebuild-marketing-pages.py
       - name: Fresh install runtime integrity policy
         run: |
           grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
@@ -101,14 +107,18 @@ jobs:
             frontend/user-console/billing-hardening.js \
             frontend/admin-console/admin-settings-unified.js \
             frontend/admin-console/admin-smtp-status.js \
+            frontend/admin-console/admin-mail-template-ui.js \
             frontend/admin-console/admin-brand-unified.css \
             frontend/marketing-site/assets/app.js \
+            frontend/marketing-site/assets/product-brand.css \
             frontend/marketing-site/privacy/index.html \
             frontend/marketing-site/terms/index.html \
             database/migrations/028_file_share_password.sql \
             database/migrations/029_payment_transactions.sql \
             database/migrations/030_fx_and_mail_lifecycle.sql \
             database/migrations/031_account_workspace_mail_events.sql \
+            database/migrations/034_mail_brand_fragments.sql \
+            services/platform-api/cmd/server/mail_templates.go \
             app/payments/service.go \
             app/billing/pdf.go \
             tests/integration/settings-roundtrip.sh \
@@ -137,6 +147,9 @@ jobs:
           check_text 'PayPal' frontend/admin-console/admin-settings-unified.js 'PayPal settings'
           check_text 'Stripe' frontend/admin-console/admin-settings-unified.js 'Stripe settings'
           check_text '发送中…' frontend/admin-console/admin-smtp-status.js 'SMTP in-flight state'
+          check_text '这里只编辑邮件内容区' frontend/admin-console/admin-mail-template-ui.js 'fragment-aware mail template editor'
+          check_text 'mailTemplateIsFragment' services/platform-api/cmd/server/mail_templates.go 'server-side mail fragment guard'
+          check_text 'support_ticket_reply' database/migrations/034_mail_brand_fragments.sql 'support ticket mail fragment'
           check_text 'USD — 美元' frontend/admin-console/billing-fx-settings.js 'canonical USD FX base'
           check_text 'seo.sitemap' tests/integration/settings-roundtrip.sh 'settings sitemap round trip'
           check_text '/privacy/' frontend/marketing-site/assets/app.js 'privacy navigation'
@@ -155,7 +168,7 @@ jobs:
           check_text 'Content-Type", "application/pdf' services/platform-api/cmd/server/billing_pdf.go 'invoice PDF response'
           check_text 'gojet_post_auth_path' frontend/marketing-site/assets/auth.js 'post-auth redirect'
           check_text 'redirect_status' app/links/json.go 'redirect status JSON'
-          if grep -R -n -E 'Fresh Install|真实业务接口|不是前端演示数据|analytics_events|RBAC 权限模型|V4 平台 API' frontend/marketing-site --include='*.html'; then
+          if grep -R -n -E 'Fresh Install|真实业务接口|不是前端演示数据|analytics_events|RBAC 权限模型|V4 平台 API|Redis Worker|file-worker' frontend/marketing-site --include='*.html'; then
             echo 'engineering/development copy leaked into public marketing HTML' >&2
             exit 1
           fi
