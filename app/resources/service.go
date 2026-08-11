@@ -46,7 +46,16 @@ func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL strin
 	if len(qrKey) > 0 {
 		key = qrKey[0]
 	}
-	return &Service{db: db, workspaces: w, uploadPath: uploadPath, filePath: filePath, files: objectstorage.Filesystem{Root: filePath}, publicURL: strings.TrimRight(publicURL, "/"), qrKey: key}
+	// The historical constructor parameter is named uploadPath, but generated QR
+	// images are system-generated resources and must not share the user-upload
+	// lifecycle. Native installs pass .../deploy/data/uploads, so derive a sibling
+	// generated/qr directory. Tests and custom callers that pass another directory
+	// keep their explicitly supplied path.
+	qrPath := filepath.Clean(uploadPath)
+	if filepath.Base(qrPath) == "uploads" {
+		qrPath = filepath.Join(filepath.Dir(qrPath), "generated", "qr")
+	}
+	return &Service{db: db, workspaces: w, uploadPath: qrPath, filePath: filePath, files: objectstorage.Filesystem{Root: filePath}, publicURL: strings.TrimRight(publicURL, "/"), qrKey: key}
 }
 
 func NewFileWorker(db *sql.DB, path string) *Service {
@@ -280,7 +289,7 @@ func (s *Service) CreateQR(ctx context.Context, user, wid, linkID int64, name, f
 	if err = qr.WriteFile(size, path); err != nil {
 		return QRCode{}, err
 	}
-	url := "/uploads/" + filename
+	url := "/generated/qr/" + filename
 	result, err := s.db.ExecContext(ctx, `INSERT INTO qr_codes(workspace_id,created_by,link_id,name,image_url,foreground,background,size) VALUES(?,?,?,?,?,?,?,?)`, wid, user, linkID, name, url, foreground, background, size)
 	if err != nil {
 		_ = os.Remove(path)
