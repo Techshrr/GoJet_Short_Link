@@ -17,6 +17,13 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+      - name: Generate canonical public marketing pages
+        run: |
+          python3 scripts/rebuild-public-product-pages.py
+          python3 scripts/rebuild-marketing-pages.py
+          ! grep -R -n -E 'Fresh Install|GoJet V4|不是静态演示数据|真实业务接口|Redis Worker|file-worker' frontend/marketing-site/products frontend/marketing-site/pricing frontend/marketing-site/about frontend/marketing-site/contact frontend/marketing-site/resources frontend/marketing-site/solutions
+          test -f frontend/marketing-site/privacy/index.html
+          test -f frontend/marketing-site/terms/index.html
       - name: Start browser acceptance harness
         run: |
           python3 tests/e2e/rebuild_server.py >/tmp/gojet-rebuild-browser.log 2>&1 &
