@@ -23,10 +23,11 @@ build file-worker ./services/platform-api/cmd/file-worker
 build operations-monitor ./services/platform-api/cmd/operations-monitor
 build log-receiver ./services/log-receiver/cmd/server
 
-# Public product and pricing pages are generated from the canonical product
-# source at release time. This prevents stale engineering copy or an older
-# navigation/footer snapshot from leaking into a production archive.
+# Production marketing pages are regenerated from canonical source before they
+# enter the archive. This prevents stale engineering copy, old navigation or an
+# older visual shell from leaking into a release package.
 python3 "$ROOT/scripts/rebuild-public-product-pages.py"
+python3 "$ROOT/scripts/rebuild-marketing-pages.py"
 
 cp -R "$ROOT/app/." "$TARGET/app/"
 cp -R "$ROOT/frontend/." "$TARGET/frontend/"
