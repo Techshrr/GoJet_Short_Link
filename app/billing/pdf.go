@@ -71,7 +71,10 @@ func RenderInvoicePDF(data InvoicePDFData) ([]byte, error) {
 	invoiceType := invoiceTypeLabel(data.InvoiceType)
 	brand := parseHexRGB(data.BrandColor)
 	ink := rgb{18, 28, 24}
-	muted := rgb{96, 108, 103}
+	// PDF text must stay legible after rasterisation, browser zoom and printing.
+	// The previous secondary gray was visually elegant on-screen but too light
+	// for small CJK strokes in invoice detail and footer copy.
+	muted := rgb{52, 64, 59}
 	border := rgb{220, 226, 223}
 	panel := mixWithWhite(brand, 0.075)
 	soft := rgb{247, 249, 248}
@@ -125,13 +128,13 @@ func RenderInvoicePDF(data InvoicePDFData) ([]byte, error) {
 	// Item table.
 	writer.fill(46, 316, 503, 34, panel)
 	for _, col := range []struct{x float64; label string}{{60,"套餐"},{245,"类型"},{355,"服务周期"}} {
-		if err := writer.text(col.x, 327, 9, muted, col.label); err != nil { return nil, err }
+		if err := writer.text(col.x, 327, 9.5, muted, col.label); err != nil { return nil, err }
 	}
-	if err := writer.textRight(535, 327, 9, muted, "结算金额"); err != nil { return nil, err }
-	if err := writer.textFit(60, 366, 11, ink, data.PlanName, 170); err != nil { return nil, err }
-	if err := writer.textFit(245, 366, 10, ink, invoiceType, 95); err != nil { return nil, err }
-	if err := writer.textFit(355, 366, 10, ink, data.Period, 90); err != nil { return nil, err }
-	if err := writer.textRight(535, 364, 11.5, ink, data.Amount); err != nil { return nil, err }
+	if err := writer.textRight(535, 327, 9.5, muted, "结算金额"); err != nil { return nil, err }
+	if err := writer.textFit(60, 366, 12, ink, data.PlanName, 170); err != nil { return nil, err }
+	if err := writer.textFit(245, 366, 11, ink, invoiceType, 95); err != nil { return nil, err }
+	if err := writer.textFit(355, 366, 11, ink, data.Period, 90); err != nil { return nil, err }
+	if err := writer.textRight(535, 364, 13, ink, data.Amount); err != nil { return nil, err }
 	writer.line(46, 398, 549, 398, border)
 
 	// Audit-friendly settlement metadata.
@@ -140,8 +143,8 @@ func RenderInvoicePDF(data InvoicePDFData) ([]byte, error) {
 		if err := writer.labelValue(46, y, "套餐计价", data.SourceAmount, 340, ink, muted); err != nil { return nil, err }; y += 22
 		if err := writer.labelValue(46, y, "锁定汇率", data.FXRate, 340, ink, muted); err != nil { return nil, err }
 		if strings.TrimSpace(data.FXProvider) != "" {
-			if err := writer.text(378, y, 8.5, muted, "来源"); err != nil { return nil, err }
-			if err := writer.textFit(415, y, 8.5, ink, data.FXProvider, 120); err != nil { return nil, err }
+			if err := writer.text(378, y, 9.5, muted, "来源"); err != nil { return nil, err }
+			if err := writer.textFit(415, y, 9.5, ink, data.FXProvider, 120); err != nil { return nil, err }
 		}
 		y += 22
 		if data.FXMarkup != "" && data.FXMarkup != "0" {
@@ -165,14 +168,14 @@ func RenderInvoicePDF(data InvoicePDFData) ([]byte, error) {
 	if summaryY < 575 { summaryY = 575 }
 	if summaryY > 650 { summaryY = 650 }
 	writer.fill(46, summaryY, 503, 88, panel)
-	if err := writer.text(64, summaryY+20, 9.5, muted, "最终结算金额"); err != nil { return nil, err }
+	if err := writer.text(64, summaryY+20, 10, muted, "最终结算金额"); err != nil { return nil, err }
 	if err := writer.text(64, summaryY+48, 23, ink, data.Amount); err != nil { return nil, err }
 	if err := writer.textRight(531, summaryY+52, 9, brand, status); err != nil { return nil, err }
 
 	footerY := 760.0
 	writer.line(46, footerY, 549, footerY, border)
-	if err := writer.text(46, footerY+20, 8.5, muted, "此账单由 "+data.SiteName+" 自动生成。金额与汇率以账单生成时保存的快照为准。"); err != nil { return nil, err }
-	if err := writer.text(46, footerY+40, 8, muted, data.CompanyName); err != nil { return nil, err }
+	if err := writer.text(46, footerY+20, 9.2, muted, "此账单由 "+data.SiteName+" 自动生成。金额与汇率以账单生成时保存的快照为准。"); err != nil { return nil, err }
+	if err := writer.text(46, footerY+40, 8.8, muted, data.CompanyName); err != nil { return nil, err }
 
 	output, err := pdf.GetBytesPdfReturnErr()
 	if err != nil { return nil, fmt.Errorf("finalize invoice PDF: %w", err) }
@@ -230,8 +233,8 @@ func (w invoicePDFWriter) textFit(x,y,size float64,color rgb,text string,maxWidt
 	return w.text(x,y,size,color,fitted)
 }
 func (w invoicePDFWriter) labelValue(x,y float64,label,value string,maxWidth float64,ink,muted rgb) error {
-	if err:=w.text(x,y,9,muted,label);err!=nil{return err}
-	return w.textFit(x+82,y,9,ink,value,maxWidth)
+	if err:=w.text(x,y,9.5,muted,label);err!=nil{return err}
+	return w.textFit(x+82,y,9.5,ink,value,maxWidth)
 }
 func (w invoicePDFWriter) fill(x,y,width,height float64,color rgb) {
 	w.pdf.SetFillColor(color.r,color.g,color.b)
