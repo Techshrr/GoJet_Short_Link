@@ -39,9 +39,11 @@ test.describe.serial('real product surface',()=>{
     await adminLogin(page);
     await page.getByRole('button',{name:'系统设置',exact:true}).click();
     await page.getByRole('button',{name:/注册与账户/}).click();
+    const pane=page.locator('[data-ah-pane="registration"]');
+    await expect(pane).toBeVisible();
     const requestPromise=page.waitForRequest(req=>req.method()==='PUT'&&req.url().endsWith('/api/admin/settings/registration'));
     const responsePromise=page.waitForResponse(res=>res.request().method()==='PUT'&&res.url().endsWith('/api/admin/settings/registration'));
-    await page.locator('[data-ah-pane="registration"] button[type="submit"]').click();
+    await pane.getByRole('button',{name:'保存设置',exact:true}).click();
     const req=await requestPromise;
     const payload=req.postDataJSON();
     for(const key of Object.keys(payload))expect(key.startsWith('registration.')).toBeTruthy();
