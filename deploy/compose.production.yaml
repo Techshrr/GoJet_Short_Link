@@ -11,6 +11,8 @@ services:
       - ../frontend/user-console:/usr/share/nginx/html/app:ro
       - ../frontend/admin-console:/usr/share/nginx/html/admin:ro
       - ../frontend/marketing-site:/usr/share/nginx/html/site:ro
+      - ./data/system/images:/usr/share/nginx/html/system-images:ro
+      - ./data/generated/qr:/usr/share/nginx/html/generated/qr:ro
       - ./data/uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
       redirect-engine:
@@ -105,6 +107,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       ANALYTICS_GROUP: gojet-mysql
       UPLOAD_STORAGE_PATH: /data/uploads
+      SYSTEM_IMAGE_PATH: /data/system/images
       FILE_STORAGE_PATH: /data/files
       FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-filesystem}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -118,6 +121,8 @@ services:
       LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
     volumes:
+      - ./data/system/images:/data/system/images
+      - ./data/generated/qr:/data/generated/qr
       - ./data/uploads:/data/uploads
       - ./data/files:/data/files
     healthcheck:
