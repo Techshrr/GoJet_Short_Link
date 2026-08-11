@@ -12,6 +12,15 @@ function setMailTestState(button,statusEl,state,message){
   }
 }
 
+// Keep the entry action concise and consistent with the modal submit action.
+// This wrapper runs after app.js and therefore survives every mail-page render.
+const originalRenderMail=renderMail;
+renderMail=async function(){
+  await originalRenderMail();
+  const entry=document.querySelector('#testSmtp');
+  if(entry)entry.textContent='发送测试';
+};
+
 // Replace the original modal handler with an explicit, duplicate-safe state
 // machine. The API call remains synchronous so the displayed result reflects
 // the real SMTP connection/authentication/send outcome.
