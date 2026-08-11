@@ -19,11 +19,15 @@ for path in \
   public/privacy/index.html \
   public/terms/index.html \
   public/assets/report-abuse.js \
+  public/assets/styles.css \
+  public/assets/app.js \
   public/assets/product-brand.css \
   public/app/support-hardening.js \
   public/admin/support-security.js \
   public/admin/admin-smtp-status.js \
   public/admin/admin-mail-template-ui.js \
+  deploy/compose.production.yaml \
+  scripts/lib.sh \
   database/migrations/032_support_tickets_and_turnstile.sql \
   database/migrations/033_abuse_report_public_url.sql \
   database/migrations/034_mail_brand_fragments.sql \
@@ -63,15 +67,27 @@ grep -Fq 'tickets.manage' "$ROOT/app/adminauth/support_permissions.go" || { echo
 grep -Fq 'createPublicAbuseReport' "$ROOT/services/platform-api/cmd/server/abuse_public.go" || { echo 'public abuse intake implementation is missing' >&2; exit 1; }
 
 # Public product/legal pages are part of the product contract. Production must
-# not fall back to engineering acceptance language or missing legal pages.
+# use the canonical customer-facing shell and never fall back to engineering copy.
 grep -Fq '隐私政策' "$ROOT/public/privacy/index.html" || { echo 'privacy page content is missing' >&2; exit 1; }
 grep -Fq '服务条款' "$ROOT/public/terms/index.html" || { echo 'terms page content is missing' >&2; exit 1; }
-grep -Fq 'product-brand.css' "$ROOT/public/products/url-shortener/index.html" || { echo 'product brand shell is not connected' >&2; exit 1; }
-if grep -R -n -E 'Fresh Install|GoJet V4|不是静态演示数据|真实业务接口|Redis Worker|file-worker' \
+grep -Fq '/assets/styles.css' "$ROOT/public/products/url-shortener/index.html" || { echo 'canonical product design system is not connected' >&2; exit 1; }
+grep -Fq '/assets/app.js' "$ROOT/public/products/url-shortener/index.html" || { echo 'canonical public shell controller is not connected' >&2; exit 1; }
+if grep -R -n -E 'Fresh Install|GoJet V4|不是静态演示数据|真实业务接口|Redis Worker|file-worker|analytics_events|RBAC 权限模型|V4 平台 API' \
   "$ROOT/public/products" "$ROOT/public/pricing" "$ROOT/public/about" "$ROOT/public/contact" "$ROOT/public/resources" "$ROOT/public/solutions"; then
   echo 'engineering acceptance copy leaked into public marketing pages' >&2
   exit 1
 fi
+
+# Docker production must preserve the same resource ownership boundaries as the
+# native/aaPanel deployment: brand images, generated QR images, user uploads and
+# protected file storage are independent lifecycles and mounts.
+grep -Fq 'SYSTEM_IMAGE_PATH: /data/system/images' "$ROOT/deploy/compose.production.yaml" || { echo 'Docker system image path is missing' >&2; exit 1; }
+grep -Fq './data/system/images:/data/system/images' "$ROOT/deploy/compose.production.yaml" || { echo 'Docker platform system-image persistence is missing' >&2; exit 1; }
+grep -Fq './data/generated/qr:/data/generated/qr' "$ROOT/deploy/compose.production.yaml" || { echo 'Docker generated-QR persistence is missing' >&2; exit 1; }
+grep -Fq './data/system/images:/usr/share/nginx/html/system-images:ro' "$ROOT/deploy/compose.production.yaml" || { echo 'Docker Nginx system-image mount is missing' >&2; exit 1; }
+grep -Fq './data/generated/qr:/usr/share/nginx/html/generated/qr:ro' "$ROOT/deploy/compose.production.yaml" || { echo 'Docker Nginx generated-QR mount is missing' >&2; exit 1; }
+grep -Fq 'deploy/data/system/images' "$ROOT/scripts/lib.sh" || { echo 'Docker storage bootstrap does not create system images' >&2; exit 1; }
+grep -Fq 'deploy/data/generated/qr' "$ROOT/scripts/lib.sh" || { echo 'Docker storage bootstrap does not create generated QR storage' >&2; exit 1; }
 
 # Production archives must contain runtime code but not the CI-only test fixtures.
 [ ! -e "$ROOT/services/platform-api/cmd/server/turnstile_test.go" ] || { echo 'Turnstile test source leaked into production package' >&2; exit 1; }
