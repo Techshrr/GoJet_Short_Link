@@ -1,0 +1,188 @@
+name: GoJet real product surface acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - 'rebuild/v4-rc12-real-install-fixes'
+
+concurrency:
+  group: gojet-real-product-surface-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-surface:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_surface
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install browser and runtime dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client nginx poppler-utils zbar-tools
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build canonical public pages
+        run: |
+          set -euo pipefail
+          python3 scripts/rebuild-public-product-pages.py
+          python3 scripts/rebuild-marketing-pages.py
+          node --check frontend/marketing-site/assets/app.js
+          node --check frontend/admin-console/admin-settings-unified.js
+          node --check tests/e2e/product-surface-real.spec.js
+          python3 -m py_compile tests/integration/assert-pdf-contrast.py
+
+      - name: Run source-level tests before starting product surface
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+
+      - name: Apply fresh schema and build exact runtime services
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          for f in database/migrations/*.sql; do mysql -h127.0.0.1 -P3306 -uroot gojet_surface < "$f"; done
+          mkdir -p /tmp/gojet-surface/{uploads,files,system/images,generated/qr,bin}
+          go build -o /tmp/gojet-surface/bin/platform-api ./services/platform-api/cmd/server
+          go build -o /tmp/gojet-surface/bin/redirect-engine ./services/redirect-engine/cmd/server
+          go build -o /tmp/gojet-surface/bin/analytics-worker ./services/analytics-worker/cmd/worker
+
+      - name: Start real backend and analytics services
+        run: |
+          set -euo pipefail
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='real-surface-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:4180' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-surface/uploads' \
+            SYSTEM_IMAGE_PATH='/tmp/gojet-surface/system/images' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
+            FILE_STORAGE_PATH='/tmp/gojet-surface/files' \
+            /tmp/gojet-surface/bin/platform-api >/tmp/gojet-surface/platform-api.log 2>&1 &
+          echo $! >/tmp/gojet-surface/platform-api.pid
+          env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' \
+            VISITOR_HASH_KEY='real-surface-visitor-key-2026' QR_TRACKING_KEY='real-surface-qr-key-2026' \
+            /tmp/gojet-surface/bin/redirect-engine >/tmp/gojet-surface/redirect-engine.log 2>&1 &
+          echo $! >/tmp/gojet-surface/redirect-engine.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojet-surface' ANALYTICS_CONSUMER='browser-surface' \
+            /tmp/gojet-surface/bin/analytics-worker >/tmp/gojet-surface/analytics-worker.log 2>&1 &
+          echo $! >/tmp/gojet-surface/analytics-worker.pid
+          for port in 18090 18080; do
+            for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done
+          done
+
+      - name: Serve exact frontend through Nginx with production storage namespaces
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gojet-web
+          mkdir -p /tmp/gojet-web/app /tmp/gojet-web/admin /tmp/gojet-web/assets
+          cp -a frontend/marketing-site/. /tmp/gojet-web/
+          cp -a frontend/user-console/. /tmp/gojet-web/app/
+          cp -a frontend/admin-console/. /tmp/gojet-web/admin/
+          cp frontend/shared/gojet-design-system.css /tmp/gojet-web/assets/gojet-design-system.css
+          cp frontend/shared/brand-runtime.js /tmp/gojet-web/assets/brand-runtime.js
+          sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
+          cat >/tmp/gojet-surface-nginx.conf <<'NGINX'
+          server {
+            listen 4180;
+            server_name 127.0.0.1 localhost;
+            root /tmp/gojet-web;
+            index index.html;
+            client_max_body_size 110m;
+
+            location ^~ /api/ { proxy_pass http://127.0.0.1:18090; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+            location ^~ /system-images/ { alias /tmp/gojet-surface/system/images/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
+            location ^~ /generated/qr/ { alias /tmp/gojet-surface/generated/qr/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
+            location = /app { return 302 /app/; }
+            location ^~ /app/ { try_files $uri $uri/ /app/index.html; }
+            location = /admin { return 302 /admin/; }
+            location ^~ /admin/ { try_files $uri $uri/ /admin/index.html; }
+            location / { try_files $uri $uri/ $uri/index.html @redirect; }
+            location @redirect { proxy_pass http://127.0.0.1:18080; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+          }
+          NGINX
+          sudo cp /tmp/gojet-surface-nginx.conf /etc/nginx/conf.d/gojet-surface.conf
+          sudo nginx -t
+          sudo nginx
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4180/ >/dev/null && break; sleep 1; test "$i" -lt 30; done
+
+      - name: Run real browser product-surface acceptance
+        env:
+          GOJET_SURFACE_BASE: http://127.0.0.1:4180
+        run: npx playwright test product-surface-real.spec.js --config=tests/e2e/playwright.real.config.js --project=chromium
+
+      - name: Run invoice PDF visual contrast acceptance
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_surface
+        run: |
+          bash tests/integration/invoice-pdf-render.sh
+          python3 tests/integration/assert-pdf-contrast.py /tmp/gojet-pdf-acceptance/invoice-pixels.ppm
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== platform-api ====='; cat /tmp/gojet-surface/platform-api.log 2>/dev/null || true
+          echo '===== redirect-engine ====='; cat /tmp/gojet-surface/redirect-engine.log 2>/dev/null || true
+          echo '===== analytics-worker ====='; cat /tmp/gojet-surface/analytics-worker.log 2>/dev/null || true
+          echo '===== nginx error ====='; sudo cat /var/log/nginx/error.log 2>/dev/null || true
+          find /tmp/gojet-surface -maxdepth 4 -type f -printf '%M %u:%g %p\n' 2>/dev/null | sort || true
+
+      - name: Upload browser and PDF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-real-product-surface-evidence
+          path: |
+            test-results/
+            /tmp/gojet-pdf-acceptance/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop runtime services
+        if: always()
+        run: |
+          sudo nginx -s stop 2>/dev/null || true
+          for name in platform-api redirect-engine analytics-worker; do
+            test ! -f "/tmp/gojet-surface/$name.pid" || kill "$(cat "/tmp/gojet-surface/$name.pid")" 2>/dev/null || true
+          done
