@@ -86,17 +86,18 @@ jobs:
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
+          QR_KEY='9c2f6b3a8d7e4f10b5a1c9d8e7f6a5b49c2f6b3a8d7e4f10b5a1c9d8e7f6a5b4'
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' \
             REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='real-surface-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:4180' \
+            QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-surface/uploads' \
             SYSTEM_IMAGE_PATH='/tmp/gojet-surface/system/images' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
             FILE_STORAGE_PATH='/tmp/gojet-surface/files' \
             /tmp/gojet-surface/bin/platform-api >/tmp/gojet-surface/platform-api.log 2>&1 &
           echo $! >/tmp/gojet-surface/platform-api.pid
           env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' \
-            VISITOR_HASH_KEY='real-surface-visitor-key-2026' QR_TRACKING_KEY='real-surface-qr-key-2026' \
+            VISITOR_HASH_KEY='real-surface-visitor-key-2026' QR_TRACKING_KEY="$QR_KEY" \
             /tmp/gojet-surface/bin/redirect-engine >/tmp/gojet-surface/redirect-engine.log 2>&1 &
           echo $! >/tmp/gojet-surface/redirect-engine.pid
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' \
