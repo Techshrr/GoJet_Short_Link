@@ -4,6 +4,14 @@ set -euo pipefail
 API_BASE=${GOJET_TEST_BASE:-http://127.0.0.1:18090}
 PUBLIC_BASE=${GOJET_PUBLIC_BASE:-http://127.0.0.1:18080}
 UPLOAD_ROOT=${UPLOAD_STORAGE_PATH:-/tmp/gojet/uploads}
+GENERATED_QR_ROOT=${GENERATED_QR_STORAGE_PATH:-}
+if [[ -z "$GENERATED_QR_ROOT" ]]; then
+  if [[ "$(basename "$UPLOAD_ROOT")" == "uploads" ]]; then
+    GENERATED_QR_ROOT="$(dirname "$UPLOAD_ROOT")/generated/qr"
+  else
+    GENERATED_QR_ROOT="$UPLOAD_ROOT"
+  fi
+fi
 MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
 MYSQL_PORT=${MYSQL_PORT:-3306}
 MYSQL_USER=${MYSQL_USER:-root}
@@ -35,8 +43,14 @@ link_id=$(mysqlq "SELECT id FROM short_links WHERE workspace_id=$wid AND code='$
 qr_body=$(expect 201 "$(req POST "/api/workspaces/$wid/qr-codes" "{\"link_id\":$link_id,\"name\":\"真实扫码验收\",\"foreground\":\"#0B1220\",\"background\":\"#FFFFFF\",\"size\":512}" "$token")" create-qr)
 qr_id=$(printf '%s' "$qr_body"|field "['id']")
 image_url=$(printf '%s' "$qr_body"|field "['image_url']")
-image_path="$UPLOAD_ROOT/${image_url#/uploads/}"
+[[ "$image_url" == /generated/qr/qr-*.png ]] || { echo "QR URL escaped generated namespace: $image_url" >&2; exit 1; }
+image_name=${image_url#/generated/qr/}
+[[ "$(basename "$image_name")" == "$image_name" ]] || { echo "unsafe QR image name: $image_name" >&2; exit 1; }
+image_path="$GENERATED_QR_ROOT/$image_name"
 [[ -s "$image_path" ]] || { echo "QR PNG missing: $image_path" >&2; exit 1; }
+
+# Ensure the generated QR did not leak back into the user-upload namespace.
+[[ ! -e "$UPLOAD_ROOT/$image_name" ]] || { echo "QR PNG leaked into user upload namespace: $UPLOAD_ROOT/$image_name" >&2; exit 1; }
 
 decoded=$(zbarimg --quiet --raw "$image_path" | tr -d '\r\n')
 [[ "$decoded" == "$PUBLIC_BASE/$code?"*'_gojet_qr='* ]] || { echo "decoded QR target unexpected: $decoded" >&2; exit 1; }
@@ -58,6 +72,6 @@ done
 [[ "$count" -ge 1 ]] || { echo 'QR visit was not persisted by analytics worker' >&2; exit 1; }
 
 list=$(expect 200 "$(req GET "/api/workspaces/$wid/qr-codes" '' "$token")" list-qr)
-printf '%s' "$list" | python3 -c "import json,sys; d=json.load(sys.stdin); item=next(x for x in d['data'] if int(x['id'])==$qr_id); assert int(item['qr_visits']) >= 1, item"
+printf '%s' "$list" | python3 -c "import json,sys; d=json.load(sys.stdin); item=next(x for x in d['data'] if int(x['id'])==$qr_id); assert int(item['qr_visits']) >= 1, item; assert item['image_url'].startswith('/generated/qr/'), item"
 
 printf 'GoJet real QR decode -> redirect -> qr_visits acceptance: PASS\n'

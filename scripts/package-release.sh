@@ -8,7 +8,7 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 TARGET="$STAGE/$NAME"
 
-for tool in go zip sha256sum sed; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+for tool in go zip sha256sum sed python3; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 mkdir -p "$TARGET/app" "$TARGET/bin" "$TARGET/frontend" "$TARGET/installer" "$TARGET/services" \
   "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/scripts" "$TARGET/docs" \
   "$TARGET/public" "$TARGET/public/assets" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer"
@@ -22,6 +22,12 @@ build mail-worker ./services/platform-api/cmd/mail-worker
 build file-worker ./services/platform-api/cmd/file-worker
 build operations-monitor ./services/platform-api/cmd/operations-monitor
 build log-receiver ./services/log-receiver/cmd/server
+
+# Production marketing pages are regenerated from canonical source before they
+# enter the archive. This prevents stale engineering copy, old navigation or an
+# older visual shell from leaking into a release package.
+python3 "$ROOT/scripts/rebuild-public-product-pages.py"
+python3 "$ROOT/scripts/rebuild-marketing-pages.py"
 
 cp -R "$ROOT/app/." "$TARGET/app/"
 cp -R "$ROOT/frontend/." "$TARGET/frontend/"

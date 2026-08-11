@@ -179,8 +179,18 @@ func (s *Service) DeleteQR(ctx context.Context, userID, workspaceID, id int64) e
 		return err
 	}
 	var originalPath, deletingPath string
-	if strings.HasPrefix(imageURL, "/uploads/qr-") {
+	switch {
+	case strings.HasPrefix(imageURL, "/generated/qr/qr-"):
 		originalPath = filepath.Join(s.uploadPath, filepath.Base(imageURL))
+	case strings.HasPrefix(imageURL, "/uploads/qr-"):
+		// RC11 compatibility: old QR files lived next to user uploads.
+		root := filepath.Dir(s.uploadPath)
+		if filepath.Base(root) == "generated" {
+			root = filepath.Dir(root)
+		}
+		originalPath = filepath.Join(root, "uploads", filepath.Base(imageURL))
+	}
+	if originalPath != "" {
 		deletingPath = originalPath + ".deleting"
 		if err = os.Rename(originalPath, deletingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err

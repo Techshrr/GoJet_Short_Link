@@ -71,7 +71,7 @@ jobs:
       - name: Build production services used by P0 acceptance
         run: |
           set -euo pipefail
-          mkdir -p /tmp/gojet/uploads /tmp/gojet/files
+          mkdir -p /tmp/gojet/uploads /tmp/gojet/files /tmp/gojet/system/images /tmp/gojet/generated/qr
           go build -o /tmp/gojet/platform-api ./services/platform-api/cmd/server
           go build -o /tmp/gojet/redirect-engine ./services/redirect-engine/cmd/server
           go build -o /tmp/gojet/analytics-worker ./services/analytics-worker/cmd/worker
@@ -97,6 +97,7 @@ jobs:
             PUBLIC_BASE_URL='http://127.0.0.1:18080' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
             UPLOAD_STORAGE_PATH='/tmp/gojet/uploads' \
+            SYSTEM_IMAGE_PATH='/tmp/gojet/system/images' \
             FILE_STORAGE_PATH='/tmp/gojet/files' \
             /tmp/gojet/platform-api >/tmp/gojet/platform-api.log 2>&1 &
           echo $! >/tmp/gojet/platform-api.pid
@@ -132,6 +133,8 @@ jobs:
           MYSQL_DATABASE: gojet_test
           REDIS_ADDRESS: 127.0.0.1:6379
           UPLOAD_STORAGE_PATH: /tmp/gojet/uploads
+          SYSTEM_IMAGE_PATH: /tmp/gojet/system/images
+          GENERATED_QR_STORAGE_PATH: /tmp/gojet/generated/qr
         run: bash tests/integration/product-rebuild-api.sh
       - name: Administrator permission boundary
         env: *integration-env
@@ -139,6 +142,9 @@ jobs:
       - name: Administrator link lifecycle
         env: *integration-env
         run: bash tests/integration/admin-link-lifecycle.sh
+      - name: Registered system settings round-trip
+        env: *integration-env
+        run: bash tests/integration/settings-roundtrip.sh
       - name: Real QR decode, redirect and qr_visits attribution
         env: *integration-env
         run: bash tests/integration/qr-real-e2e.sh

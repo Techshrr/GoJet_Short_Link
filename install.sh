@@ -27,7 +27,16 @@ command -v base64 >/dev/null 2>&1 || die "需要 base64"
 command -v curl >/dev/null 2>&1 || die "需要 curl"
 
 "$PHP" -r 'exit(version_compare(PHP_VERSION,"8.3.0",">=")?0:1);' || die "PHP 8.3 或更高版本才受支持"
-"$PHP" -r 'exit(extension_loaded("pdo_mysql")&&extension_loaded("openssl")?0:1);' || die "PHP 必须启用 pdo_mysql 与 openssl 扩展"
+REQUIRED_PHP_EXTENSIONS=(pdo_mysql openssl session filter json hash)
+missing_php_extensions=()
+for extension in "${REQUIRED_PHP_EXTENSIONS[@]}"; do
+  if ! "$PHP" -r 'exit(extension_loaded($argv[1])?0:1);' "$extension"; then
+    missing_php_extensions+=("$extension")
+  fi
+done
+if (( ${#missing_php_extensions[@]} > 0 )); then
+  die "PHP 缺少必需扩展：${missing_php_extensions[*]}"
+fi
 [[ -f "$ROOT/public/install/index.php" ]] || die "发布包缺少 public/install/index.php"
 for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
   [[ -x "$ROOT/bin/$binary" ]] || die "发布包缺少可执行文件 bin/$binary"

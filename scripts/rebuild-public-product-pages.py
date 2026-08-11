@@ -1,32 +1,40 @@
 #!/usr/bin/env python3
 from pathlib import Path
-from html import escape
-ROOT=Path(__file__).resolve().parents[1]/'frontend'/'marketing-site'
+import re
 
-PRODUCTS={
-'url-shortener':dict(label='URL SHORTENER',title='让每一条长链接，变成可管理的产品入口。',desc='创建品牌短链、自定义短码、访问密码、到期策略、UTM 参数和智能路由，并在同一工作区持续管理。',icon='↗',metrics=[('短码','/launch'),('跳转','302'),('状态','Active')],features=[('⌁','短码与域名','自定义短码、默认域名和自定义域名统一管理。'),('◷','生命周期','到期时间、点击上限和一次性访问控制链接生命周期。'),('⚿','访问保护','为敏感链接设置访问密码，降低链接被随意扩散的风险。'),('⇄','智能路由','按照设备、国家、语言或来源匹配不同目标地址。'),('A/B','A/B 分流','多个目标按权重分配，并让同一访客稳定命中同一版本。'),('◎','组织能力','文件夹、标签、Campaign 与批量操作让大量链接保持清晰。')],uses=('营销活动','产品发布','客服与运营','渠道追踪')),
-'analytics':dict(label='LINK ANALYTICS',title='看见链接背后的真实访问，而不只是一个点击数字。',desc='GoJet 将实时计数与持久化事件结合，帮助你理解点击、独立访客、来源、设备和浏览器表现。',icon='⌁',metrics=[('Clicks','24.8K'),('Visitors','8.4K'),('Bots','3.2%')],features=[('↗','点击趋势','按时间查看链接访问变化和近期事件。'),('◎','独立访客','基于隐私友好的访客窗口识别独立访问。'),('⌁','来源分析','查看 Referer、渠道和 Campaign 带来的访问。'),('▱','设备维度','拆分设备、浏览器和操作系统表现。'),('⚙','Bot 识别','识别自动化访问，并可在统计中排除 Bot。'),('⇄','可靠链路','Redis 实时事件、Worker 持久化与对账机制降低统计漂移。')],uses=('增长分析','渠道归因','内容运营','异常排查')),
-'qr-code':dict(label='QR CODES',title='把线上链接，带到每一个线下触点。',desc='为链接和 Campaign 生成二维码，让包装、展架、门店、资料和活动现场都拥有可追踪的数字入口。',icon='▦',metrics=[('类型','Dynamic'),('目标','Short Link'),('状态','Ready')],features=[('▦','动态二维码','二维码承载 GoJet 入口，后续可以调整目标内容。'),('↗','链接联动','与短链接、Campaign 和 Analytics 使用同一工作区。'),('⌁','访问分析','二维码访问最终进入统一统计体系。'),('◎','批量管理','按项目管理多个二维码，不依赖散落的图片文件。'),('⚙','生命周期','删除二维码资源时同步清理相关配置。'),('⇩','随时下载','生成后可在控制台查看和使用二维码资源。')],uses=('线下物料','包装标签','活动现场','门店导流')),
-'bio-pages':dict(label='LINK IN BIO',title='用一个页面，承载所有重要入口。',desc='创建简洁的 Link in Bio 页面，把社交账号、内容、产品、活动和其他链接放进统一的公开主页。',icon='◎',metrics=[('页面','1'),('入口','8'),('状态','Published')],features=[('◎','统一主页','一个公开地址聚合多个关键链接。'),('↗','链接组件','添加、排序和更新外部入口。'),('⌁','访问能力','主页本身可以作为 GoJet 公开资源访问。'),('▱','移动优先','页面结构优先适配手机访问场景。'),('⚙','工作区管理','与短链、文本、文件使用同一账户和工作区。'),('◷','持续更新','无需改变公开地址即可长期维护页面内容。')],uses=('创作者主页','社交媒体','个人品牌','活动导航')),
-'text-sharing':dict(label='TEXT SHARING',title='临时文本、说明和代码，也值得一个干净的分享地址。',desc='快速发布文本内容，通过独立地址分享，并在工作区里继续更新、查看和删除。',icon='¶',metrics=[('格式','Text'),('地址','/t/demo'),('状态','Public')],features=[('¶','快速发布','从控制台创建文本分享，不需要额外部署页面。'),('↗','独立地址','每份文本拥有独立公开访问入口。'),('◷','生命周期','随时更新或删除，不让过期内容长期失控。'),('⚿','统一权限','资源归属于工作区，延续现有成员权限。'),('◎','资源列表','集中查看和管理所有文本分享。'),('⌁','轻量交付','适合说明、代码片段、临时文档与活动内容。')],uses=('代码片段','临时说明','活动文本','团队交付')),
-'file-sharing':dict(label='FILE SHARING',title='文件可以快速分享，但安全状态必须先说清楚。',desc='文件上传后进入扫描队列，通过 ClamAV 安全检查后再作为公开分享资源使用；管理员可以查看扫描、隔离和恢复状态。',icon='⇩',metrics=[('Scan','Clean'),('Files','12'),('Queue','0')],features=[('⇩','文件分享','上传后生成工作区资源和公开分享入口。'),('⚿','ClamAV 扫描','原生部署可通过 Unix Socket 接入 clamd。'),('◷','隔离状态','扫描未完成或异常时，不会把文件假装成安全文件。'),('◎','管理员队列','管理员可查看扫描错误、重试和隔离资源。'),('⌁','下载统计','记录文件下载量和资源状态。'),('⚙','存储抽象','本地文件与对象存储沿用统一资源接口。')],uses=('文件交付','产品资料','临时下载','团队共享')),
-}
+ROOT = Path(__file__).resolve().parents[1] / 'frontend' / 'marketing-site'
+PRODUCTS = (
+    'url-shortener', 'qr-code', 'analytics', 'text-sharing', 'file-sharing',
+    'bio-pages', 'custom-domains', 'smart-links', 'ab-testing', 'qr-campaigns',
+)
+FORBIDDEN = re.compile(
+    r'Fresh Install|GoJet V4|不是静态演示数据|真实业务接口|Redis Worker|file-worker|'
+    r'analytics_events|RBAC 权限模型|V4 平台 API|后端业务闭环|可部署', re.I
+)
 
-def header(): return '''<header class="header"><div class="wrap nav"><a class="logo" href="/">GoJet<i>.</i></a><div class="nav-links"><a href="/#products">产品</a><a href="/products/analytics/">分析</a><a href="/pricing/">定价</a><a href="/docs/">文档</a></div><div class="nav-actions"><a class="btn" href="/login">登录</a><a class="btn dark" href="/register">免费开始</a></div></div></header>'''
-def footer(): return '''<footer class="footer"><div class="wrap"><div class="footer-grid"><div><a class="logo" href="/">GoJet<i>.</i></a><p>Short links, sharing and analytics in one workspace.</p></div><div><b>产品</b><a href="/products/url-shortener/">短链接</a><a href="/products/analytics/">访问分析</a><a href="/products/qr-code/">二维码</a></div><div><b>分享</b><a href="/products/bio-pages/">Link in Bio</a><a href="/products/text-sharing/">Text Sharing</a><a href="/products/file-sharing/">File Sharing</a></div><div><b>资源</b><a href="/pricing/">定价</a><a href="/docs/">文档</a><a href="/status/">状态</a></div><div><b>账户</b><a href="/login">登录</a><a href="/register">注册</a><a href="/forgot-password">找回密码</a></div></div><div class="legal"><span>© 2026 GoJet. All rights reserved.</span><span>Built for measurable links.</span></div></div></footer>'''
-def demo(p):
-    cards=''.join(f'<div><span>{escape(k)}</span><strong>{escape(v)}</strong></div>' for k,v in p['metrics'])
-    bars=''.join(f'<i style="height:{h}%"></i>' for h in [28,44,37,66,57,78,70,96,81,89])
-    return f'''<div class="product-demo"><div class="demo-bar"><i></i><i></i><i></i></div><div class="demo-canvas"><span class="demo-title">GOJET WORKSPACE</span><div class="demo-big">{escape(p['label'].title())}</div><div class="demo-row">{cards}</div><div class="mini-bars">{bars}</div></div></div>'''
-def product_page(slug,p):
-    features=''.join(f'<article class="feature-card"><em>{escape(i)}</em><h3>{escape(t)}</h3><p>{escape(d)}</p></article>' for i,t,d in p['features'])
-    workflow=''.join([f'<article><h3>{t}</h3><p>{d}</p></article>' for t,d in [('创建资源','从 GoJet 控制台进入对应产品，填写真正需要的业务信息。'),('持续管理','资源进入同一工作区，成员权限、状态和生命周期保持一致。'),('观察与优化','通过访问数据、状态和管理员能力持续运营，而不是创建后就失控。')]])
-    tags=''.join(f'<span>{escape(x)}</span>' for x in p['uses'])
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(p['label'].title())} — GoJet</title><meta name="description" content="{escape(p['desc'])}"><link rel="stylesheet" href="/assets/product.css"></head><body>{header()}<main><section class="product-hero"><div class="wrap product-hero-grid"><div><div class="crumb"><a href="/">GoJet</a> / Products / {escape(p['label'].title())}</div><span class="eyebrow">{escape(p['label'])}</span><h1>{escape(p['title'])}</h1><p>{escape(p['desc'])}</p><div class="hero-actions"><a class="btn blue" href="/register">免费开始</a><a class="btn" href="/login">进入控制台</a></div><div class="hero-note">一个账户 · 一个工作区 · 统一权限与数据</div></div>{demo(p)}</div></section><section class="value-strip"><div class="wrap"><div><b>真实业务接口</b><span>不是静态演示数据</span></div><div><b>工作区统一管理</b><span>资源、成员和权限集中</span></div><div><b>管理员可运营</b><span>后台拥有实际操作能力</span></div><div><b>Fresh Install</b><span>V4 产品重构基线</span></div></div></section><section class="section"><div class="wrap"><div class="section-head"><small>CAPABILITIES</small><h2>功能要落在真实工作流里。</h2><p>GoJet V4 的产品页面只展示已经进入系统能力范围的功能，不用“即将支持”包装空页面。</p></div><div class="feature-grid">{features}</div></div></section><section class="section soft"><div class="wrap"><div class="section-head"><small>WORKFLOW</small><h2>从创建，到管理，再到运营。</h2></div><div class="workflow">{workflow}</div></div></section><section class="section"><div class="wrap use-grid"><article class="use-card"><h3>适合真正需要持续维护的入口。</h3><p>资源不会散落在临时脚本、单独页面和不同账户里，而是进入 GoJet 的统一控制面。</p><div class="tag-list">{tags}</div></article><article class="use-card light"><h3>从免费账户开始。</h3><p>注册后进入工作区创建资源；如果管理员要求邮箱验证，完成验证后再进入控制台。</p><div class="hero-actions"><a class="btn dark" href="/register">创建账户</a></div></article></div></section><section class="cta"><div class="wrap"><div class="cta-box"><h2>把下一次分享交给 GoJet。</h2><p>短链、分享、二维码和访问分析，放进同一个工作区。</p><a class="btn" href="/register">免费开始</a></div></div></section></main>{footer()}</body></html>'''
 
-for slug,p in PRODUCTS.items():
-    d=ROOT/'products'/slug; d.mkdir(parents=True,exist_ok=True); (d/'index.html').write_text(product_page(slug,p))
+def require_product_page(slug: str) -> None:
+    path = ROOT / 'products' / slug / 'index.html'
+    if not path.is_file():
+        raise SystemExit(f'missing canonical product page: {path}')
+    html = path.read_text(encoding='utf-8')
+    required = ('/assets/styles.css', '/assets/app.js', 'siteHeader')
+    for marker in required:
+        if marker not in html:
+            raise SystemExit(f'product page {slug} is not using the canonical public shell: missing {marker}')
+    if 'product.css' in html or 'product-brand.css' in html:
+        raise SystemExit(f'product page {slug} returned to a secondary product-only design system')
+    match = FORBIDDEN.search(html)
+    if match:
+        raise SystemExit(f'engineering copy leaked into {slug}: {match.group(0)}')
 
-pricing='''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>定价 — GoJet</title><meta name="description" content="GoJet 套餐与工作区配额。"><link rel="stylesheet" href="/assets/product.css"></head><body>'''+header()+'''<main><section class="pricing-hero"><div class="wrap"><span class="eyebrow">PRICING</span><h1>从轻量使用，到完整工作区。</h1><p>最终价格与配额由站点管理员在 GoJet 后台套餐管理中维护。</p></div></section><section><div class="wrap pricing-grid"><article class="price-card"><small>STARTER</small><h2>Starter</h2><div class="price">Free <span>/ 入门</span></div><ul><li>短链接基础能力</li><li>文本与二维码资源</li><li>基础访问分析</li><li>个人工作区</li></ul><a class="btn" href="/register">免费开始</a></article><article class="price-card featured"><small>PRO</small><h2>Pro</h2><div class="price">Flexible <span>/ 按站点配置</span></div><ul><li>更高资源配额</li><li>完整 Analytics</li><li>文件与 Bio 资源</li><li>自定义域名</li></ul><a class="btn" href="/register">创建账户</a></article><article class="price-card"><small>TEAM</small><h2>Team</h2><div class="price">Custom <span>/ 团队</span></div><ul><li>团队工作区</li><li>成员角色与权限</li><li>更高存储与资源配额</li><li>运营与审计能力</li></ul><a class="btn" href="/contact/">联系站点</a></article></div></section></main>'''+footer()+'''</body></html>'''
-(ROOT/'pricing').mkdir(exist_ok=True);(ROOT/'pricing'/'index.html').write_text(pricing)
-print('rebuilt',len(PRODUCTS),'core product pages and pricing')
+
+for slug in PRODUCTS:
+    require_product_page(slug)
+
+# Pricing is generated because prices and billing presentation evolve with the
+# product, but it uses the exact same public shell as the committed product pages.
+pricing = '''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="GoJet 套餐覆盖个人使用、专业增长与团队协作；实际价格与配额以当前站点账户页面为准。"><title>套餐价格 · GoJet</title><link rel="stylesheet" href="/assets/styles.css?v=rc12"></head><body><header class="siteHeader"><div class="container nav"><a class="logo" href="/">GoJet<i>.</i></a></div></header><main><section class="hero"><div class="container"><span class="eyebrow">套餐价格</span><h1>从个人使用，到团队协作</h1><p>先从适合当前规模的套餐开始。实际价格、币种、资源配额和可用支付方式以登录后的账户页面与正式账单为准。</p><div class="actions"><a class="btn primary" href="/register">免费开始</a><a class="btn" href="/login">登录账户</a></div></div></section><section class="section"><div class="container"><div class="pricing"><article class="price"><span class="eyebrow">FREE</span><h3>Free</h3><b>适合个人试用与轻量分享</b><p>短链接、二维码和基础分享能力，适合先体验完整工作流程。</p><a class="btn" href="/register">免费开始</a></article><article class="price featured"><span class="eyebrow">PRO</span><h3>Pro</h3><b>适合持续运营和专业使用</b><p>更高资源配额、更多分析与品牌能力。具体价格以账户页面为准。</p><a class="btn primary" href="/register">创建账户</a></article><article class="price"><span class="eyebrow">BUSINESS</span><h3>Business</h3><b>适合多人团队与业务协作</b><p>面向团队工作区、成员管理和更高业务规模。具体方案以账户页面为准。</p><a class="btn" href="/contact/">了解更多</a></article></div></div></section><section class="section alt"><div class="container split"><div><span class="eyebrow">账单与汇率</span><h2>下单前确认实际币种和金额</h2><p>GoJet 统一以 USD 作为汇率基准。需要跨币种结算时，账单创建时会记录对应的结算金额和有效汇率，之后的参考汇率变化不会修改已经生成的账单。</p></div><div class="uiPanel"><header><b>账单信息</b><small>创建时确认</small></header><div class="row"><b>套餐</b><small>当前选择</small><small>明确</small></div><div class="row"><b>结算币种</b><small>账单显示</small><small>明确</small></div><div class="row"><b>应付金额</b><small>账单固定</small><small>明确</small></div></div></div></section><section class="cta"><div class="container"><div class="ctaBox"><h2>先创建账户，再选择适合的套餐</h2><p>账户页面会展示当前可用价格、配额和支付方式。</p><div class="actions" style="justify-content:center"><a class="btn" href="/register">免费开始</a></div></div></div></section></main><footer><div class="container"><a class="logo" href="/">GoJet<i>.</i></a></div></footer><script src="/assets/app.js?v=rc12"></script></body></html>'''
+pricing_path = ROOT / 'pricing' / 'index.html'
+pricing_path.parent.mkdir(parents=True, exist_ok=True)
+pricing_path.write_text(pricing, encoding='utf-8')

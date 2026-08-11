@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -54,10 +53,18 @@ var brandAssets = map[string]string{
 	"share-image": "brand.share_image_url", "login-image": "brand.login_image_url", "mail-logo": "brand.mail_logo_url",
 }
 
+func canonicalSettingSection(key string) (string, bool) {
+	for section, keys := range settingSections {
+		if keys[key] {
+			return section, true
+		}
+	}
+	return "", false
+}
+
 func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
-	section := r.PathValue("section")
-	allowed, ok := settingSections[section]
-	if !ok {
+	requestedSection := r.PathValue("section")
+	if _, ok := settingSections[requestedSection]; !ok {
 		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "未知设置分组"})
 		return
 	}
@@ -65,27 +72,39 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &values) != nil {
 		return
 	}
-	for key := range values {
-		if !allowed[key] {
+
+	// The setting key registry is the source of truth. The URL section is a UI
+	// grouping hint only. This prevents a stale/cached admin bundle from rejecting
+	// an otherwise valid setting merely because a field moved between tabs, while
+	// still rejecting every unregistered key.
+	canonicalGroups := map[string]map[string]any{}
+	for key, value := range values {
+		section, ok := canonicalSettingSection(key)
+		if !ok {
 			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "不允许的设置项: " + key})
 			return
 		}
+		if canonicalGroups[section] == nil {
+			canonicalGroups[section] = map[string]any{}
+		}
+		canonicalGroups[section][key] = value
 	}
-	if section == "registration" && truthy(values["registration.require_email_verification"]) {
+
+	if registration := canonicalGroups["registration"]; truthy(registration["registration.require_email_verification"]) {
 		var status string
 		if err := s.db.QueryRowContext(r.Context(), `SELECT status FROM mail_health WHERE singleton_id=1`).Scan(&status); err != nil || status != "connected" {
 			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "SMTP 测试邮件成功前不能开启强制邮箱验证"})
 			return
 		}
 	}
-	if section == "links" {
-		if err := validateLinkSettings(values); err != nil {
+	if links := canonicalGroups["links"]; links != nil {
+		if err := validateLinkSettings(links); err != nil {
 			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
 		}
 	}
-	if section == "runtime" {
-		if err := validateRuntimeSettings(values); err != nil {
+	if runtime := canonicalGroups["runtime"]; runtime != nil {
+		if err := validateRuntimeSettings(runtime); err != nil {
 			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
 		}
@@ -101,9 +120,14 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id,metadata) VALUES('admin.settings_updated','settings',?,JSON_OBJECT('keys',?))`, section, strings.Join(mapKeys(values), ","))
+	groups := make([]string, 0, len(canonicalGroups))
+	for group := range canonicalGroups {
+		groups = append(groups, group)
+	}
+	sort.Strings(groups)
+	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id,metadata) VALUES('admin.settings_updated','settings',?,JSON_OBJECT('keys',?,'canonical_sections',?))`, requestedSection, strings.Join(mapKeys(values), ","), strings.Join(groups, ","))
 	s.invalidatePublicSettings(r.Context())
-	jsonResponse(w, http.StatusOK, map[string]any{"saved": true, "section": section})
+	jsonResponse(w, http.StatusOK, map[string]any{"saved": true, "section": requestedSection, "canonical_sections": groups})
 }
 
 func (s *server) getSettingsCenter(w http.ResponseWriter, r *http.Request) {
@@ -185,38 +209,43 @@ func (s *server) uploadBrandAsset(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "无法读取文件"})
 		return
 	}
-	storage := getenv("UPLOAD_STORAGE_PATH", "/data/uploads")
+
+	storage := getenv("SYSTEM_IMAGE_PATH", "/data/system/images")
 	if err = os.MkdirAll(storage, 0755); err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "存储目录不可用"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片目录不可用"})
 		return
 	}
-	random := make([]byte, 16)
-	if _, err = rand.Read(random); err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法生成安全文件名"})
-		return
-	}
-	name := asset + "-" + hex.EncodeToString(random) + ext
+	// Brand slots use stable, human-readable filenames. Replacement is atomic;
+	// users and user-resource cleanup never operate in this directory.
+	name := asset + ext
 	target := filepath.Join(storage, name)
-	output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	tmp := target + ".uploading"
+	output, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "文件存储失败"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片存储失败"})
 		return
 	}
 	_, copyErr := io.Copy(output, file)
 	closeErr := output.Close()
 	if copyErr != nil || closeErr != nil {
-		_ = os.Remove(target)
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "文件存储失败"})
+		_ = os.Remove(tmp)
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片存储失败"})
 		return
 	}
-	publicURL := "/uploads/" + name
+	if err = os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "系统图片替换失败"})
+		return
+	}
+
+	publicURL := "/system-images/" + name
 	old, _, _ := s.settings.Get(r.Context(), settingKey)
 	if err = s.settings.Set(r.Context(), settingKey, publicURL, false); err != nil {
 		_ = os.Remove(target)
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌设置保存失败"})
 		return
 	}
-	removeOldUpload(storage, old)
+	removeOldBrandAsset(storage, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), old, publicURL)
 	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id,metadata) VALUES('admin.brand_uploaded','brand',?,JSON_OBJECT('url',?,'mime',?))`, asset, publicURL, mimeType)
 	s.invalidatePublicSettings(r.Context())
 	jsonResponse(w, http.StatusCreated, map[string]string{"asset": asset, "url": publicURL, "mime_type": mimeType})
@@ -238,7 +267,7 @@ func (s *server) deleteBrandAsset(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "删除失败"})
 		return
 	}
-	removeOldUpload(getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), old)
+	removeOldBrandAsset(getenv("SYSTEM_IMAGE_PATH", "/data/system/images"), getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), old, "")
 	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id) VALUES('admin.brand_deleted','brand',?)`, asset)
 	s.invalidatePublicSettings(r.Context())
 	w.WriteHeader(http.StatusNoContent)
@@ -265,11 +294,24 @@ func validateImage(file multipart.File, header *multipart.FileHeader) (string, s
 	return mimeType, ext, nil
 }
 
-func removeOldUpload(storage, publicURL string) {
-	if !strings.HasPrefix(publicURL, "/uploads/") {
+func removeOldBrandAsset(systemStorage, legacyUploadStorage, oldPublicURL, keepPublicURL string) {
+	if oldPublicURL == "" || oldPublicURL == keepPublicURL {
 		return
 	}
-	name := filepath.Base(publicURL)
+	var storage, prefix string
+	switch {
+	case strings.HasPrefix(oldPublicURL, "/system-images/"):
+		storage, prefix = systemStorage, "/system-images/"
+	case strings.HasPrefix(oldPublicURL, "/uploads/"):
+		// RC11 compatibility cleanup only. New system images are never written here.
+		storage, prefix = legacyUploadStorage, "/uploads/"
+	default:
+		return
+	}
+	name := strings.TrimPrefix(oldPublicURL, prefix)
+	if name == "" || filepath.Base(name) != name {
+		return
+	}
 	path := filepath.Join(storage, name)
 	if filepath.Dir(path) == filepath.Clean(storage) {
 		_ = os.Remove(path)
@@ -299,6 +341,7 @@ func mapKeys(values map[string]any) []string {
 	for key := range values {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	return keys
 }
 
@@ -337,7 +380,7 @@ func validateLinkSettings(values map[string]any) error {
 			if char > 127 || strings.ContainsRune(" /?#", char) {
 				return fmt.Errorf("短码字符集只能使用安全 ASCII 字符")
 			}
-		}
+	}
 	}
 	return nil
 }

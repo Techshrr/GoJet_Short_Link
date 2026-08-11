@@ -9,6 +9,7 @@ User=gojet
 Group=gojet
 WorkingDirectory=__GOJET_ROOT__
 EnvironmentFile=__GOJET_ROOT__/deploy/native/gojet.env
+Environment=SYSTEM_IMAGE_PATH=__GOJET_ROOT__/deploy/data/system/images
 ExecStart=__GOJET_ROOT__/bin/%i
 Restart=on-failure
 RestartSec=3
