@@ -1,5 +1,5 @@
 (()=>{
-const UQ=s=>document.querySelector(s),UQA=s=>[...document.querySelectorAll(s)],UE=v=>esc(v??'');
+const UQ=(s,r=document)=>r.querySelector(s),UQA=(s,r=document)=>[...r.querySelectorAll(s)],UE=v=>esc(v??'');
 const value=(o,k,d='')=>o?.[k]??d;
 const bool=(v,d=false)=>v===undefined?d:Boolean(v);
 const input=(k,l,v,type='text',attrs='')=>`<label><span>${UE(l)}</span><input name="${UE(k)}" type="${type}" value="${UE(v??'')}" ${attrs}></label>`;
