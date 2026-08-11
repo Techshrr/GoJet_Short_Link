@@ -28,7 +28,7 @@ import (
 type Service struct {
 	db         *sql.DB
 	workspaces *workspace.Service
-	uploadPath string
+	qrPath     string
 	filePath   string
 	publicURL  string
 	qrKey      string
@@ -46,16 +46,14 @@ func New(db *sql.DB, w *workspace.Service, uploadPath, filePath, publicURL strin
 	if len(qrKey) > 0 {
 		key = qrKey[0]
 	}
-	// The historical constructor parameter is named uploadPath, but generated QR
-	// images are system-generated resources and must not share the user-upload
-	// lifecycle. Native installs pass .../deploy/data/uploads, so derive a sibling
-	// generated/qr directory. Tests and custom callers that pass another directory
-	// keep their explicitly supplied path.
-	qrPath := filepath.Clean(uploadPath)
-	if filepath.Base(qrPath) == "uploads" {
-		qrPath = filepath.Join(filepath.Dir(qrPath), "generated", "qr")
+	qrPath := strings.TrimSpace(os.Getenv("GENERATED_QR_STORAGE_PATH"))
+	if qrPath == "" {
+		qrPath = filepath.Clean(uploadPath)
+		if filepath.Base(qrPath) == "uploads" {
+			qrPath = filepath.Join(filepath.Dir(qrPath), "generated", "qr")
+		}
 	}
-	return &Service{db: db, workspaces: w, uploadPath: qrPath, filePath: filePath, files: objectstorage.Filesystem{Root: filePath}, publicURL: strings.TrimRight(publicURL, "/"), qrKey: key}
+	return &Service{db: db, workspaces: w, qrPath: qrPath, filePath: filePath, files: objectstorage.Filesystem{Root: filePath}, publicURL: strings.TrimRight(publicURL, "/"), qrKey: key}
 }
 
 func NewFileWorker(db *sql.DB, path string) *Service {
@@ -275,11 +273,11 @@ func (s *Service) CreateQR(ctx context.Context, user, wid, linkID int64, name, f
 	if parsed, parseErr := url.ParseRequestURI(target); parseErr != nil || parsed.Host == "" || parsed.Scheme == "" {
 		return QRCode{}, errors.New("公开访问地址配置无效")
 	}
-	if err = os.MkdirAll(s.uploadPath, 0755); err != nil {
+	if err = os.MkdirAll(s.qrPath, 0755); err != nil {
 		return QRCode{}, err
 	}
 	filename := "qr-" + randomSlug() + ".png"
-	path := filepath.Join(s.uploadPath, filename)
+	path := filepath.Join(s.qrPath, filename)
 	qr, err := qrcode.New(target, qrcode.Medium)
 	if err != nil {
 		return QRCode{}, err
