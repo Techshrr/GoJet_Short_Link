@@ -160,6 +160,8 @@ ENV_FILE="$ROOT/deploy/native/gojet.env"
   printf 'HTTP_ADDRESS=%s\n' "$(envq '127.0.0.1:18080')"
   printf 'LOG_RECEIVER_HTTP_ADDRESS=%s\n' "$(envq '127.0.0.1:18092')"
   printf 'UPLOAD_STORAGE_PATH=%s\n' "$(envq "$ROOT/deploy/data/uploads")"
+  printf 'SYSTEM_IMAGE_PATH=%s\n' "$(envq "$ROOT/deploy/data/system/images")"
+  printf 'GENERATED_QR_STORAGE_PATH=%s\n' "$(envq "$ROOT/deploy/data/generated/qr")"
   printf 'FILE_STORAGE_PATH=%s\n' "$(envq "$ROOT/deploy/data/files")"
   printf 'FILE_STORAGE_DRIVER=%s\n' "$(envq 'filesystem')"
   printf 'CLAMAV_ADDRESS=%s\n' "$(envq "$CLAMAV_ADDRESS")"
@@ -178,9 +180,9 @@ id gojet >/dev/null 2>&1 || useradd --system --home-dir "$ROOT" --shell /usr/sbi
 if getent group clamav >/dev/null 2>&1; then
   usermod -aG clamav gojet || true
 fi
-mkdir -p "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/files"
+mkdir -p "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/system/images" "$ROOT/deploy/data/generated/qr" "$ROOT/deploy/data/files"
 chown -R gojet:gojet "$ROOT/deploy/data"
-chmod 0755 "$ROOT/deploy/data/uploads"
+chmod 0755 "$ROOT/deploy/data" "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/system" "$ROOT/deploy/data/system/images" "$ROOT/deploy/data/generated" "$ROOT/deploy/data/generated/qr"
 chmod 0750 "$ROOT/deploy/data/files"
 chmod 0755 "$ROOT" "$ROOT/bin" "$ROOT/public"
 sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojet@.service" > /etc/systemd/system/gojet@.service
