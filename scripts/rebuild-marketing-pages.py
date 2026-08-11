@@ -21,13 +21,13 @@ PAGES = {
 
 
 def shell_header():
-    # app.js replaces this compact placeholder with the canonical navigation.
+    # app.js hydrates the same canonical navigation used by the homepage.
     return '<header class="siteHeader"><div class="container nav"><a class="logo" href="/">GoJet<i>.</i></a></div></header>'
 
 
 def shell_footer():
-    # app.js replaces this compact placeholder with the canonical footer.
-    return '<footer><div class="container"><a class="logo" href="/">GoJet<i>.</i></a></div></footer><script src="/assets/app.js?v=rc12"></script>'
+    # Release-specific cache keys are injected by package-release.sh only.
+    return '<footer><div class="container"><a class="logo" href="/">GoJet<i>.</i></a></div></footer><script src="/assets/app.js"></script>'
 
 
 def render(title, desc, cards, contact=False):
@@ -37,8 +37,8 @@ def render(title, desc, cards, contact=False):
     )
     support = ''
     if contact:
-        support = '''<section class="section alt"><div class="container split"><div><span class="eyebrow">已有账户</span><h2>优先从客户工单继续沟通</h2><p>工单会保留问题上下文、双方回复和当前处理状态，更适合持续跟进账户、账单和产品问题。</p><div class="actions"><a class="btn primary" href="/app/">进入用户控制台</a><a class="btn" href="/report-abuse/">滥用举报</a></div></div><div class="uiPanel"><header><b>客户支持</b><small>可持续跟进</small></header><div class="row"><b>提交问题</b><small>选择支持部门</small><small>1</small></div><div class="row"><b>查看回复</b><small>同一会话</small><small>2</small></div><div class="row"><b>问题解决</b><small>关闭工单</small><small>3</small></div></div></div></section>'''
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{escape(desc)}"><title>{escape(title)} · GoJet</title><link rel="stylesheet" href="/assets/styles.css?v=rc12"></head><body>{shell_header()}<main><section class="hero"><div class="container"><span class="eyebrow">GOJET</span><h1>{escape(title)}</h1><p>{escape(desc)}</p><div class="actions"><a class="btn primary" href="/register">免费开始</a><a class="btn" href="/pricing/">查看套餐</a></div></div></section><section class="section"><div class="container"><div class="cards">{items}</div></div></section>{support}<section class="cta"><div class="container"><div class="ctaBox"><h2>把链接与分享集中到一个工作区</h2><p>从免费账户开始，再按实际需要使用更多能力。</p><div class="actions" style="justify-content:center"><a class="btn" href="/register">免费开始</a></div></div></div></section></main>{shell_footer()}</body></html>'''
+        support = '''<section class="section alt"><div class="container split"><div><span class="eyebrow">已有账户</span><h2>优先从客户工单继续沟通</h2><p>工单会保留问题上下文、双方回复和当前处理状态，更适合持续跟进账户、账单和产品问题。</p><div class="actions"><a class="btn primary" href="/app/?view=support">进入支持工单</a><a class="btn" href="/report-abuse/">滥用举报</a></div></div><div class="uiPanel"><header><b>客户支持</b><small>可持续跟进</small></header><div class="row"><b>提交问题</b><small>选择支持部门</small><small>1</small></div><div class="row"><b>查看回复</b><small>同一会话</small><small>2</small></div><div class="row"><b>问题解决</b><small>关闭工单</small><small>3</small></div></div></div></section>'''
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="{escape(desc)}"><title>{escape(title)} · GoJet</title><link rel="stylesheet" href="/assets/styles.css"></head><body>{shell_header()}<main><section class="hero"><div class="container"><span class="eyebrow">GOJET</span><h1>{escape(title)}</h1><p>{escape(desc)}</p><div class="actions"><a class="btn primary" href="/register">免费开始</a><a class="btn" href="/pricing/">查看套餐</a></div></div></section><section class="section"><div class="container"><div class="cards">{items}</div></div></section>{support}<section class="cta"><div class="container"><div class="ctaBox"><h2>把链接与分享集中到一个工作区</h2><p>从免费账户开始，再按实际需要使用更多能力。</p><div class="actions" style="justify-content:center"><a class="btn" href="/register">免费开始</a></div></div></div></section></main>{shell_footer()}</body></html>'''
 
 
 for slug, (title, desc, cards) in PAGES.items():
