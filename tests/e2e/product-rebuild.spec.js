@@ -62,13 +62,13 @@ test('marketing homepage and legal pages use the canonical customer-facing shell
 
   await page.goto(base+'/privacy/');
   await expect(page.getByRole('heading',{name:'隐私政策'})).toBeVisible();
-  await expect(page.getByText('我们处理的信息',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/我们处理的信息/})).toBeVisible();
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
   await expect(page.getByRole('link',{name:'服务条款'}).last()).toBeVisible();
 
   await page.goto(base+'/terms/');
   await expect(page.getByRole('heading',{name:'服务条款'})).toBeVisible();
-  await expect(page.getByText('禁止行为',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/禁止行为/})).toBeVisible();
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
   await expect(page.getByRole('link',{name:'隐私政策'}).last()).toBeVisible();
 });
