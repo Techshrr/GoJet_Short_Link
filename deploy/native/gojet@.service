@@ -10,6 +10,10 @@ Group=gojet
 WorkingDirectory=__GOJET_ROOT__
 EnvironmentFile=__GOJET_ROOT__/deploy/native/gojet.env
 Environment=SYSTEM_IMAGE_PATH=__GOJET_ROOT__/deploy/data/system/images
+Environment=GENERATED_QR_STORAGE_PATH=__GOJET_ROOT__/deploy/data/generated/qr
+UMask=0022
+ExecStartPre=/usr/bin/mkdir -p __GOJET_ROOT__/deploy/data/system/images __GOJET_ROOT__/deploy/data/generated/qr
+ExecStartPre=/usr/bin/chmod 0755 __GOJET_ROOT__/deploy/data/system/images __GOJET_ROOT__/deploy/data/generated/qr
 ExecStart=__GOJET_ROOT__/bin/%i
 Restart=on-failure
 RestartSec=3
