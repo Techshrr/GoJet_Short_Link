@@ -1,6 +1,6 @@
 FROM golang:1.23-alpine AS build
 WORKDIR /src
-RUN apk add --no-cache curl git
+RUN apk add --no-cache curl git python3 py3-fonttools
 COPY go.mod go.sum ./
 RUN go mod download
 COPY scripts/prepare-pdf-fonts.sh ./scripts/prepare-pdf-fonts.sh
@@ -18,7 +18,8 @@ COPY --from=build /platform-api /platform-api
 COPY --from=build /mail-worker /mail-worker
 COPY --from=build /file-worker /file-worker
 COPY --from=build /operations-monitor /operations-monitor
-COPY --from=build /src/resources/fonts /app/resources/fonts
-ENV PDF_FONT_PATH=/app/resources/fonts/NotoSansSC-VF.ttf
+COPY --from=build /src/resources/fonts/NotoSansSC-Regular.ttf /app/resources/fonts/NotoSansSC-Regular.ttf
+COPY --from=build /src/resources/fonts/OFL.txt /app/resources/fonts/OFL.txt
+ENV PDF_FONT_PATH=/app/resources/fonts/NotoSansSC-Regular.ttf
 EXPOSE 8090
 ENTRYPOINT ["/platform-api"]
