@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y default-mysql-client nginx poppler-utils zbar-tools
+          sudo apt-get install -y default-mysql-client nginx poppler-utils zbar-tools python3-fonttools
           npm ci
           npx playwright install --with-deps chromium
 
@@ -103,7 +103,7 @@ jobs:
             QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-surface/uploads' \
             BRAND_ASSET_PATH='/tmp/gojet-surface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
-            FILE_STORAGE_PATH='/tmp/gojet-surface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSC-VF.ttf" \
+            FILE_STORAGE_PATH='/tmp/gojet-surface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSC-Regular.ttf" \
             /tmp/gojet-surface/bin/platform-api >/tmp/gojet-surface/platform-api.log 2>&1 &
           echo $! >/tmp/gojet-surface/platform-api.pid
           env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' \
