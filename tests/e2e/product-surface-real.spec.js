@@ -124,7 +124,9 @@ test.describe.serial('real product surface',()=>{
     await setUserSession(page,user.token);
     await page.goto(base+'/app/links');
     await expect(page.getByRole('heading',{name:'短链接'})).toBeVisible();
-    await page.getByRole('button',{name:'访问分析'}).first().click();
+    const card=page.locator('#lhLinks article.shareCard').filter({hasText:code}).first();
+    await expect(card).toBeVisible();
+    await card.getByRole('button',{name:'访问分析',exact:true}).click();
     await expect(page).toHaveURL(new RegExp(`/app/analytics\\?link=${id}$`));
     await expect(page.getByRole('heading',{name:'访问分析'})).toBeVisible();
     const surface=page.locator('#analyticsPage');
