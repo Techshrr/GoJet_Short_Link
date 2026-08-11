@@ -52,8 +52,18 @@ validate_env() {
 
 prepare_storage() {
   [ "$(id -u)" -eq 0 ] || die "installation and upgrades must run as root so container storage ownership can be set (use sudo)"
-  mkdir -p "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/files"
-  chown 65532:65532 "$ROOT/deploy/data/uploads" "$ROOT/deploy/data/files"
+  mkdir -p \
+    "$ROOT/deploy/data/system/images" \
+    "$ROOT/deploy/data/generated/qr" \
+    "$ROOT/deploy/data/uploads" \
+    "$ROOT/deploy/data/files"
+  chown 65532:65532 \
+    "$ROOT/deploy/data/system/images" \
+    "$ROOT/deploy/data/generated/qr" \
+    "$ROOT/deploy/data/uploads" \
+    "$ROOT/deploy/data/files"
+  chmod 0755 "$ROOT/deploy/data/system/images"
+  chmod 0755 "$ROOT/deploy/data/generated/qr"
   chmod 0755 "$ROOT/deploy/data/uploads"
   chmod 0750 "$ROOT/deploy/data/files"
 }
