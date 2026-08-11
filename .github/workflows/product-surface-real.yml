@@ -75,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           for f in database/migrations/*.sql; do mysql -h127.0.0.1 -P3306 -uroot gojet_surface < "$f"; done
-          mkdir -p /tmp/gojet-surface/{uploads,files,system/images,generated/qr,bin}
+          mkdir -p /tmp/gojet-surface/{uploads,files,brand,generated/qr,bin}
           go build -o /tmp/gojet-surface/bin/platform-api ./services/platform-api/cmd/server
           go build -o /tmp/gojet-surface/bin/redirect-engine ./services/redirect-engine/cmd/server
           go build -o /tmp/gojet-surface/bin/analytics-worker ./services/analytics-worker/cmd/worker
@@ -94,7 +94,7 @@ jobs:
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
             QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-surface/uploads' \
-            SYSTEM_IMAGE_PATH='/tmp/gojet-surface/system/images' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
+            BRAND_ASSET_PATH='/tmp/gojet-surface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojet-surface/generated/qr' \
             FILE_STORAGE_PATH='/tmp/gojet-surface/files' \
             /tmp/gojet-surface/bin/platform-api >/tmp/gojet-surface/platform-api.log 2>&1 &
           echo $! >/tmp/gojet-surface/platform-api.pid
@@ -130,7 +130,7 @@ jobs:
             client_max_body_size 110m;
 
             location ^~ /api/ { proxy_pass http://127.0.0.1:18090; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
-            location ^~ /assets/images/ { alias /tmp/gojet-surface/system/images/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
+            location ^~ /assets/images/ { alias /tmp/gojet-surface/brand/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
             location ^~ /generated/qr/ { alias /tmp/gojet-surface/generated/qr/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
             location = /app { return 302 /app/; }
             location ^~ /app/ { try_files $uri $uri/ /app/index.html; }

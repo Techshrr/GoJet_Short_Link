@@ -63,7 +63,7 @@ test.describe.serial('real product surface',()=>{
     const preview=page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img');
     await expect(preview).toBeVisible();
     await expect.poll(async()=>preview.evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
-    expect(await preview.getAttribute('src')).toBe('/assets/images/logo.png');
+    expect(new URL(await preview.getAttribute('src'),base).pathname).toBe('/assets/images/logo.png');
     const response=await request.get(base+'/assets/images/logo.png');
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']||'').toContain('image/png');

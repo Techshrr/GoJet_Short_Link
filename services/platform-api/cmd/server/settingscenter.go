@@ -73,10 +73,6 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The setting key registry is the source of truth. The URL section is a UI
-	// grouping hint only. This prevents a stale/cached admin bundle from rejecting
-	// an otherwise valid setting merely because a field moved between tabs, while
-	// still rejecting every unregistered key.
 	canonicalGroups := map[string]map[string]any{}
 	for key, value := range values {
 		section, ok := canonicalSettingSection(key)
@@ -210,7 +206,7 @@ func (s *server) uploadBrandAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storage := getenv("SYSTEM_IMAGE_PATH", "/data/system/images")
+	storage := getenv("BRAND_ASSET_PATH", "/data/brand")
 	if err = os.MkdirAll(storage, 0755); err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "品牌图片目录不可用"})
 		return
@@ -265,7 +261,7 @@ func (s *server) deleteBrandAsset(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "删除失败"})
 		return
 	}
-	removeOldBrandAsset(getenv("SYSTEM_IMAGE_PATH", "/data/system/images"), getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), old, "")
+	removeOldBrandAsset(getenv("BRAND_ASSET_PATH", "/data/brand"), getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), old, "")
 	_, _ = s.db.ExecContext(r.Context(), `INSERT INTO audit_logs(action,target_type,target_id) VALUES('admin.brand_deleted','brand',?)`, asset)
 	s.invalidatePublicSettings(r.Context())
 	w.WriteHeader(http.StatusNoContent)
@@ -300,8 +296,6 @@ func removeOldBrandAsset(brandStorage, uploadStorage, oldPublicURL, keepPublicUR
 	switch {
 	case strings.HasPrefix(oldPublicURL, "/assets/images/"):
 		storage, prefix = brandStorage, "/assets/images/"
-	case strings.HasPrefix(oldPublicURL, "/system-images/"):
-		storage, prefix = brandStorage, "/system-images/"
 	case strings.HasPrefix(oldPublicURL, "/uploads/"):
 		storage, prefix = uploadStorage, "/uploads/"
 	default:
