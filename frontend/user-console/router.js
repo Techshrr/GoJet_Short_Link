@@ -46,7 +46,7 @@ if(nav&&!nav.querySelector('[data-console-view="tickets"]')){
 }
 function activate(view){document.querySelectorAll('[data-console-view]').forEach(node=>node.classList.toggle('active',node.dataset.consoleView===view))}
 function currentView(){return routeToView[location.pathname]||'overview'}
-function registeredPage(view){return window.GoJetPages?.[view]||window.GoJetProductHardening?.[view]||null}
+function registeredPage(view){return window.GoJetPages?.[view]||null}
 async function waitForWorkspace(){
   for(let i=0;i<200;i++){
     if(typeof state!=='undefined'&&state.workspace&&document.querySelector('#shell:not(.hidden)'))return;
@@ -73,11 +73,8 @@ async function show(view,push=false){
   }
 }
 
-// app.js still performs authentication and workspace bootstrap, but it must no
-// longer own page selection. Its final renderOverview() call used to overwrite
-// clean deep links such as /app/qr after the router had already rendered them.
-// Redirect that legacy callback into the canonical router unless the URL truly
-// represents the overview page.
+// app.js performs authentication and workspace bootstrap. The router owns page
+// selection so a late overview render can never replace a requested deep link.
 if(legacyOverview){
   window.renderOverview=async(...args)=>{
     if(routerStarted&&currentView()!=='overview')return show(currentView(),false);
@@ -93,7 +90,7 @@ routerStarted=true;
 
 document.addEventListener('click',event=>{
   const create=event.target.closest('#createButton');
-  if(create){event.preventDefault();event.stopImmediatePropagation();modulesReady.then(()=>window.openLinkHardening?.());return}
+  if(create){event.preventDefault();event.stopImmediatePropagation();modulesReady.then(()=>window.openLinkEditor?.());return}
   const button=event.target.closest('[data-console-view]');
   if(!button)return;
   event.preventDefault();event.stopImmediatePropagation();show(button.dataset.consoleView,true);
