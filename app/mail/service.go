@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -125,10 +126,6 @@ func (s *Service) renderTemplate(ctx context.Context, key string, values map[str
 }
 
 func (s *Service) brandWrap(ctx context.Context, body string) string {
-	// Tests and narrowly scoped callers may intentionally construct the mail
-	// service without the settings store. In that case preserve the rendered
-	// template body rather than panicking or inventing configuration. Production
-	// services always provide the settings store and receive the branded wrapper.
 	if s == nil || s.settings == nil {
 		return body
 	}
@@ -145,16 +142,29 @@ func (s *Service) brandWrap(ctx context.Context, body string) string {
 		primary = "#16A66A"
 	}
 	logo := get("brand.mail_logo_url", "")
+	if strings.HasPrefix(logo, "/") {
+		base := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/")
+		if base != "" {
+			logo = base + logo
+		} else {
+			logo = ""
+		}
+	}
 	support := get("site.support_email", "")
-	brand := `<div style="font-size:24px;font-weight:800;letter-spacing:-.6px;color:#101828">` + html.EscapeString(site) + `<span style="color:` + primary + `">.</span></div>`
+	brand := `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.6px;color:#101828">` + html.EscapeString(site) + `<span style="color:` + primary + `">.</span></div>`
 	if logo != "" {
-		brand = `<img src="` + html.EscapeString(logo) + `" alt="` + html.EscapeString(site) + `" style="display:block;max-height:38px;max-width:180px">`
+		brand = `<img src="` + html.EscapeString(logo) + `" alt="` + html.EscapeString(site) + `" width="180" style="display:block;width:auto;max-width:180px;max-height:42px;border:0;outline:none;text-decoration:none">`
 	}
 	footer := `此邮件由 ` + html.EscapeString(site) + ` 自动发送。`
 	if support != "" {
 		footer += ` 如需帮助，请联系 ` + html.EscapeString(support) + `。`
 	}
-	return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#f6f8f7;color:#17211c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}.wrap{max-width:640px;margin:0 auto;padding:36px 18px}.card{margin-top:20px;background:#fff;border:1px solid #e3e9e6;border-radius:18px;padding:32px;box-shadow:0 16px 45px rgba(16,24,40,.06)}h1{margin:0 0 20px;font-size:25px;line-height:1.35;color:#101828}p{margin:12px 0;line-height:1.8}.button{display:inline-block;margin:10px 0;padding:12px 20px;border-radius:10px;background:` + primary + `;color:#fff!important;text-decoration:none;font-weight:700}.muted{color:#667085;font-size:13px;word-break:break-all}.footer{padding:20px 4px;color:#98a2b3;font-size:12px;line-height:1.7}@media(max-width:520px){.wrap{padding:22px 12px}.card{padding:24px 20px}}</style></head><body><div class="wrap">` + brand + `<div class="card">` + body + `</div><div class="footer">` + footer + `</div></div></body></html>`
+
+	// Use one table-based shell with inline layout styles for predictable rendering
+	// across Gmail, Outlook, Apple Mail and common mobile clients. Template HTML is
+	// always inserted as a fragment inside the single content cell; templates do
+	// not own outer document/card containers.
+	return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>a.button{display:inline-block;padding:12px 20px;border-radius:10px;background:` + primary + `;color:#fff!important;text-decoration:none;font-weight:700}.muted{color:#667085;font-size:13px;word-break:break-all}h1{margin:0 0 20px;font-size:25px;line-height:1.4;color:#101828}h2{margin:22px 0 12px;font-size:19px;line-height:1.5;color:#101828}p{margin:12px 0;line-height:1.8;color:#344054}ul,ol{color:#344054;line-height:1.8}a{color:` + primary + `}</style></head><body style="margin:0;padding:0;background:#f5f7f6;color:#17211c"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f5f7f6"><tr><td align="center" style="padding:32px 12px"><table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;border-collapse:separate"><tr><td style="padding:0 4px 18px">` + brand + `</td></tr><tr><td style="background:#ffffff;border:1px solid #e3e9e6;border-radius:16px;padding:32px 30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;line-height:1.8;color:#344054">` + body + `</td></tr><tr><td style="padding:18px 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;line-height:1.7;color:#98a2b3">` + footer + `</td></tr></table></td></tr></table></body></html>`
 }
 
 func (s *Service) Templates(ctx context.Context) ([]Template, error) {
