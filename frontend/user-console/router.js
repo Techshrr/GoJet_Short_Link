@@ -14,6 +14,8 @@ const viewToRoute={
 const styleModules=['/assets/gojet-design-system.css','/app/shell.css','/app/links.css','/app/bio.css','/app/domains.css','/app/analytics.css','/app/files.css','/app/team.css','/app/organization.css','/app/billing.css'];
 const scriptModules=['/app/dialogs.js','/app/links.js','/app/bio.js','/app/domains.js','/app/analytics.js','/app/files.js','/app/team.js','/app/organization.js','/app/billing.js','/app/support.js'];
 let navigationToken=0;
+let routerStarted=false;
+const legacyOverview=typeof window.renderOverview==='function'?window.renderOverview:null;
 
 function loadStyle(path){
   return new Promise(resolve=>{
@@ -46,19 +48,11 @@ function activate(view){document.querySelectorAll('[data-console-view]').forEach
 function currentView(){return routeToView[location.pathname]||'overview'}
 function registeredPage(view){return window.GoJetPages?.[view]||window.GoJetProductHardening?.[view]||null}
 async function waitForWorkspace(){
-  for(let i=0;i<150;i++){
+  for(let i=0;i<200;i++){
     if(typeof state!=='undefined'&&state.workspace&&document.querySelector('#shell:not(.hidden)'))return;
-    await new Promise(resolve=>setTimeout(resolve,40));
+    await new Promise(resolve=>setTimeout(resolve,30));
   }
   throw new Error('工作区初始化超时');
-}
-async function waitForBaseBootstrap(){
-  await waitForWorkspace();
-  // app.js still owns authentication and the initial workspace bootstrap. It can
-  // render its default overview after workspace becomes available, so deep-link
-  // routing must not race that final render. Wait until the initial network burst
-  // has settled, then the router becomes the sole owner of subsequent navigation.
-  await new Promise(resolve=>setTimeout(resolve,120));
 }
 async function show(view,push=false){
   const token=++navigationToken;
@@ -69,15 +63,33 @@ async function show(view,push=false){
     if(token!==navigationToken)return;
     const page=registeredPage(view);
     if(page)return await page();
-    if(view==='overview')return await renderOverview();
+    if(view==='overview')return legacyOverview?await legacyOverview():undefined;
     if(view==='settings')return await renderAccountSettings();
-    return await renderOverview();
+    if(legacyOverview)return await legacyOverview();
   }catch(err){
     console.error(err);
     const content=document.querySelector('.content');
     if(content)content.innerHTML=`<div class="productError">${escapeHTML(err.message||'页面加载失败')}</div>`;
   }
 }
+
+// app.js still performs authentication and workspace bootstrap, but it must no
+// longer own page selection. Its final renderOverview() call used to overwrite
+// clean deep links such as /app/qr after the router had already rendered them.
+// Redirect that legacy callback into the canonical router unless the URL truly
+// represents the overview page.
+if(legacyOverview){
+  window.renderOverview=async(...args)=>{
+    if(routerStarted&&currentView()!=='overview')return show(currentView(),false);
+    return legacyOverview(...args);
+  };
+}
+window.GoJetRouter={
+  show:(view,push=false)=>show(view,push),
+  currentView,
+  showCurrent:()=>show(currentView(),false)
+};
+routerStarted=true;
 
 document.addEventListener('click',event=>{
   const create=event.target.closest('#createButton');
@@ -87,7 +99,7 @@ document.addEventListener('click',event=>{
   event.preventDefault();event.stopImmediatePropagation();show(button.dataset.consoleView,true);
 },true);
 addEventListener('popstate',()=>show(currentView(),false));
-waitForBaseBootstrap().then(()=>show(currentView(),false)).catch(err=>console.error(err));
+waitForWorkspace().then(()=>show(currentView(),false)).catch(err=>console.error(err));
 
 async function renderAccountSettings(){
   const user=await api('/api/me'),content=document.querySelector('.content');
