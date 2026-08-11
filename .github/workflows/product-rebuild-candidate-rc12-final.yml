@@ -1,0 +1,348 @@
+name: V4 RC12 final fresh-install candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'rebuild/v4-rc12-real-install-fixes'
+    paths:
+      - 'scripts/v4-candidate-final-rc12.trigger'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PACKAGE_RUN_ID: '31474701339'
+  PACKAGE_HEAD_SHA: 'ee876bcd598f38660f6a6267298327765fc1fe27'
+  PACKAGE_ARTIFACT_NAME: 'gojet-4.0.0-rc.12-package-release'
+  PACKAGE_VERSION: '4.0.0-rc.12'
+  PACKAGE_ZIP_SHA256: 'eebcc4a7ecdf13dd3439eaca2509406a3056c0843c8ef8822ad46e81a4b3a896'
+
+concurrency:
+  group: v4-rc12-final-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lock RC12 candidate snapshot and prove Package provenance
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/gojet-candidate-control-sha
+          git cat-file -e "$PACKAGE_HEAD_SHA^{commit}"
+          git diff --name-only "$PACKAGE_HEAD_SHA"..HEAD | tee /tmp/gojet-post-package-files
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              .github/workflows/product-rebuild-candidate-rc12-final.yml|scripts/v4-candidate-final-rc12.trigger) ;;
+              *) echo "runtime/package content changed after RC12 Package gate: $path" >&2; exit 1 ;;
+            esac
+          done < /tmp/gojet-post-package-files
+
+      - name: Install candidate dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client zbar-tools unzip file
+
+      - name: Download exact verified RC12 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_ARTIFACT_NAME }}
+          path: /tmp/gojet-package-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.PACKAGE_RUN_ID }}
+
+      - name: Verify RC12 evidence and production ZIP
+        run: |
+          set -euo pipefail
+          ART=/tmp/gojet-package-artifact
+          EVIDENCE="$ART/RC12-RELEASE-EVIDENCE.txt"
+          ZIP="$ART/gojet-4.0.0-rc.12-linux-production.zip"
+          SHA_FILE="$ZIP.sha256"
+          test -f "$EVIDENCE" -a -f "$ZIP" -a -f "$SHA_FILE"
+          grep -Fxq "tested_sha=$PACKAGE_HEAD_SHA" "$EVIDENCE"
+          grep -Fxq "version=$PACKAGE_VERSION" "$EVIDENCE"
+          grep -Fxq "archive=$(basename "$ZIP")" "$EVIDENCE"
+          grep -Fxq "sha256=$PACKAGE_ZIP_SHA256" "$EVIDENCE"
+          test "$(sha256sum "$ZIP" | awk '{print $1}')" = "$PACKAGE_ZIP_SHA256"
+          (cd "$ART" && sha256sum -c "$(basename "$SHA_FILE")")
+          unzip -tq "$ZIP"
+          rm -rf /tmp/gojet-candidate-root
+          mkdir -p /tmp/gojet-candidate-root
+          unzip -q "$ZIP" -d /tmp/gojet-candidate-root
+          ROOT=$(find /tmp/gojet-candidate-root -mindepth 1 -maxdepth 1 -type d | head -1)
+          test -n "$ROOT"
+          printf '%s\n' "$ROOT" >/tmp/gojet-candidate-root-path
+          printf '%s\n' "$ZIP" >/tmp/gojet-candidate-zip
+          test "$(cat "$ROOT/VERSION")" = "$PACKAGE_VERSION"
+          grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
+          "$ROOT/scripts/verify-release.sh" "$ZIP"
+          "$ROOT/scripts/verify-hardening-release.sh" "$ZIP"
+          test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
+          for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
+            test -x "$ROOT/bin/$binary"
+            file "$ROOT/bin/$binary" | grep -Eq 'ELF 64-bit.*x86-64'
+          done
+          test ! -e "$ROOT/tests"
+
+      - name: Apply packaged RC12 migrations to two independent fresh databases
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          ROOT=$(cat /tmp/gojet-candidate-root-path)
+          mysql -h127.0.0.1 -P3306 -uroot -e 'DROP DATABASE IF EXISTS gojet_auth_candidate; CREATE DATABASE gojet_auth_candidate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+          for db in gojet_candidate gojet_auth_candidate; do
+            for f in "$ROOT"/database/migrations/*.sql; do mysql -h127.0.0.1 -P3306 -uroot "$db" < "$f"; done
+          done
+          mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -N -B <<'SQL' >/tmp/gojet-candidate-schema
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='support_tickets';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='support_ticket_messages';
+          SELECT COUNT(*) FROM support_departments WHERE is_active=TRUE;
+          SELECT COUNT(*) FROM system_settings WHERE setting_key IN ('turnstile.enabled','turnstile.registration','turnstile.login','turnstile.forgot_password','turnstile.reset_password','turnstile.ticket_create','turnstile.ticket_reply','turnstile.abuse_report');
+          SELECT COUNT(*) FROM system_settings WHERE setting_key='seo.sitemap';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='abuse_reports' AND COLUMN_NAME='reported_url';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='payment_transactions';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='fx_rate_cache';
+          SELECT COUNT(*) FROM mail_templates WHERE template_key IN ('account_welcome','invoice_created','support_ticket_created','support_ticket_reply') AND html_template NOT REGEXP '<(html|head|body)[ >]';
+          SQL
+          mapfile -t schema </tmp/gojet-candidate-schema
+          test "${schema[0]}" = 1
+          test "${schema[1]}" = 1
+          test "${schema[2]}" -ge 3
+          test "${schema[3]}" = 8
+          test "${schema[4]}" = 1
+          test "${schema[5]}" = 1
+          test "${schema[6]}" = 1
+          test "${schema[7]}" = 1
+          test "${schema[8]}" = 4
+
+      - name: Start exact packaged RC12 primary runtime
+        run: |
+          set -euo pipefail
+          ROOT=$(cat /tmp/gojet-candidate-root-path)
+          mkdir -p /tmp/gojet-candidate/uploads /tmp/gojet-candidate/files /tmp/gojet-candidate/system/images /tmp/gojet-candidate/generated/qr /tmp/gojet
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$SETTINGS_KEY" >/tmp/gojet/test-env
+          cp "$ROOT/bin/mail-worker" /tmp/gojet/mail-worker
+          chmod 0755 /tmp/gojet/mail-worker
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY='fresh-candidate-rc12-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18080' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojet-candidate/uploads' SYSTEM_IMAGE_PATH='/tmp/gojet-candidate/system/images' FILE_STORAGE_PATH='/tmp/gojet-candidate/files' "$ROOT/bin/platform-api" >/tmp/gojet-candidate/platform-api.log 2>&1 &
+          echo $! >/tmp/gojet-candidate/platform-api.pid
+          env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='fresh-candidate-visitor-key-2026' QR_TRACKING_KEY='fresh-candidate-rc12-qr-key-2026' "$ROOT/bin/redirect-engine" >/tmp/gojet-candidate/redirect-engine.log 2>&1 &
+          echo $! >/tmp/gojet-candidate/redirect-engine.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojet-mysql' ANALYTICS_CONSUMER='fresh-candidate-rc12-final' "$ROOT/bin/analytics-worker" >/tmp/gojet-candidate/analytics-worker.log 2>&1 &
+          echo $! >/tmp/gojet-candidate/analytics-worker.pid
+          for port in 18090 18080; do
+            for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done
+          done
+
+      - name: Run RC12 P0 gates against exact packaged runtime
+        env: &candidate-env
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          GOJET_PUBLIC_BASE: http://127.0.0.1:18080
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
+          REDIS_ADDRESS: 127.0.0.1:6379
+          UPLOAD_STORAGE_PATH: /tmp/gojet-candidate/uploads
+          SYSTEM_IMAGE_PATH: /tmp/gojet-candidate/system/images
+          GENERATED_QR_STORAGE_PATH: /tmp/gojet-candidate/generated/qr
+          FILE_STORAGE_PATH: /tmp/gojet-candidate/files
+        run: |
+          set -euo pipefail
+          bash tests/integration/product-rebuild-api.sh
+          bash tests/integration/admin-permission-boundary.sh
+          bash tests/integration/admin-link-lifecycle.sh
+          bash tests/integration/settings-roundtrip.sh
+          bash tests/integration/qr-real-e2e.sh
+          bash tests/integration/file-share-lifecycle.sh
+          bash tests/integration/brand-logo-lifecycle.sh
+          bash tests/integration/mail-lifecycle-smtp.sh
+          bash tests/integration/billing-payment-conflict.sh
+          bash tests/integration/billing-fx-freeze.sh
+
+      - name: Candidate support - customer lifecycle
+        timeout-minutes: 1
+        env: *candidate-env
+        run: |
+          set -euo pipefail
+          BASE="$GOJET_TEST_BASE"
+          request(){ local method=$1 path=$2 body=${3:-} auth=${4:-}; local args=(-sS --connect-timeout 3 --max-time 15 -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [ -n "$auth" ] && args+=(-H "Authorization: Bearer $auth"); [ -n "$body" ] && args+=(--data "$body"); curl "${args[@]}" "$BASE$path"; }
+          expect(){ local want=$1 raw=$2 label=$3 got body; got=$(printf '%s\n' "$raw"|tail -n1); body=$(printf '%s\n' "$raw"|sed '$d'); [ "$got" = "$want" ] || { echo "FAIL $label expected $want got $got" >&2; echo "$body" >&2; exit 1; }; printf '%s' "$body"; }
+          field(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
+          policy=$(expect 200 "$(request GET /api/public/turnstile)" policy)
+          printf '%s' "$policy" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["enabled"] is False; assert d["surfaces"]["ticket_create"] is False; assert d["surfaces"]["abuse_report"] is False'
+          user=$(expect 201 "$(request POST /api/auth/register '{"email":"candidate-ticket@example.test","display_name":"Candidate Ticket User","password":"CandidateTicket!2026"}')" register)
+          USER_TOKEN=$(printf '%s' "$user"|field "['token']")
+          departments=$(expect 200 "$(request GET /api/support/departments '' "$USER_TOKEN")" departments)
+          DEPT_ID=$(printf '%s' "$departments"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
+          ticket=$(expect 201 "$(request POST /api/support/tickets "{\"department_id\":$DEPT_ID,\"subject\":\"Fresh Candidate Support\",\"priority\":\"high\",\"message\":\"RC12 final candidate support lifecycle\"}" "$USER_TOKEN")" ticket-create)
+          TICKET_ID=$(printf '%s' "$ticket"|field "['id']")
+          TICKET_NUMBER=$(printf '%s' "$ticket"|field "['ticket_number']")
+          expect 200 "$(request GET "/api/support/tickets/$TICKET_ID" '' "$USER_TOKEN")" ticket-detail >/dev/null
+          printf 'USER_TOKEN=%s\nTICKET_ID=%s\nTICKET_NUMBER=%s\n' "$USER_TOKEN" "$TICKET_ID" "$TICKET_NUMBER" >/tmp/gojet-candidate/support-state
+
+      - name: Candidate support - administrator queue and reply
+        timeout-minutes: 1
+        env: *candidate-env
+        run: |
+          set -euo pipefail
+          source /tmp/gojet-candidate/support-state
+          BASE="$GOJET_TEST_BASE"
+          request(){ local method=$1 path=$2 body=${3:-} auth=${4:-}; local args=(-sS --connect-timeout 3 --max-time 15 -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [ -n "$auth" ] && args+=(-H "Authorization: Bearer $auth"); [ -n "$body" ] && args+=(--data "$body"); curl "${args[@]}" "$BASE$path"; }
+          expect(){ local want=$1 raw=$2 label=$3 got body; got=$(printf '%s\n' "$raw"|tail -n1); body=$(printf '%s\n' "$raw"|sed '$d'); [ "$got" = "$want" ] || { echo "FAIL $label expected $want got $got" >&2; echo "$body" >&2; exit 1; }; printf '%s' "$body"; }
+          field(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
+          admin=$(expect 200 "$(request POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" admin-login)
+          ADMIN_TOKEN=$(printf '%s' "$admin"|field "['token']")
+          queue=$(expect 200 "$(request GET "/api/admin/support/tickets?search=$TICKET_NUMBER" '' "$ADMIN_TOKEN")" admin-queue)
+          printf '%s' "$queue"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["data"])==1 and d["data"][0]["priority"]=="high"'
+          expect 201 "$(request POST "/api/admin/support/tickets/$TICKET_ID/replies" '{"message":"GoJet RC12 candidate support reply","internal":false}' "$ADMIN_TOKEN")" admin-reply >/dev/null
+          detail=$(expect 200 "$(request GET "/api/support/tickets/$TICKET_ID" '' "$USER_TOKEN")" reply-visible)
+          printf '%s' "$detail"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert any(m["author_type"]=="administrator" and "RC12 candidate support reply" in m["body"] for m in d["messages"])'
+          expect 200 "$(request PATCH "/api/support/tickets/$TICKET_ID/state" '{"action":"close"}' "$USER_TOKEN")" close >/dev/null
+          expect 200 "$(request PATCH "/api/support/tickets/$TICKET_ID/state" '{"action":"reopen"}' "$USER_TOKEN")" reopen >/dev/null
+          printf 'ADMIN_TOKEN=%s\n' "$ADMIN_TOKEN" >>/tmp/gojet-candidate/support-state
+
+      - name: Candidate security - Turnstile secret boundary
+        timeout-minutes: 1
+        env: *candidate-env
+        run: |
+          set -euo pipefail
+          source /tmp/gojet-candidate/support-state
+          BASE="$GOJET_TEST_BASE"
+          request(){ local method=$1 path=$2 body=${3:-} auth=${4:-}; local args=(-sS --connect-timeout 3 --max-time 15 -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [ -n "$auth" ] && args+=(-H "Authorization: Bearer $auth"); [ -n "$body" ] && args+=(--data "$body"); curl "${args[@]}" "$BASE$path"; }
+          expect(){ local want=$1 raw=$2 label=$3 got body; got=$(printf '%s\n' "$raw"|tail -n1); body=$(printf '%s\n' "$raw"|sed '$d'); [ "$got" = "$want" ] || { echo "FAIL $label expected $want got $got" >&2; echo "$body" >&2; exit 1; }; printf '%s' "$body"; }
+          bot=$(expect 200 "$(request GET /api/admin/bot-protection '' "$ADMIN_TOKEN")" bot-read)
+          printf '%s' "$bot"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["turnstile.secret_configured"] is False; assert "turnstile.secret" not in d'
+          expect 200 "$(request PUT /api/admin/bot-protection '{"turnstile.enabled":false,"turnstile.site_key":"1x00000000000000000000AA","turnstile.secret":"candidate-secret-not-for-production","turnstile.allowed_hostnames":["gojet.cc"],"turnstile.ticket_create":true,"turnstile.ticket_reply":true,"turnstile.abuse_report":true}' "$ADMIN_TOKEN")" bot-save >/dev/null
+          bot=$(expect 200 "$(request GET /api/admin/bot-protection '' "$ADMIN_TOKEN")" bot-masked-read)
+          printf '%s' "$bot"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["turnstile.secret_configured"] is True; assert "turnstile.secret" not in d; assert d["turnstile.site_key"]=="1x00000000000000000000AA"'
+          test "$(MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -N -B -e "SELECT is_encrypted FROM system_settings WHERE setting_key='turnstile.secret';")" = 1
+
+      - name: Candidate security - public abuse intake
+        timeout-minutes: 1
+        env: *candidate-env
+        run: |
+          set -euo pipefail
+          BASE="$GOJET_TEST_BASE"
+          raw=$(curl -sS --connect-timeout 3 --max-time 15 -X POST -H 'Content-Type: application/json' --data '{"url":"http://127.0.0.1:18080/unresolved-candidate","reporter_email":"reporter@example.test","reason":"phishing","details":"RC12 candidate abuse intake"}' -w $'\n%{http_code}' "$BASE/api/public/abuse-reports")
+          code=$(printf '%s\n' "$raw"|tail -n1); body=$(printf '%s\n' "$raw"|sed '$d'); test "$code" = 202
+          ABUSE_ID=$(printf '%s' "$body"|python3 -c 'import json,sys; print(json.load(sys.stdin)["reference"])')
+          test "$ABUSE_ID" -gt 0
+          test "$(MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -N -B -e "SELECT CONCAT(reported_url,'|',reason,'|',status) FROM abuse_reports WHERE id=$ABUSE_ID;")" = 'http://127.0.0.1:18080/unresolved-candidate|phishing|open'
+
+      - name: Stop primary packaged runtime
+        if: always()
+        run: |
+          for name in platform-api redirect-engine analytics-worker; do test ! -f "/tmp/gojet-candidate/$name.pid" || kill "$(cat "/tmp/gojet-candidate/$name.pid")" 2>/dev/null || true; done
+
+      - name: Start packaged authentication-policy runtime
+        run: |
+          set -euo pipefail
+          ROOT=$(cat /tmp/gojet-candidate-root-path)
+          mkdir -p /tmp/gojet-auth/uploads /tmp/gojet-auth/files /tmp/gojet-auth/system/images
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(reversed(range(32)))).decode())
+          PY
+          )
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_candidate?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner-auth@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerAuthPassword!2026' QR_TRACKING_KEY='fresh-candidate-auth-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18091' PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojet-auth/uploads' SYSTEM_IMAGE_PATH='/tmp/gojet-auth/system/images' FILE_STORAGE_PATH='/tmp/gojet-auth/files' "$ROOT/bin/platform-api" >/tmp/gojet-auth.log 2>&1 &
+          echo $! >/tmp/gojet-auth.pid
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:18091/health >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done
+
+      - name: Run authentication policy against packaged runtime
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18091
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_auth_candidate
+          REDIS_ADDRESS: 127.0.0.1:6379
+        run: bash tests/integration/auth-policy.sh
+
+      - name: Stop packaged authentication runtime
+        if: always()
+        run: kill "$(cat /tmp/gojet-auth.pid)" 2>/dev/null || true
+
+      - name: Write RC12 candidate evidence
+        run: |
+          set -euo pipefail
+          ART=/tmp/gojet-package-artifact
+          {
+            echo "candidate_version=$PACKAGE_VERSION"
+            echo "package_run_id=$PACKAGE_RUN_ID"
+            echo "package_tested_sha=$PACKAGE_HEAD_SHA"
+            echo "package_sha256=$PACKAGE_ZIP_SHA256"
+            echo "candidate_control_sha=$(cat /tmp/gojet-candidate-control-sha)"
+            echo 'fresh_package_migrations=pass'
+            echo 'packaged_runtime_settings=pass'
+            echo 'packaged_runtime_p0=pass'
+            echo 'system_asset_isolation=pass'
+            echo 'generated_qr_isolation=pass'
+            echo 'mail_lifecycle=pass'
+            echo 'support_customer=pass'
+            echo 'support_administrator=pass'
+            echo 'turnstile_secret_boundary=pass'
+            echo 'public_abuse=pass'
+            echo 'packaged_auth_policy=pass'
+          } | tee "$ART/RC12-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt"
+
+      - name: Refuse stale RC12 candidate if branch moved
+        run: |
+          set -euo pipefail
+          TESTED=$(cat /tmp/gojet-candidate-control-sha)
+          CURRENT=$(git ls-remote origin refs/heads/rebuild/v4-rc12-real-install-fixes|awk '{print $1}')
+          test "$TESTED" = "$CURRENT" || { echo "branch moved during RC12 final candidate: tested=$TESTED current=$CURRENT" >&2; exit 1; }
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== changed since Package ====='; cat /tmp/gojet-post-package-files 2>/dev/null || true
+          echo '===== platform API ====='; cat /tmp/gojet-candidate/platform-api.log 2>/dev/null || true
+          echo '===== mail worker ====='; cat /tmp/gojet/mail-worker.log 2>/dev/null || true
+          echo '===== auth API ====='; cat /tmp/gojet-auth.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -e 'SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,ticket_number,status,priority FROM support_tickets ORDER BY id DESC LIMIT 20; SELECT id,reported_url,reason,status FROM abuse_reports ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
+
+      - name: Upload exact RC12 fresh-install candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-4.0.0-rc.12-fresh-install-candidate-final
+          path: |
+            /tmp/gojet-package-artifact/gojet-4.0.0-rc.12-linux-production.zip
+            /tmp/gojet-package-artifact/gojet-4.0.0-rc.12-linux-production.zip.sha256
+            /tmp/gojet-package-artifact/RC12-RELEASE-EVIDENCE.txt
+            /tmp/gojet-package-artifact/RC12-FRESH-INSTALL-CANDIDATE-EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 14
