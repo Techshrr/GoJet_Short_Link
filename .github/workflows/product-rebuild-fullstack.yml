@@ -142,6 +142,9 @@ jobs:
       - name: Administrator link lifecycle
         env: *integration-env
         run: bash tests/integration/admin-link-lifecycle.sh
+      - name: Registered system settings round-trip
+        env: *integration-env
+        run: bash tests/integration/settings-roundtrip.sh
       - name: Real QR decode, redirect and qr_visits attribution
         env: *integration-env
         run: bash tests/integration/qr-real-e2e.sh
