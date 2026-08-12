@@ -102,14 +102,7 @@ mysql_version=$(tr -d '\r\n' < "$STATE/mysql-version.txt")
 MYSQL_PWD="${cfg[MYSQL_PASSWORD]}" "$mysql" -h "$MYSQL_HOST" -P "${cfg[MYSQL_PORT]}" -u "${cfg[MYSQL_USER]}" "${cfg[MYSQL_DATABASE]}" -e "CREATE TABLE IF NOT EXISTS schema_migrations(name VARCHAR(255) PRIMARY KEY,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" 2>/dev/null || fail '数据库用户缺少建表权限'
 
 status database 27 '正在执行数据库迁移'
-for migration in "$ROOT"/database/migrations/*.sql; do
-  name=$(basename "$migration")
-  applied=$(MYSQL_PWD="${cfg[MYSQL_PASSWORD]}" "$mysql" -N -s -h "$MYSQL_HOST" -P "${cfg[MYSQL_PORT]}" -u "${cfg[MYSQL_USER]}" "${cfg[MYSQL_DATABASE]}" -e "SELECT COUNT(*) FROM schema_migrations WHERE name='$name'") || fail "读取迁移状态失败：$name"
-  if [[ "$applied" == 0 ]]; then
-    MYSQL_PWD="${cfg[MYSQL_PASSWORD]}" "$mysql" -h "$MYSQL_HOST" -P "${cfg[MYSQL_PORT]}" -u "${cfg[MYSQL_USER]}" "${cfg[MYSQL_DATABASE]}" < "$migration" || fail "数据库迁移失败：$name"
-    MYSQL_PWD="${cfg[MYSQL_PASSWORD]}" "$mysql" -h "$MYSQL_HOST" -P "${cfg[MYSQL_PORT]}" -u "${cfg[MYSQL_USER]}" "${cfg[MYSQL_DATABASE]}" -e "INSERT INTO schema_migrations(name) VALUES('$name')" || fail "记录迁移失败：$name"
-  fi
-done
+MYSQL_HOST="$MYSQL_HOST" MYSQL_PORT="${cfg[MYSQL_PORT]}" MYSQL_USER="${cfg[MYSQL_USER]}" MYSQL_PASSWORD="${cfg[MYSQL_PASSWORD]}" MYSQL_DATABASE="${cfg[MYSQL_DATABASE]}" MYSQL_BIN="$mysql" "$ROOT/scripts/runmigrations.sh" || fail '数据库迁移失败'
 
 status redis 38 '正在验证 Redis'
 redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}")
@@ -240,7 +233,7 @@ version=$(cat "$ROOT/VERSION" 2>/dev/null || echo development)
 installation_id=$(openssl rand -hex 16)
 printf 'version=%s\ninstalled_at=%s\ninstallation_id=%s\nmysql_schema=%s\nclamav=%s\n' \
   "$version" "$(date -u +%FT%TZ)" "$installation_id" \
-  "$(basename "$(ls -1 "$ROOT"/database/migrations/*.sql | tail -1)")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"
+  "$(tail -n 1 "$ROOT/database/migrations/migrationcatalog.txt")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"
 chmod 0644 "$LOCK"
 rm -f "$PROCESSING" "$STATE/mysql-version.txt"
 status complete 100 'GoJet 安装完成，核心服务和后台静态资源均已通过健康检查' success

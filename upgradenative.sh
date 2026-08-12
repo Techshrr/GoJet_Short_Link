@@ -79,21 +79,8 @@ trap rollback ERR
 
 echo '[1/6] 验证数据库并执行缺失迁移…'
 mysql_exec -e 'SELECT 1' >/dev/null
-mysql_exec -e "CREATE TABLE IF NOT EXISTS schema_migrations(name VARCHAR(255) PRIMARY KEY,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)" >/dev/null
-for migration in "$SOURCE"/database/migrations/*.sql; do
-  name=$(basename "$migration")
-  applied=$(mysql_exec -N -s -e "SELECT COUNT(*) FROM schema_migrations WHERE name='$name'")
-  [[ "$applied" == "0" ]] || continue
-  if [[ "$name" == "026_admin_step_up_session.sql" ]]; then
-    column_exists=$(mysql_exec -N -s -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='administrator_sessions' AND COLUMN_NAME='step_up_until'")
-    if [[ "$column_exists" != "0" ]]; then
-      mysql_exec -e "INSERT INTO schema_migrations(name) VALUES('$name')" >/dev/null
-      continue
-    fi
-  fi
-  mysql_exec < "$migration"
-  mysql_exec -e "INSERT INTO schema_migrations(name) VALUES('$name')" >/dev/null
-done
+MYSQL_HOST="$MYSQL_HOST" MYSQL_PORT="$MYSQL_PORT" MYSQL_USER="$MYSQL_USER" MYSQL_PASSWORD="$MYSQL_PASSWORD" MYSQL_DATABASE="$MYSQL_DATABASE" MYSQL_BIN="$mysql_bin" MIGRATION_ROOT="$SOURCE/database/migrations" "$SOURCE/scripts/runmigrations.sh"
+rm -rf "$TARGET/database/migrations"
 mkdir -p "$TARGET/database/migrations"
 cp -a "$SOURCE/database/migrations/." "$TARGET/database/migrations/"
 
