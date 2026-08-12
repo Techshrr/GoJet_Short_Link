@@ -20,7 +20,7 @@ func TestRenderInvoicePDFRequiresBundledUnicodeFont(t *testing.T) {
 func TestRenderInvoicePDFEmbedsUnicodeFontForChineseAndLatin(t *testing.T) {
 	font := filepath.Join("..", "..", "resources", "fonts", "NotoSansSC-VF.ttf")
 	if _, err := os.Stat(font); err != nil {
-		t.Skip("run scripts/prepare-pdf-fonts.sh before the PDF render test")
+		t.Skip("run scripts/preparepdffonts.sh before the PDF render test")
 	}
 	pdf, err := RenderInvoicePDF(InvoicePDFData{
 		BrandColor: "#16A66A", SiteName: "GoJet", CompanyName: "GoJet Technology",

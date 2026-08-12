@@ -98,7 +98,7 @@ $checks = [
     'json' => [extension_loaded('json'), 'PHP 扩展：JSON'],
     'hash' => [extension_loaded('hash'), 'PHP 扩展：Hash'],
     'arch' => [PHP_INT_SIZE === 8, '64 位 PHP'],
-    'binaries' => [count(array_filter(['redirect-engine','analytics-worker','analytics-reconciler','platform-api','mail-worker','file-worker','operations-monitor','log-receiver'], fn($b) => is_executable($root . '/bin/' . $b))) === 8, '8 个 GoJet Linux 服务程序'],
+    'binaries' => [count(array_filter(['redirectengine','analyticsworker','analyticsreconciler','platformapi','mailworker','fileworker','operationsmonitor','logreceiver'], fn($b) => is_executable($root . '/bin/' . $b))) === 8, '8 个 GoJet Linux 服务程序'],
     'state' => [is_dir($state) && is_writable($state), '安装状态目录可写'],
 ];
 [$clamavOk, $clamavMessage] = clamavCheck();

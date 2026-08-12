@@ -1,7 +1,7 @@
 const{test,expect}=require('@playwright/test');
 const products=['url-shortener','bio-pages','text-sharing','file-sharing','analytics','qr-code','ab-testing','custom-domains','smart-links','qr-campaigns'];
 const genericRoutes=['about','contact','resources','docs','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browser-extension','apps','changelog'];
-const authRoutes=['login','register','forgot-password','reset-password?token=acceptance-token','verify-email?token=acceptance-token'];
+const authRoutes=['login','register','forgotpassword','resetpassword?token=acceptance-token','verifyemail?token=acceptance-token'];
 test.beforeEach(async({page})=>page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'})));
 
 for(const product of products)test(`${product} has complete product narrative`,async({page})=>{

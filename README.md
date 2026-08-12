@@ -31,7 +31,7 @@ verification, and real payment-channel acceptance.
 ```sh
 go test -race ./...
 go vet ./...
-npm ci
+bash scripts/npmci.sh
 npm run test:e2e
 ```
 
@@ -41,12 +41,12 @@ by the individual scripts under `tests/integration/`.
 ## Documentation
 
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
-- Deployment: [`docs/deployment.zh-CN.md`](docs/deployment.zh-CN.md)
-- Fresh-install guide: [`deploy/INSTALL.zh-CN.md`](deploy/INSTALL.zh-CN.md)
-- Full-stack acceptance: [`docs/full-stack-acceptance.zh-CN.md`](docs/full-stack-acceptance.zh-CN.md)
-- Integration acceptance: [`docs/integration-acceptance.zh-CN.md`](docs/integration-acceptance.zh-CN.md)
-- Mail center: [`docs/mail-center.zh-CN.md`](docs/mail-center.zh-CN.md)
-- Object storage: [`docs/object-storage.zh-CN.md`](docs/object-storage.zh-CN.md)
+- Deployment: [`docs/deployment.zhCN.md`](docs/deployment.zhCN.md)
+- Fresh-install guide: [`deploy/INSTALL.zhCN.md`](deploy/INSTALL.zhCN.md)
+- Full-stack acceptance: [`docs/fullstackacceptance.zhCN.md`](docs/fullstackacceptance.zhCN.md)
+- Integration acceptance: [`docs/integrationacceptance.zhCN.md`](docs/integrationacceptance.zhCN.md)
+- Mail center: [`docs/mailcenter.zhCN.md`](docs/mailcenter.zhCN.md)
+- Object storage: [`docs/objectstorage.zhCN.md`](docs/objectstorage.zhCN.md)
 
 Configuration examples are provided in [`.env.example`](.env.example) and
 `deploy/.env.production.example`.

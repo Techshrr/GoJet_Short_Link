@@ -1,0 +1,10 @@
+# Use with compose.production.yaml when Nginx is installed directly on the host.
+services:
+  nginx:
+    profiles: ["bundled-nginx"]
+  redirectengine:
+    ports:
+      - "127.0.0.1:18080:8080"
+  platformapi:
+    ports:
+      - "127.0.0.1:18090:8090"

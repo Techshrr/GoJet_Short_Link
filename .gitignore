@@ -2,7 +2,7 @@
 deploy/.env.production
 backups/
 /server
-/analytics-worker
+/analyticsworker
 *.log
 __pycache__/
 *.pyc

@@ -20,14 +20,14 @@ shared consistently by the API, Nginx and deployment definitions.
 
 The production package contains eight Go executables:
 
-1. `redirect-engine` — resolves short links and records realtime visit events.
-2. `analytics-worker` — persists visit events and aggregate analytics.
-3. `analytics-reconciler` — reconciles realtime and persisted counters.
-4. `platform-api` — serves customer, administrator and public product APIs.
-5. `mail-worker` — renders and sends queued branded transactional mail.
-6. `file-worker` — processes file scanning and retention work.
-7. `operations-monitor` — evaluates operational state and platform alerts.
-8. `log-receiver` — receives structured service logs.
+1. `redirectengine` — resolves short links and records realtime visit events.
+2. `analyticsworker` — persists visit events and aggregate analytics.
+3. `analyticsreconciler` — reconciles realtime and persisted counters.
+4. `platformapi` — serves customer, administrator and public product APIs.
+5. `mailworker` — renders and sends queued branded transactional mail.
+6. `fileworker` — processes file scanning and retention work.
+7. `operationsmonitor` — evaluates operational state and platform alerts.
+8. `logreceiver` — receives structured service logs.
 
 MySQL is the durable business store. Redis provides realtime redirect state,
 rate limiting, streams and short-lived application data. ClamAV provides file

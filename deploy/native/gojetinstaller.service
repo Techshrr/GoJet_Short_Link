@@ -1,0 +1,12 @@
+[Unit]
+Description=GoJet privileged installer apply helper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=__GOJET_ROOT__/scripts/nativeinstallerrun.sh
+UMask=0077
+NoNewPrivileges=false

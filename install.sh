@@ -6,7 +6,7 @@ die(){ echo "GoJet installer bootstrap: $*" >&2; exit 1; }
 case "$ROOT" in *' '*) die "安装路径不能包含空格";; esac
 
 if [[ "${1:-}" == "--docker" ]]; then
-  exec "$ROOT/scripts/install-docker.sh"
+  exec "$ROOT/scripts/installdocker.sh"
 fi
 
 find_cmd(){
@@ -38,7 +38,7 @@ if (( ${#missing_php_extensions[@]} > 0 )); then
   die "PHP 缺少必需扩展：${missing_php_extensions[*]}"
 fi
 [[ -f "$ROOT/public/install/index.php" ]] || die "发布包缺少 public/install/index.php"
-for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
+for binary in redirectengine analyticsworker analyticsreconciler platformapi mailworker fileworker operationsmonitor logreceiver; do
   [[ -x "$ROOT/bin/$binary" ]] || die "发布包缺少可执行文件 bin/$binary"
 done
 
@@ -55,10 +55,10 @@ rm -f "$STATE/request.ready" "$STATE/request.processing"
 printf '%s\n' "root=$ROOT" "web_user=$WEB_USER" "web_group=$WEB_GROUP" "nginx=$NGINX" "php=$PHP" "mysql=$MYSQL" "redis_cli=$REDIS_CLI" > "$ROOT/deploy/native/bootstrap.env"
 chmod 0600 "$ROOT/deploy/native/bootstrap.env"
 
-sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojet-installer.service" > /etc/systemd/system/gojet-installer.service
-sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojet-installer.path" > /etc/systemd/system/gojet-installer.path
+sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojetinstaller.service" > /etc/systemd/system/gojetinstaller.service
+sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojetinstaller.path" > /etc/systemd/system/gojetinstaller.path
 systemctl daemon-reload
-systemctl enable --now gojet-installer.path
+systemctl enable --now gojetinstaller.path
 
 touch "$STATE/bootstrap.ready"
 chown "$WEB_USER:$WEB_GROUP" "$STATE/bootstrap.ready"

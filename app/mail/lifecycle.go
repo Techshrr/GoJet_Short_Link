@@ -40,7 +40,7 @@ func fxDescription(sourceAmount int64, sourceCurrency string, settlementAmount i
 
 // QueueLifecycleNotifications discovers durable business-state transitions and
 // enqueues each customer notification at most once through mail_messages.dedupe_key.
-// It is deliberately safe to call repeatedly from mail-worker.
+// It is deliberately safe to call repeatedly from mailworker.
 func (s *Service) QueueLifecycleNotifications(ctx context.Context) error {
 	if err := s.queueInvoiceCreated(ctx); err != nil { return err }
 	if err := s.queueInvoiceDueSoon(ctx); err != nil { return err }

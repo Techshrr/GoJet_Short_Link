@@ -11,7 +11,7 @@ import (
 
 func TestMiddlewarePropagatesValidRequestIDAndLogsJSON(t *testing.T) {
 	var output bytes.Buffer
-	logger := NewLogger("platform-api", &output)
+	logger := NewLogger("platformapi", &output)
 	handler := logger.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if RequestID(r.Context()) != "client-request-1234" {
 			t.Fatal("request id missing from context")
@@ -29,7 +29,7 @@ func TestMiddlewarePropagatesValidRequestIDAndLogsJSON(t *testing.T) {
 	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &record); err != nil {
 		t.Fatal(err)
 	}
-	if record["service"] != "platform-api" || record["status"] != float64(201) {
+	if record["service"] != "platformapi" || record["status"] != float64(201) {
 		t.Fatalf("record=%v", record)
 	}
 }

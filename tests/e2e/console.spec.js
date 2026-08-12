@@ -37,7 +37,7 @@ test('customer console loads the canonical browser module bundle',async({page})=
   await page.route('**/api/**',route=>json(route,commonUser(new URL(route.request().url()).pathname)));
   await openUser(page);
   const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname));
-  for(const resource of ['/app/app.js','/app/pages.js','/app/router.js','/app/pending-link.js'])expect(resources).toContain(resource);
+  for(const resource of ['/app/app.js','/app/pages.js','/app/router.js','/app/pendinglink.js'])expect(resources).toContain(resource);
   await expect(page.getByText('GoJet',{exact:false}).first()).toBeVisible();
   await expect(page.getByRole('button',{name:'创建链接'})).toBeVisible();
 });
@@ -71,7 +71,7 @@ test('customer file sharing distinguishes clean downloads from quarantined scans
   await seedUser(page);
   await page.route('**/api/**',route=>{
     const path=new URL(route.request().url()).pathname;
-    if(path.includes('/file-shares'))return json(route,{data:[{id:3,slug:'safe-file',original_name:'campaign.pdf',mime_type:'application/pdf',size_bytes:2048,scan_status:'clean',status:'active',downloads:2,max_downloads:10},{id:4,slug:'pending-file',original_name:'raw-assets.zip',mime_type:'application/zip',size_bytes:4096,scan_status:'pending',status:'quarantined',downloads:0}]});
+    if(path.includes('/fileshares'))return json(route,{data:[{id:3,slug:'safe-file',original_name:'campaign.pdf',mime_type:'application/pdf',size_bytes:2048,scan_status:'clean',status:'active',downloads:2,max_downloads:10},{id:4,slug:'pending-file',original_name:'raw-assets.zip',mime_type:'application/zip',size_bytes:4096,scan_status:'pending',status:'quarantined',downloads:0}]});
     return json(route,commonUser(path));
   });
   await openUser(page);
@@ -162,7 +162,7 @@ test('administrator console loads every canonical management module',async({page
   await page.route('**/api/admin/**',route=>json(route,commonAdmin(new URL(route.request().url()).pathname)));
   await openAdmin(page);
   const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname));
-  for(const resource of ['/admin/app.js','/admin/mail-status.js','/admin/mail-templates.js','/admin/product-actions.js','/admin/billingadmin.js','/admin/settings.js','/admin/billing-fx-settings.js','/admin/support-security.js'])expect(resources).toContain(resource);
+  for(const resource of ['/admin/app.js','/admin/mailstatus.js','/admin/mailtemplates.js','/admin/productactions.js','/admin/billingadmin.js','/admin/settings.js','/admin/billingfxsettings.js','/admin/supportsecurity.js'])expect(resources).toContain(resource);
   await expect(page.getByRole('button',{name:'客户工单'})).toBeVisible();
   await expect(page.getByRole('button',{name:'人机验证'})).toBeVisible();
 });

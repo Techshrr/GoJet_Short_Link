@@ -13,17 +13,17 @@ services:
       - ./data/generated/qr:/usr/share/nginx/html/generated/qr:ro
       - ./data/uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
-      redirect-engine:
+      redirectengine:
         condition: service_healthy
-      platform-api:
+      platformapi:
         condition: service_healthy
 
-  log-receiver:
+  logreceiver:
     build:
       context: ..
       dockerfile: deploy/docker/service.Dockerfile
       args:
-        BINARY: log-receiver
+        BINARY: logreceiver
     restart: unless-stopped
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
@@ -32,12 +32,12 @@ services:
       mysql:
         condition: service_healthy
 
-  redirect-engine:
+  redirectengine:
     build:
       context: ..
       dockerfile: deploy/docker/service.Dockerfile
       args:
-        BINARY: redirect-engine
+        BINARY: redirectengine
     restart: unless-stopped
     environment:
       HTTP_ADDRESS: :8080
@@ -45,7 +45,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       VISITOR_HASH_KEY: ${VISITOR_HASH_KEY:?VISITOR_HASH_KEY is required}
       QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
       VISIT_RATE_LIMIT_PER_MINUTE: ${VISIT_RATE_LIMIT_PER_MINUTE:-60}
     healthcheck:
@@ -57,18 +57,18 @@ services:
       redis:
         condition: service_healthy
 
-  analytics-worker:
+  analyticsworker:
     build:
       context: ..
       dockerfile: deploy/docker/service.Dockerfile
       args:
-        BINARY: analytics-worker
+        BINARY: analyticsworker
     restart: unless-stopped
     environment:
       REDIS_ADDRESS: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
       ANALYTICS_GROUP: gojet-mysql
       ANALYTICS_CONSUMER: ${HOSTNAME:-worker-1}
@@ -79,12 +79,12 @@ services:
       mysql:
         condition: service_healthy
 
-  analytics-reconciler:
+  analyticsreconciler:
     build:
       context: ..
       dockerfile: deploy/docker/service.Dockerfile
       args:
-        BINARY: analytics-reconciler
+        BINARY: analyticsreconciler
     restart: unless-stopped
     environment:
       REDIS_ADDRESS: redis:6379
@@ -98,7 +98,7 @@ services:
       mysql:
         condition: service_healthy
 
-  platform-api:
+  platformapi:
     image: gojet-platform-runtime:local
     build:
       context: ..
@@ -126,7 +126,7 @@ services:
       S3_SECURE: ${S3_SECURE:-true}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL is required}
       QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
     volumes:
       - ./data/brand:/data/brand
@@ -134,7 +134,7 @@ services:
       - ./data/uploads:/data/uploads
       - ./data/files:/data/files
     healthcheck:
-      test: ["CMD", "/platform-api", "healthcheck"]
+      test: ["CMD", "/platformapi", "healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -144,30 +144,30 @@ services:
       redis:
         condition: service_healthy
 
-  mail-worker:
+  mailworker:
     image: gojet-platform-runtime:local
-    entrypoint: ["/mail-worker"]
+    entrypoint: ["/mailworker"]
     restart: unless-stopped
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
     depends_on:
       mysql:
         condition: service_healthy
-      platform-api:
+      platformapi:
         condition: service_started
 
-  file-worker:
+  fileworker:
     image: gojet-platform-runtime:local
-    entrypoint: ["/file-worker"]
+    entrypoint: ["/fileworker"]
     restart: unless-stopped
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
       FILE_STORAGE_PATH: /data/files
       CLAMAV_ADDRESS: clamav:3310
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
       FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-filesystem}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -183,24 +183,24 @@ services:
         condition: service_healthy
       clamav:
         condition: service_started
-      platform-api:
+      platformapi:
         condition: service_started
 
-  operations-monitor:
+  operationsmonitor:
     image: gojet-platform-runtime:local
-    entrypoint: ["/operations-monitor"]
+    entrypoint: ["/operationsmonitor"]
     restart: unless-stopped
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
       ALERT_RECIPIENT: ${ALERT_RECIPIENT:-}
       OPERATIONS_MONITOR_INTERVAL_SECONDS: ${OPERATIONS_MONITOR_INTERVAL_SECONDS:-60}
-      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://log-receiver:8092/v1/logs}
+      LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
     depends_on:
       mysql:
         condition: service_healthy
-      platform-api:
+      platformapi:
         condition: service_started
 
   clamav:

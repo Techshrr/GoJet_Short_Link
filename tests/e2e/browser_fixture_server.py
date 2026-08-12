@@ -6,8 +6,8 @@ import json, mimetypes, os, subprocess, sys, time
 
 ROOT=Path(__file__).resolve().parents[2]
 PUBLIC=Path(os.environ.get('GOJET_FIXTURE_PUBLIC', '/tmp/gojet-browser-fixture'))
-APP=ROOT/'frontend'/'user-console'
-ADMIN=ROOT/'frontend'/'admin-console'
+APP=ROOT/'frontend'/'userconsole'
+ADMIN=ROOT/'frontend'/'adminconsole'
 
 USERS=[{'id':1,'email':'user@example.test','name':'Browser User','status':'active','email_verified':True,'workspaces':1,'last_login_at':'2026-08-10T00:00:00Z','created_at':'2026-08-01T00:00:00Z'}]
 USER_DETAIL={'id':1,'email':'user@example.test','display_name':'Browser User','status':'active','email_verified':True,'active_sessions':2,'last_login_at':'2026-08-10T00:00:00Z','resources':{'links':4,'file_shares':1},'workspaces':[{'id':1,'name':'Browser Workspace','role':'owner','status':'active'}]}
@@ -20,7 +20,7 @@ BOT={'turnstile.enabled':False,'turnstile.site_key':'','turnstile.fail_open':Fal
 def ensure_public_build():
     if (PUBLIC/'index.html').is_file():
         return
-    subprocess.run([sys.executable,str(ROOT/'scripts'/'build-public-site.py'),'--output',str(PUBLIC)],check=True)
+    subprocess.run([sys.executable,str(ROOT/'scripts'/'buildpublicsite.py'),'--output',str(PUBLIC)],check=True)
 
 class H(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -102,8 +102,8 @@ class H(BaseHTTPRequestHandler):
         if p=='/api/public/abuse-reports': return self.send_json({'accepted':True,'reference':42},202)
         if p=='/api/auth/login': return self.send_json({'user':{'id':1,'email':'user@example.test','display_name':'Browser User'},'token':'u'*64})
         if p=='/api/auth/register': return self.send_json({'user':{'id':2},'token':'r'*64},201)
-        if p=='/api/auth/forgot-password': return self.send_json({'queued':True},202)
-        if p=='/api/auth/reset-password': return self.send_json({'reset':True})
+        if p=='/api/auth/forgotpassword': return self.send_json({'queued':True},202)
+        if p=='/api/auth/resetpassword': return self.send_json({'reset':True})
         if p.startswith('/api/'): return self.send_json({'ok':True})
         self.send_error(404)
     def do_PATCH(self):

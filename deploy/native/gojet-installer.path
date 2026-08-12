@@ -1,9 +1,0 @@
-[Unit]
-Description=Watch for a GoJet web installer request
-
-[Path]
-PathExists=__GOJET_ROOT__/storage/installer/request.ready
-Unit=gojet-installer.service
-
-[Install]
-WantedBy=multi-user.target

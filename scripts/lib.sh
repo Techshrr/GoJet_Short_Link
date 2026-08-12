@@ -23,7 +23,7 @@ validate_env() {
   set -a; . "$ENV_FILE"; set +a
   case "${NGINX_MODE:-container}" in
     container) ;;
-    host) COMPOSE_OVERRIDE="$ROOT/deploy/compose.host-nginx.yaml" ;;
+    host) COMPOSE_OVERRIDE="$ROOT/deploy/compose.hostnginx.yaml" ;;
     *) die "NGINX_MODE must be container or host" ;;
   esac
   for key in MYSQL_PASSWORD MYSQL_ROOT_PASSWORD REDIS_PASSWORD VISITOR_HASH_KEY QR_TRACKING_KEY SETTINGS_ENCRYPTION_KEY ADMIN_BOOTSTRAP_EMAIL ADMIN_BOOTSTRAP_PASSWORD PUBLIC_BASE_URL LOG_WEBHOOK_TOKEN LOG_INGEST_TOKEN; do

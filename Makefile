@@ -7,32 +7,32 @@ test-go:
 	go vet ./...
 
 test-browser:
-	npm ci --ignore-scripts
+	bash scripts/npmci.sh --ignore-scripts
 	npx playwright install chromium
 	npm audit --audit-level=high
 	npm run test:e2e
 
 test-integration:
-	./tests/integration/redis-analytics.sh
-	./tests/integration/mysql-platform.sh
-	./tests/integration/smtp-protocol.sh
-	./tests/integration/clamav-eicar.sh
-	./tests/integration/minio-storage.sh
-	./tests/integration/full-stack-analytics.sh
-	./tests/integration/file-worker-scale.sh
-	./tests/integration/log-receiver.sh
-	./tests/integration/release-package.sh
-	./tests/integration/nginx-host.sh
+	./tests/integration/redisanalytics.sh
+	./tests/integration/mysqlplatform.sh
+	./tests/integration/smtpprotocol.sh
+	./tests/integration/clamaveicar.sh
+	./tests/integration/miniostorage.sh
+	./tests/integration/fullstackanalytics.sh
+	./tests/integration/fileworkerscale.sh
+	./tests/integration/logreceiver.sh
+	./tests/integration/releasepackage.sh
+	./tests/integration/nginxhost.sh
 
 build:
-	go build -o /tmp/gojet-redirect ./services/redirect-engine/cmd/server
-	go build -o /tmp/gojet-analytics-worker ./services/analytics-worker/cmd/worker
-	go build -o /tmp/gojet-analytics-reconciler ./services/analytics-reconciler/cmd/reconciler
-	go build -o /tmp/gojet-platform ./services/platform-api/cmd/server
-	go build -o /tmp/gojet-mail-worker ./services/platform-api/cmd/mail-worker
-	go build -o /tmp/gojet-file-worker ./services/platform-api/cmd/file-worker
-	go build -o /tmp/gojet-operations-monitor ./services/platform-api/cmd/operations-monitor
-	go build -o /tmp/gojet-log-receiver ./services/log-receiver/cmd/server
+	go build -o /tmp/gojet-redirect ./services/redirectengine/cmd/server
+	go build -o /tmp/gojet-analyticsworker ./services/analyticsworker/cmd/worker
+	go build -o /tmp/gojet-analyticsreconciler ./services/analyticsreconciler/cmd/reconciler
+	go build -o /tmp/gojet-platform ./services/platformapi/cmd/server
+	go build -o /tmp/gojet-mailworker ./services/platformapi/cmd/mailworker
+	go build -o /tmp/gojet-fileworker ./services/platformapi/cmd/fileworker
+	go build -o /tmp/gojet-operationsmonitor ./services/platformapi/cmd/operationsmonitor
+	go build -o /tmp/gojet-logreceiver ./services/logreceiver/cmd/server
 
 package:
-	./scripts/package-release.sh
+	./scripts/packagerelease.sh
