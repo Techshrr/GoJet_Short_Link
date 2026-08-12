@@ -11,10 +11,23 @@ async function setSession(page,token){await page.addInitScript(t=>localStorage.s
 async function noOverflow(page){const d=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));expect(d.scroll).toBeLessThanOrEqual(d.client+2);}
 async function noBrokenImages(page){const bad=await page.locator('img:visible').evaluateAll(imgs=>imgs.filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.getAttribute('src')));expect(bad).toEqual([]);}
 async function noEngineering(page){expect((await page.locator('body').innerText())).not.toMatch(engineering);}
+async function branded(locator){
+ await expect(locator).toBeVisible();
+ const logo=locator.locator('.logo').first();
+ await expect(logo).toBeVisible();
+ const image=logo.locator('img');
+ if(await image.count()){
+  await expect(image).toBeVisible();
+  await expect(image).toHaveAttribute('alt',/\S+/);
+  expect(await image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+ }else{
+  await expect(logo).toContainText('GoJet');
+ }
+}
 
 test.describe.serial('whole product visual and route consistency',()=>{
  test('every public product route uses a stable GoJet shell',async({page})=>{
-  for(const route of publicRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('body')).toBeVisible();await expect(page.locator('header')).toBeVisible();await expect(page.locator('footer')).toBeVisible();await expect(page.locator('header')).toContainText('GoJet');await expect(page.locator('footer')).toContainText('GoJet');await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
+  for(const route of publicRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('body')).toBeVisible();await branded(page.locator('header'));await branded(page.locator('footer'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
  });
  test('all account entry pages keep the GoJet identity without release-stage copy',async({page})=>{
   for(const route of authRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('.auth-brand')).toContainText('GoJet');await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
