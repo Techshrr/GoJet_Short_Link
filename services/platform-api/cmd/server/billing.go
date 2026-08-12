@@ -104,7 +104,7 @@ func (s *server) adminUpdatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := billing.PlanInput{Name: raw.Name, Description: raw.Description, Status: raw.Status, MonthlyPriceCents: raw.MonthlyPriceCents, LinkLimit: raw.LinkLimit, QRLimit: raw.QRLimit, TextLimit: raw.TextLimit, BioLimit: raw.BioLimit, FileStorageBytes: raw.FileStorageBytes, MemberLimit: raw.MemberLimit, AnalyticsRetentionDays: raw.AnalyticsRetentionDays, Features: raw.Features}
-	if err = s.billing.UpdatePlan(r.Context(), id, in); err != nil {
+	if err = s.billing.UpdateManagedPlan(r.Context(), id, in); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
