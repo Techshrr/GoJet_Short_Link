@@ -139,7 +139,7 @@ window.gojetOpenQR=async id=>{
   await qrs(Number(id));
 };
 
-window.GoJetProductHardening=window.GoJetProductHardening||{};
-window.GoJetProductHardening.texts=texts;
-window.GoJetProductHardening.qrs=qrs;
+window.GoJetPages=window.GoJetPages||{};
+window.GoJetPages.texts=texts;
+window.GoJetPages.qrs=qrs;
 })();
