@@ -6,8 +6,6 @@ for command in nginx python3 curl grep sed; do
   command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }
 done
 
-# Every supported deployment must route the three public product surfaces to
-# platformapi instead of falling through to the redirect engine.
 for config in \
   deploy/nginx/gojetbtrewrite.conf \
   deploy/nginx/gojet.conf \
@@ -21,6 +19,10 @@ do
   grep -q 'platformapi\|127.0.0.1:18090' "$config" || { echo "$config does not target platformapi" >&2; exit 1; }
 done
 
+for config in deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf; do
+  grep -Fq 'try_files $uri $uri.html' "$config" || { echo "$config does not map clean public URLs to flat HTML files" >&2; exit 1; }
+done
+
 tmp="$(mktemp -d)"
 cleanup(){
   for pid in "${nginx_pid:-}" "${platform_pid:-}" "${redirect_pid:-}"; do
@@ -30,18 +32,21 @@ cleanup(){
 }
 trap cleanup EXIT
 
-# Host/native Nginx deliberately target the packaged public tree rather than
-# source frontend directories. Build that exact layout here so this gate proves
-# what a user actually installs.
-stage="$tmp/gojet-install"
+stage="$tmp/gojetinstall"
 mkdir -p "$stage/public/app" "$stage/public/admin" \
   "$stage/deploy/data/brand" "$stage/deploy/data/generated/qr" "$stage/deploy/data/uploads"
 python3 scripts/buildpublicsite.py --output "$stage/public"
 cp -a frontend/userconsole/. "$stage/public/app/"
 cp -a frontend/adminconsole/. "$stage/public/admin/"
 test -s "$stage/public/index.html"
+test -s "$stage/public/privacy.html"
+test -s "$stage/public/terms.html"
+test -s "$stage/public/forgotpassword.html"
+test -s "$stage/public/reportabuse.html"
+test -s "$stage/public/products/urlshortener.html"
 test -s "$stage/public/app/index.html"
 test -s "$stage/public/admin/index.html"
+test -z "$(find "$stage/public" -mindepth 2 -type f -name index.html ! -path "$stage/public/app/index.html" ! -path "$stage/public/admin/index.html" -print -quit)"
 
 cat >"$tmp/upstream.py" <<'PY'
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
@@ -57,9 +62,6 @@ class Handler(BaseHTTPRequestHandler):
 ThreadingHTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
 PY
 
-# Full-stack acceptance already runs the real GoJet services on 18080/18090.
-# Use isolated upstream ports so this routing gate cannot accidentally talk to
-# those real processes and create a false pass.
 REDIRECT_TEST_PORT=18180
 PLATFORM_TEST_PORT=18190
 NGINX_TEST_PORT=18081
@@ -79,8 +81,6 @@ for port in "$REDIRECT_TEST_PORT" "$PLATFORM_TEST_PORT"; do
   fi
 done
 
-# Rewrite only the temporary runtime copy. The checked-in production config
-# remains pinned to the real native ports 18080/18090.
 sed \
   -e "s|__GOJET_ROOT__|$stage|g" \
   -e "s/listen 80;/listen 127.0.0.1:$NGINX_TEST_PORT;/" \
@@ -88,11 +88,10 @@ sed \
   -e "s/127\.0\.0\.1:18090/127.0.0.1:$PLATFORM_TEST_PORT/g" \
   deploy/nginx/gojethost.conf >"$tmp/gojet.conf"
 
-# Guard the fixture itself: the staged public tree and both isolated upstreams
-# must be present in the generated config or this test proves nothing.
 grep -Fq "root $stage/public;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged public root' >&2; exit 1; }
 grep -Fq "alias $stage/public/app/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged customer console' >&2; exit 1; }
 grep -Fq "alias $stage/public/admin/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged administrator console' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html @redirect;' "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use flat public clean URL mapping' >&2; exit 1; }
 grep -Fq "127.0.0.1:$REDIRECT_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate redirectengine upstream' >&2; exit 1; }
 grep -Fq "127.0.0.1:$PLATFORM_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate platformapi upstream' >&2; exit 1; }
 
@@ -139,13 +138,18 @@ assert_upstream(){
   fi
 }
 
-assert_contains / 'GoJet' 'marketing root'
+assert_contains / 'GoJet' 'public root'
+assert_contains /privacy '隐私政策' 'flat privacy page'
+assert_contains /terms '服务条款' 'flat terms page'
+assert_contains /forgotpassword '找回密码' 'flat password recovery page'
+assert_contains /reportabuse '举报' 'flat abuse report page'
+assert_contains /products/urlshortener '短链接' 'flat grouped product page'
 assert_contains /app/ 'GoJet 控制台' 'user console'
 assert_contains /admin/ 'GoJet 管理中心' 'administrator console'
 assert_upstream /api/public/status platformapi 'public API to platformapi'
 assert_upstream /t/demo platformapi 'text share to platformapi'
 assert_upstream /p/demo platformapi 'bio page to platformapi'
 assert_upstream /f/demo platformapi 'file share to platformapi'
-assert_upstream /example-code redirectengine 'short link fallback to redirectengine'
+assert_upstream /examplecode redirectengine 'short link fallback to redirectengine'
 
-printf 'packaged public tree and four-deployment Nginx routing acceptance passed\n'
+printf 'flat packaged public tree and four deployment Nginx routing acceptance passed\n'
