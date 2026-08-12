@@ -18,7 +18,7 @@ jobs:
         with:
           ref: rebuild/v4-rc12-real-install-fixes
           fetch-depth: 0
-      - name: Normalize every tracked repository path
+      - name: Normalize non-workflow repository paths
         shell: bash
         run: |
           set -euo pipefail
@@ -27,6 +27,7 @@ jobs:
           import subprocess
 
           ROOT = Path.cwd()
+          WORKFLOW_PREFIX = '.github/workflows/'
 
           def git(*args):
               return subprocess.check_output(['git', *args], cwd=ROOT)
@@ -36,7 +37,14 @@ jobs:
           def clean_path(path: str) -> str:
               return '/'.join(part.replace('-', '') for part in path.split('/'))
 
-          mapping = {old: clean_path(old) for old in tracked if clean_path(old) != old}
+          # GitHub Actions' job token cannot update workflow files. Normalize the
+          # entire remainder of the repository here; workflow paths/content are
+          # migrated immediately afterwards through the connected GitHub API.
+          mapping = {
+              old: clean_path(old)
+              for old in tracked
+              if not old.startswith(WORKFLOW_PREFIX) and clean_path(old) != old
+          }
           destinations = {}
           tracked_set = set(tracked)
           for old, new in mapping.items():
@@ -76,6 +84,8 @@ jobs:
           ordered = sorted(replacements.items(), key=lambda item: (-len(item[0]), item[0]))
           renamed = [p for p in git('ls-files', '-z').decode().split('\0') if p]
           for rel in renamed:
+              if rel.startswith(WORKFLOW_PREFIX):
+                  continue
               path = ROOT / rel
               try:
                   raw = path.read_bytes()
@@ -123,22 +133,20 @@ jobs:
           print(f"Repository path policy: PASS ({len(files)} tracked files, zero hyphenated paths)")
           ''', encoding='utf-8')
 
-          subprocess.run(['git', 'add', '-A'], cwd=ROOT, check=True)
-          subprocess.run(['python3', 'scripts/checknames.py'], cwd=ROOT, check=True)
+          # Before workflow migration, every non-workflow tracked path must already
+          # satisfy the final naming policy.
+          files = [p for p in git('ls-files', '-z').decode().split('\0') if p]
+          bad = [p for p in files if not p.startswith(WORKFLOW_PREFIX) and any('-' in part for part in p.split('/'))]
+          if bad:
+              raise SystemExit('non-workflow path normalization failed: ' + ', '.join(bad))
 
-          # Existing detector files are cleaned immediately after the atomic rename.
-          # Do not let their own detector text prevent the path transaction itself.
+          # Keep the source/release query-marker rule active for all files this job
+          # is allowed to mutate. Workflow detectors are cleaned in the API phase.
           needle = '?' + 'v='
-          detector_files = {
-              '.github/workflows/migratenames.yml',
-              '.github/workflows/productsurface.yml',
-              'scripts/buildpublicsite.py',
-              'scripts/packagerelease.sh',
-              'scripts/verifyrelease.sh',
-          }
+          detector_files = {'scripts/buildpublicsite.py', 'scripts/packagerelease.sh', 'scripts/verifyrelease.sh'}
           violations = []
-          for rel in [p for p in git('ls-files', '-z').decode().split('\0') if p]:
-              if rel in detector_files:
+          for rel in files:
+              if rel.startswith(WORKFLOW_PREFIX) or rel in detector_files:
                   continue
               path = ROOT / rel
               try:
@@ -161,5 +169,5 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add -A
           git status --short
-          git commit -m "Normalize all repository paths and references"
+          git commit -m "Normalize non-workflow repository paths and references"
           git push origin HEAD:rebuild/v4-rc12-real-install-fixes
