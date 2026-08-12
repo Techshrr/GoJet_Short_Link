@@ -20,7 +20,7 @@ mapfile -t migrations < <(sed -e 's/\r$//' -e '/^[[:space:]]*$/d' "$CATALOG")
 
 declare -A seen
 for name in "${migrations[@]}"; do
-  [[ "$name" =~ ^[a-z0-9]+\.sql$ ]] || { echo "invalid migration catalog entry: $name" >&2; exit 1; }
+  [[ "$name" =~ ^[a-z][a-z0-9]+\.sql$ ]] || { echo "invalid semantic migration catalog entry: $name" >&2; exit 1; }
   [[ -z "${seen[$name]:-}" ]] || { echo "duplicate migration catalog entry: $name" >&2; exit 1; }
   seen[$name]=1
   [[ -f "$MIGRATION_ROOT/$name" ]] || { echo "catalog migration missing: $name" >&2; exit 1; }
@@ -38,9 +38,10 @@ export MYSQL_PWD="$MYSQL_PASSWORD"
 
 "${mysqlcmd[@]}" -e "CREATE TABLE IF NOT EXISTS schema_migrations(name VARCHAR(255) PRIMARY KEY,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
 
-# Before semantic migration names were introduced, GoJet used numeric filename
-# prefixes. Map any legacy applied row to the catalog entry at the same ordinal,
-# then remove the engineering-style legacy row. Migration SQL is never replayed.
+# Upgrade compatibility only: installations created before semantic migration
+# names can contain numbered migration records. Map each legacy ordinal to the
+# semantic catalog entry, then remove the engineering-style row without
+# replaying its SQL.
 mapfile -t legacy < <("${mysqlquery[@]}" -e "SELECT name FROM schema_migrations WHERE name REGEXP '^[0-9]{3}.*[.]sql$' ORDER BY name")
 for old in "${legacy[@]}"; do
   ordinal=${old:0:3}
@@ -59,4 +60,4 @@ for name in "${migrations[@]}"; do
   "${mysqlcmd[@]}" -e "INSERT INTO schema_migrations(name) VALUES('$name')"
 done
 
-printf 'Migration catalog applied: %d migrations\n' "${#migrations[@]}"
+printf 'Migration catalog applied: %d semantic migrations\n' "${#migrations[@]}"
