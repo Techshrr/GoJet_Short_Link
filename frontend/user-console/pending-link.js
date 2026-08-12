@@ -1,6 +1,6 @@
 (()=>{
 let tries=0;
-function ready(){return window.GoJetProductHardening&&typeof state!=='undefined'&&state.workspace&&state.token}
+function ready(){return window.GoJetPages&&typeof state!=='undefined'&&state.workspace&&state.token}
 function applyPending(){
   if(!ready()){if(++tries<120)setTimeout(applyPending,100);return}
   if(location.pathname==='/app/links'){
