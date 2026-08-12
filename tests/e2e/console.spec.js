@@ -63,7 +63,7 @@ test('team console renders active members and invitation lifecycle states',async
   await page.getByRole('button',{name:'工作区与团队'}).click();
   await expect(page.getByText('数据分析员')).toBeVisible();
   await expect(page.getByText('等待接受')).toBeVisible();
-  await expect(page.getByText('已过期')).toBeVisible();
+  await expect(page.getByText('只读成员 · 已过期',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'重新发送'})).toHaveCount(2);
 });
 
@@ -94,7 +94,7 @@ test('organization, text, bio and QR product surfaces use live API data',async({
   });
   await openUser(page);
   await page.getByRole('button',{name:'活动与组织'}).click();
-  await expect(page.getByText('夏季投放',{exact:true})).toBeVisible();
+  await expect(page.locator('#organizationWorkspace').getByText('夏季投放',{exact:true})).toBeVisible();
   await expect(page.getByText(/41 次转化/)).toBeVisible();
   await page.getByRole('button',{name:'文本分享'}).click();
   await expect(page.getByText(/发布说明/)).toBeVisible();
@@ -166,7 +166,7 @@ test('administrator console loads every canonical management module',async({page
 
 test('administrator TOTP login uses the current login form and fails closed',async({page})=>{
   await page.route('**/api/admin/**',route=>{
-    const request=route.request(),path=new URL(request.url()).pathname;
+    const request=route.request(),path=new URL(route.request().url()).pathname;
     if(path==='/api/admin/auth/login'){
       const input=request.postDataJSON();
       if(input.code!=='123456')return json(route,{error:'请输入有效的二次验证码',two_factor_required:true},428);
@@ -191,7 +191,7 @@ test('administrator file security center retries a failed malware scan',async({p
   let retried=false;
   await seedAdmin(page);
   await page.route('**/api/admin/**',route=>{
-    const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
+    const request=route.request(),path=new URL(route.request().url()).pathname,method=request.method();
     if(path==='/api/admin/files'&&method==='GET')return json(route,{data:[{id:9,name:'campaign-assets.zip',mime:'application/zip',size:4096,scan_status:'error',status:'active',scan_result:'clamd connection: timeout',workspace:'营销团队',creator:'owner@example.com'},{id:8,name:'brief.pdf',mime:'application/pdf',size:2048,scan_status:'clean',status:'active',scan_result:'stream: OK',workspace:'创作者团队',creator:'editor@example.com'}]});
     if(path==='/api/admin/resources')return json(route,{data:[]});
     if(path==='/api/admin/files/9/retry-scan'&&method==='POST'){retried=true;return json(route,{queued:true})}
@@ -230,7 +230,7 @@ test('administrator diagnostics exposes live dependencies and direct audited act
   let reconciled=false;
   await seedAdmin(page);
   await page.route('**/api/admin/**',route=>{
-    const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
+    const request=route.request(),path=new URL(route.request().url()).pathname,method=request.method();
     if(path==='/api/admin/diagnostics'&&method==='GET')return json(route,{database:{status:'operational',latency_ms:3,open_connections:5},redis:{status:'operational',latency_ms:1,stream_events:82,consumer_pending:4},maintenance_mode:false,alerts:[]});
     if(path==='/api/admin/diagnostics/reconcile'&&method==='POST'){reconciled=true;return json(route,{status:'success'})}
     return json(route,commonAdmin(path));
