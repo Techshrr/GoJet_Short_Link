@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOJET_RELEASE_VERSION: 4.0.0-rc.12
+  GOJET_RELEASE_VERSION: 4.0.0-${{ github.sha }}
 
 jobs:
   package:
