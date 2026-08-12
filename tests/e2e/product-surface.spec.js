@@ -1,6 +1,8 @@
 const { test, expect } = require('@playwright/test');
 const fs=require('fs');
 const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
+const visualEvidenceDir='test-results/visual-evidence';
+fs.mkdirSync(visualEvidenceDir,{recursive:true});
 
 async function json(request,method,path,body,token){
   const options={method,headers:{'Content-Type':'application/json'}};
@@ -30,6 +32,9 @@ async function adminLogin(page){
   await page.getByLabel('密码').fill('OwnerPassword!2026');
   await page.getByRole('button',{name:'登录',exact:true}).click();
   await expect(page.getByText('平台概览',{exact:true}).first()).toBeVisible();
+}
+async function capture(page,name){
+  await page.screenshot({path:`${visualEvidenceDir}/${name}.png`,fullPage:true});
 }
 
 test.describe.serial('real product surface',()=>{
@@ -149,5 +154,44 @@ test.describe.serial('real product surface',()=>{
     const fields=await form.locator('input,select,textarea').all();
     const formBox=await form.boundingBox();
     for(const field of fields){const box=await field.boundingBox();expect(box.x).toBeGreaterThanOrEqual(formBox.x);expect(box.x+box.width).toBeLessThanOrEqual(formBox.x+formBox.width+1);}
+  });
+});
+
+test.describe.serial('product visual evidence',()=>{
+  test('capture desktop public home',async({page})=>{
+    await page.setViewportSize({width:1440,height:1000});
+    await page.goto(base+'/',{waitUntil:'networkidle'});
+    await expect(page.getByRole('heading',{name:'让链接更短，让分享更有价值'})).toBeVisible();
+    await capture(page,'01-public-home-desktop');
+  });
+
+  test('capture mobile public home',async({page})=>{
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(base+'/',{waitUntil:'networkidle'});
+    await expect(page.getByRole('heading',{name:'让链接更短，让分享更有价值'})).toBeVisible();
+    await capture(page,'02-public-home-mobile');
+  });
+
+  test('capture account login',async({page})=>{
+    await page.setViewportSize({width:1280,height:900});
+    await page.goto(base+'/login',{waitUntil:'networkidle'});
+    await expect(page.getByRole('heading',{name:'欢迎回来'})).toBeVisible();
+    await capture(page,'03-account-login');
+  });
+
+  test('capture customer console',async({page,request})=>{
+    const account=await bootstrapUser(request);
+    await setUserSession(page,account.token);
+    await page.setViewportSize({width:1440,height:1000});
+    await page.goto(base+'/app/dashboard',{waitUntil:'networkidle'});
+    await expect(page.locator('#shell')).toBeVisible();
+    await capture(page,'04-customer-console');
+  });
+
+  test('capture administrator console',async({page})=>{
+    await page.setViewportSize({width:1440,height:1000});
+    await adminLogin(page);
+    await expect(page.locator('#adminView')).toBeVisible();
+    await capture(page,'05-administrator-console');
   });
 });
