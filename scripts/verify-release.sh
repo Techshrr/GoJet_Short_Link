@@ -24,7 +24,7 @@ for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh ins
   database/migrations/003_identity_and_workspaces.sql database/migrations/015_admin_identity.sql database/migrations/025_mail_templates.sql \
   database/migrations/028_file_share_password.sql database/migrations/029_payment_transactions.sql \
   database/migrations/030_fx_and_mail_lifecycle.sql database/migrations/031_account_workspace_mail_events.sql \
-  database/migrations/032_support_tickets_and_turnstile.sql database/migrations/033_abuse_report_public_url.sql database/migrations/034_mail_brand_fragments.sql \
+  database/migrations/032_support_tickets_and_turnstile.sql database/migrations/033_abuse_report_public_url.sql database/migrations/034_mail_brand_fragments.sql database/migrations/035_link_contracts.sql \
   public/report-abuse/index.html public/privacy/index.html public/terms/index.html public/admin/support-security.js \
   resources/fonts/NotoSansSC-Regular.ttf resources/fonts/OFL.txt; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
@@ -49,6 +49,10 @@ if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUC
   echo 'retired engineering or system-image contract leaked into production package' >&2
   exit 1
 fi
+if grep -R -I -n -F '?v=' "$ROOT/public"; then
+  echo 'version query string is forbidden in production public assets' >&2
+  exit 1
+fi
 if grep -R -n -E 'installer\.token|MYSQL_ADMIN_PASSWORD' "$ROOT/install.sh" "$ROOT/install-native-lemp.sh" "$ROOT/installer" "$ROOT/public/install" "$ROOT/deploy/native"; then
   echo "deprecated installer behavior leaked into production package" >&2; exit 1
 fi
@@ -68,6 +72,7 @@ grep -Fq 'CREATE TABLE support_tickets' "$ROOT/database/migrations/032_support_t
 grep -Fq "'turnstile.ticket_create'" "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support Turnstile policy is missing' >&2; exit 1; }
 grep -Fq 'ADD COLUMN reported_url' "$ROOT/database/migrations/033_abuse_report_public_url.sql" || { echo 'public abuse URL schema is missing' >&2; exit 1; }
 grep -Fq "'support_ticket_reply'" "$ROOT/database/migrations/034_mail_brand_fragments.sql" || { echo 'support mail fragment is missing' >&2; exit 1; }
+grep -Fq "'links.default_click_limit','0'" "$ROOT/database/migrations/035_link_contracts.sql" || { echo 'blank link visit limit contract is missing' >&2; exit 1; }
 
 grep -Fq 'data-auth-page="login"' "$ROOT/public/login/index.html" || { echo 'dedicated login page is invalid' >&2; exit 1; }
 grep -Fq '/api/auth/forgot-password' "$ROOT/public/assets/auth.js" || { echo 'password recovery frontend is not connected' >&2; exit 1; }
@@ -86,11 +91,6 @@ grep -Fq '<form id="loginForm" class="login-card" method="post" action="/api/adm
 if grep -R -n -E 'step_up_required|X-GoJet-TOTP|MutationObserver' "$ROOT/public/admin"; then
   echo 'operation-level admin step-up or obsolete hotpatch leaked into admin UI' >&2; exit 1
 fi
-
-VERSION=$(cat "$ROOT/VERSION")
-for page in public/index.html public/login/index.html public/app/index.html public/admin/index.html; do
-  grep -Eq "(src|href)=['\"][^'\"]+\.(css|js)\?v=${VERSION}['\"]" "$ROOT/$page" || { echo "release asset version is missing from $page" >&2; exit 1; }
-done
 
 # Runtime release must serve only the built public tree. Canonical frontend
 # source paths are intentionally absent from the archive.
