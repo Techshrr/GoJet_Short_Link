@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'database/**'
+      - 'scripts/runmigrations.sh'
       - 'scripts/checkschema.py'
       - 'scripts/checknames.py'
       - 'tests/integration/schemanaming.sh'
@@ -14,6 +15,7 @@ on:
       - rebuild/v4-rc12-real-install-fixes
     paths:
       - 'database/**'
+      - 'scripts/runmigrations.sh'
       - 'scripts/checkschema.py'
       - 'scripts/checknames.py'
       - 'tests/integration/schemanaming.sh'
@@ -46,16 +48,16 @@ jobs:
           set -euo pipefail
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
+          bash -n scripts/runmigrations.sh
 
-      - name: Apply all migrations to a fresh database
+      - name: Apply migration catalog to a fresh database
         env:
-          MYSQL_PWD: root
-        run: |
-          set -euo pipefail
-          for migration in database/migrations/*.sql; do
-            echo "Applying $(basename "$migration")"
-            mysql -h127.0.0.1 -P3306 -uroot gojet_schema < "$migration"
-          done
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_schema
+        run: bash scripts/runmigrations.sh
 
       - name: Verify live schema naming
         env:
