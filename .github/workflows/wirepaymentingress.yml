@@ -1,0 +1,89 @@
+name: GoJet payment callback ingress wiring
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/wirepaymentingress.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gojetpaymentcallbackingresswiring
+  cancel-in-progress: false
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+
+      - name: Add explicit payment callback ingress to every deployment entry
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          targets={
+              'deploy/nginx/gojet.conf':'http://platformapi:8090',
+              'deploy/nginx/gojethost.conf':'http://127.0.0.1:18090',
+              'deploy/nginx/gojetnative.conf':'http://127.0.0.1:18090',
+              'deploy/nginx/gojetbtrewrite.conf':'http://127.0.0.1:18090',
+          }
+          for name,upstream in targets.items():
+              path=Path(name)
+              text=path.read_text(encoding='utf-8')
+              if 'location ^~ /api/payments/' in text:
+                  print(name,'already wired')
+                  continue
+              marker='    location /api/ {\n' if name!='deploy/nginx/gojetbtrewrite.conf' else 'location /api/ {\n'
+              if marker not in text:
+                  raise SystemExit(f'general API location marker missing in {name}')
+              indent='    ' if name!='deploy/nginx/gojetbtrewrite.conf' else ''
+              inner=indent+'    '
+              block=(
+                  f'{indent}# Payment providers call these endpoints directly; keep them public, bounded and observable.\n'
+                  f'{indent}location ^~ /api/payments/ {{\n'
+                  f'{inner}proxy_pass {upstream};\n'
+                  f'{inner}proxy_http_version 1.1;\n'
+                  f'{inner}proxy_set_header Host $host;\n'
+                  f'{inner}proxy_set_header X-Real-IP $remote_addr;\n'
+                  f'{inner}proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n'
+                  f'{inner}proxy_set_header X-Forwarded-Proto $scheme;\n'
+                  f'{inner}client_max_body_size 3m;\n'
+                  f'{inner}proxy_request_buffering off;\n'
+                  f'{inner}proxy_connect_timeout 3s;\n'
+                  f'{inner}proxy_read_timeout 30s;\n'
+                  f'{inner}add_header Cache-Control "no-store" always;\n'
+                  f'{indent}}}\n\n'
+              )
+              path.write_text(text.replace(marker,block+marker,1),encoding='utf-8')
+              print(name,'wired')
+          PY
+          for file in deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf; do
+            grep -Fq 'location ^~ /api/payments/' "$file"
+            grep -Fq 'proxy_request_buffering off;' "$file"
+            grep -Fq 'add_header Cache-Control "no-store" always;' "$file"
+          done
+          python3 scripts/checknames.py
+
+      - name: Commit validated ingress wiring
+        run: |
+          set -euo pipefail
+          git restore -- .github/workflows
+          git config user.name 'GoJet Payment Ingress Wiring'
+          git config user.email 'actions@users.noreply.github.com'
+          git add deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf
+          git diff --cached --name-status
+          if git diff --cached --quiet; then
+            echo 'Payment callback ingress already wired.'
+            exit 0
+          fi
+          git commit -m 'Expose bounded payment callback ingress'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
