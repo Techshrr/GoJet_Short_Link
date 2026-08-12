@@ -2,8 +2,8 @@
 set -euo pipefail
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 DEST=${PDF_FONT_DIR:-$ROOT/resources/fonts}
-VARIABLE_FONT="$DEST/NotoSansSC-VF.ttf"
-REGULAR_FONT="$DEST/NotoSansSC-Regular.ttf"
+VARIABLE_FONT="$DEST/NotoSansSCVF.ttf"
+REGULAR_FONT="$DEST/NotoSansSCRegular.ttf"
 LICENSE="$DEST/OFL.txt"
 NOTO_COMMIT='f8d157532fbfaeda587e826d4cd5b21a49186f7c'
 FONT_BLOB='5371a543be5fc670c7cdee9760c03554ee3e9b8e'
@@ -42,14 +42,9 @@ download_verified(){
 
 download_verified "$FONT_URL" "$VARIABLE_FONT" "$FONT_BLOB" 'Noto Sans SC variable font'
 [[ "$(stat -c %s "$VARIABLE_FONT")" == "$FONT_SIZE" ]] || { echo "unexpected Noto Sans SC font size" >&2; exit 1; }
-# TrueType/OpenType sfnt magic: 00 01 00 00 or 'true'. This pinned file uses 00 01 00 00.
 [[ "$(od -An -tx1 -N4 "$VARIABLE_FONT" | tr -d ' \n')" == '00010000' ]] || { echo 'downloaded PDF font is not a TrueType sfnt file' >&2; exit 1; }
 download_verified "$LICENSE_URL" "$LICENSE" "$LICENSE_BLOB" 'Noto Sans CJK license'
 
-# gopdf expects a concrete font face for a concrete weight. It does not select
-# an OpenType variable-font wght axis when SetFont is called. Freeze every axis
-# at its default value except wght=400 so the shipped runtime font is a true
-# static Regular TTF with deterministic CJK/Latin stroke weight.
 python3 - "$VARIABLE_FONT" "$REGULAR_FONT" <<'PY'
 import os
 import sys
