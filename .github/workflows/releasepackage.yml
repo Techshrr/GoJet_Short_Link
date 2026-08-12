@@ -54,6 +54,7 @@ jobs:
         run: |
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
+          bash -n scripts/runmigrations.sh
       - name: Install release build dependencies
         run: |
           sudo apt-get update
@@ -108,6 +109,8 @@ jobs:
           test -f "$ROOT/public/admin/index.html"
           test -d "$ROOT/public/assets/images"
           test -d "$ROOT/public/generated/qr"
+          test -f "$ROOT/database/migrations/migrationcatalog.txt"
+          test -f "$ROOT/scripts/runmigrations.sh"
           test -z "$(find "$ROOT/public" -mindepth 2 -type f -name index.html ! -path "$ROOT/public/app/index.html" ! -path "$ROOT/public/admin/index.html" -print -quit)"
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
@@ -180,14 +183,21 @@ jobs:
           test -f "$ROOT/public/index.html" && test -f "$ROOT/public/privacy.html" && test -f "$ROOT/public/terms.html"
           test -f "$ROOT/public/app/index.html" && test -f "$ROOT/public/admin/index.html"
           test -d "$ROOT/public/assets/images" && test -d "$ROOT/public/generated/qr"
+          test -f "$ROOT/database/migrations/migrationcatalog.txt"
+          test -f "$ROOT/scripts/runmigrations.sh"
           if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then echo 'connector-bearing path leaked into fresh candidate' >&2; exit 1; fi
-      - name: Apply packaged migrations to a fresh database
-        env: {MYSQL_PWD: root}
+      - name: Apply packaged migration catalog to a fresh database
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
         run: |
           set -euo pipefail
           ROOT=$(cat /tmp/gojetcandidaterootpath)
-          for f in "$ROOT"/database/migrations/*.sql; do echo "Applying $(basename "$f")"; mysql -h127.0.0.1 -P3306 -uroot gojet_candidate < "$f"; done
-          mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -N -B <<'SQL' >/tmp/gojetcandidateschema
+          MIGRATION_ROOT="$ROOT/database/migrations" bash "$ROOT/scripts/runmigrations.sh"
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_candidate -N -B <<'SQL' >/tmp/gojetcandidateschema
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='support_tickets';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='payment_transactions';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_candidate' AND TABLE_NAME='fx_rate_cache';
