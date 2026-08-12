@@ -92,6 +92,7 @@ jobs:
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
+          QR_KEY='9c2f6b3a8d7e4f10b5a1c9d8e7f6a5b49c2f6b3a8d7e4f10b5a1c9d8e7f6a5b4'
           cat > /tmp/gojet/testenv <<EOF2
           SETTINGS_ENCRYPTION_KEY=$SETTINGS_KEY
           EOF2
@@ -101,7 +102,7 @@ jobs:
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
             ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='fullstackacceptanceqrkey2026' \
+            QR_TRACKING_KEY="$QR_KEY" \
             PUBLIC_BASE_URL='http://127.0.0.1:18080' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
             UPLOAD_STORAGE_PATH='/tmp/gojet/uploads' \
@@ -114,7 +115,7 @@ jobs:
             REDIS_ADDRESS='127.0.0.1:6379' \
             HTTP_ADDRESS='127.0.0.1:18080' \
             VISITOR_HASH_KEY='fullstackvisitorhashkey2026' \
-            QR_TRACKING_KEY='fullstackacceptanceqrkey2026' \
+            QR_TRACKING_KEY="$QR_KEY" \
             /tmp/gojet/redirectengine >/tmp/gojet/redirectengine.log 2>&1 &
           echo $! >/tmp/gojet/redirectengine.pid
           env \
