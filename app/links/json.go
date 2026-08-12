@@ -1,6 +1,9 @@
 package links
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 type linkWire struct {
 	ID             int64           `json:"id,omitempty"`
@@ -44,18 +47,26 @@ func (l Link) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func normalizeOptionalJSON(value json.RawMessage) json.RawMessage {
+	value = bytes.TrimSpace(value)
+	if len(value) == 0 || bytes.Equal(value, []byte("null")) || bytes.Equal(value, []byte("[]")) || bytes.Equal(value, []byte("{}")) {
+		return nil
+	}
+	return value
+}
+
 func (l *Link) UnmarshalJSON(data []byte) error {
 	var wire linkWire
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	// Preserve compatibility with pre-hardening clients that emitted Go field
-	// names such as RedirectStatus while making snake_case canonical.
+	// Preserve compatibility with older clients that emitted Go field names
+	// while keeping snake_case as the canonical public contract.
 	var legacy struct {
-		ID, WorkspaceID, CreatedBy int64
-		Code, Domain, Destination, Title, Status string
-		RedirectStatus int
-		Clicks, Visitors int64
+		ID, WorkspaceID, CreatedBy                   int64
+		Code, Domain, Destination, Title, Status     string
+		RedirectStatus                               int
+		Clicks, Visitors                             int64
 	}
 	_ = json.Unmarshal(data, &legacy)
 	if wire.ID == 0 { wire.ID = legacy.ID }
@@ -69,6 +80,14 @@ func (l *Link) UnmarshalJSON(data []byte) error {
 	if wire.RedirectStatus == 0 { wire.RedirectStatus = legacy.RedirectStatus }
 	if wire.Clicks == 0 { wire.Clicks = legacy.Clicks }
 	if wire.Visitors == 0 { wire.Visitors = legacy.Visitors }
+
+	wire.UTM = normalizeOptionalJSON(wire.UTM)
+	wire.RoutingRules = normalizeOptionalJSON(wire.RoutingRules)
+	wire.ABDestinations = normalizeOptionalJSON(wire.ABDestinations)
+	if wire.MaxClicks != nil && *wire.MaxClicks <= 0 {
+		wire.MaxClicks = nil
+	}
+
 	*l = Link{
 		ID: wire.ID, WorkspaceID: wire.WorkspaceID, CreatedBy: wire.CreatedBy,
 		Code: wire.Code, Domain: wire.Domain, Destination: wire.Destination, Title: wire.Title, Status: wire.Status,
