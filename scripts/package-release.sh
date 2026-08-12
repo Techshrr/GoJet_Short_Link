@@ -30,7 +30,7 @@ cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
 cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(\?[^'\"]*)?(['\"])#\1?v=$SAFE_VERSION\5#g" {} \;
-cp "$ROOT/deploy/compose.release.yaml" "$TARGET/deploy/compose.production.yaml"
+cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
 cp "$ROOT/deploy/compose.host-nginx.yaml" "$TARGET/deploy/compose.host-nginx.yaml"
 cp "$ROOT/deploy/.env.production.example" "$TARGET/deploy/.env.production.example"
 cp "$ROOT/deploy/docker/service.Dockerfile" "$TARGET/deploy/docker/service.Dockerfile"
