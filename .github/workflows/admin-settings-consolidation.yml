@@ -43,7 +43,7 @@ jobs:
 
           settings = Path('frontend/admin-console/settings.js').read_text(encoding='utf-8')
           required = [
-              'async function renderSettings(',
+              'renderSettings=async function(){',
               'async function saveUnifiedSection(',
           ]
           for marker in required:
@@ -63,8 +63,8 @@ jobs:
           test -f \"$core\"
           test -f \"$index\"
 
-          grep -q 'async function renderSettings(' \"$canonical\"
-          grep -q 'async function saveUnifiedSection(' \"$canonical\"
+          grep -Fq 'renderSettings=async function(){' \"$canonical\"
+          grep -Fq 'async function saveUnifiedSection(' \"$canonical\"
 
           for legacy in \\
             'function settingInput(' \\
