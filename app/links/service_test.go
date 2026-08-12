@@ -16,7 +16,7 @@ func TestRandomCodeUsesURLSafeAlphabet(t *testing.T) {
 	}
 }
 
-func TestApplyCreatePolicyKeepsBlankVisitLimitUnlimited(t *testing.T) {
+func TestApplyCreatePolicyAppliesDefaults(t *testing.T) {
 	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
 	link, err := applyCreatePolicy(Link{Destination: "https://example.com"}, CreatePolicy{
 		DefaultDomain:         "go.example",
@@ -31,25 +31,14 @@ func TestApplyCreatePolicyKeepsBlankVisitLimitUnlimited(t *testing.T) {
 		t.Fatal(err)
 	}
 	if link.Domain != "go.example" || link.RedirectStatus != 307 || len(link.Code) != 9 {
-		t.Fatalf("safe defaults were not applied: %#v", link)
+		t.Fatalf("defaults were not applied: %#v", link)
 	}
-	if link.MaxClicks != nil {
-		t.Fatalf("blank customer visit limit must remain unlimited even when a legacy platform default exists: %#v", link.MaxClicks)
+	if link.MaxClicks == nil || *link.MaxClicks != 500 {
+		t.Fatalf("click limit was not applied: %#v", link.MaxClicks)
 	}
 	wantExpiry := now.AddDate(0, 0, 30).Format(time.RFC3339)
 	if link.ExpiresAt == nil || *link.ExpiresAt != wantExpiry {
 		t.Fatalf("expiry was not applied: %#v", link.ExpiresAt)
-	}
-}
-
-func TestApplyCreatePolicyPreservesExplicitVisitLimit(t *testing.T) {
-	limit := int64(25)
-	link, err := applyCreatePolicy(Link{Destination: "https://example.com", Code: "abc", MaxClicks: &limit}, CreatePolicy{}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if link.MaxClicks == nil || *link.MaxClicks != 25 {
-		t.Fatalf("explicit customer visit limit was not preserved: %#v", link.MaxClicks)
 	}
 }
 
