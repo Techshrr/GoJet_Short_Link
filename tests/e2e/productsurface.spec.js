@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const fs=require('fs');
+const {execFileSync}=require('child_process');
 const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
 const visualEvidenceDir='test-results/visual-evidence';
 fs.mkdirSync(visualEvidenceDir,{recursive:true});
@@ -38,7 +39,7 @@ async function capture(page,name){
 }
 
 test.describe.serial('real product surface',()=>{
-  let user,link,invoice;
+  let user,link;
 
   test('admin settings save stays inside the visible settings form',async({page})=>{
     await adminLogin(page);
@@ -113,22 +114,44 @@ test.describe.serial('real product surface',()=>{
     await expect.poll(async()=>img.evaluate(node=>node.naturalWidth)).toBeGreaterThan(0);
   });
 
-  test('invoice download completes as a browser download and the returned PDF is non-empty',async({page,request})=>{
-    if(!user)user=await bootstrapUser(request);
-    invoice=await json(request,'POST',`/api/workspaces/${user.workspace}/billing/invoices`,{plan_code:'pro',type:'purchase'},user.token);
-    await setUserSession(page,user.token);
+  test('browser downloaded invoice PDF contains the real Chinese invoice content',async({page,request})=>{
+    const stamp=Date.now();
+    const registration=await json(request,'POST','/api/auth/register',{email:`browserpdf-${stamp}@example.test`,display_name:'浏览器账单验收',password:'BrowserPDF!2026'});
+    const token=registration.token;
+    const workspaces=await json(request,'GET','/api/workspaces',undefined,token);
+    const workspace=workspaces.data[0];
+    const invoice=await json(request,'POST',`/api/workspaces/${workspace.id}/billing/invoices`,{plan_code:'pro',type:'purchase'},token);
+    const cleanNumber=String(invoice.invoice_number).replace(/[-_]/g,'');
+    const expectedFilename=`GoJetInvoice${cleanNumber}.pdf`;
+
+    await setUserSession(page,token);
     await page.goto(base+'/app/billing');
     await expect(page.getByRole('heading',{name:'套餐与账单'})).toBeVisible();
     const button=page.locator(`[data-download-invoice="${invoice.id}"]`);
     await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute('data-invoice-number',invoice.invoice_number);
+
     const downloadPromise=page.waitForEvent('download');
     await button.click();
     const download=await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
-    const path=await download.path();
-    expect(path).toBeTruthy();
-    expect(fs.statSync(path).size).toBeGreaterThan(1500);
-    expect(fs.readFileSync(path).subarray(0,5).toString()).toBe('%PDF-');
+    expect(download.suggestedFilename()).toBe(expectedFilename);
+    expect(download.suggestedFilename()).not.toMatch(/[-_]/);
+    const pdfPath=await download.path();
+    expect(pdfPath).toBeTruthy();
+    expect(fs.statSync(pdfPath).size).toBeGreaterThan(1500);
+    expect(fs.readFileSync(pdfPath).subarray(0,5).toString()).toBe('%PDF-');
+
+    const extracted=execFileSync('pdftotext',['-enc','UTF-8',pdfPath,'-'],{encoding:'utf8'});
+    for(const expected of [invoice.invoice_number,workspace.name,'浏览器账单验收','专业版','账单','账单编号','服务方','客户 / 工作区','购买套餐','最终结算金额']){
+      expect(extracted,expected).toContain(expected);
+    }
+    expect(extracted).not.toContain('�');
+
+    const direct=await request.get(base+`/api/workspaces/${workspace.id}/billing/invoices/${invoice.id}/pdf`,{headers:{Authorization:`Bearer ${token}`}});
+    expect(direct.status()).toBe(200);
+    expect(direct.headers()['content-type']||'').toContain('application/pdf');
+    expect(direct.headers()['content-disposition']||'').toContain(expectedFilename);
+    expect(direct.headers()['content-disposition']||'').not.toMatch(/[-_]/);
     await expect(page.getByText('Failed to fetch')).toHaveCount(0);
   });
 
