@@ -1,0 +1,198 @@
+name: GoJet semantic migration filename normalization
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/migrationsemanticrename.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gojetsemanticmigrationrename
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_semantic_migrations
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client
+      - name: Rename migrations and establish semantic catalog contract
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          root=Path('database/migrations')
+          catalog=root/'migrationcatalog.txt'
+          names=[line.strip() for line in catalog.read_text(encoding='utf-8').splitlines() if line.strip()]
+          if len(names) != 37 or len(set(names)) != 37:
+              raise SystemExit(f'expected 37 unique catalog entries, got {len(names)}')
+          targets=[]
+          for old in names:
+              if not re.fullmatch(r'\d{3}[a-z0-9]+\.sql',old):
+                  raise SystemExit(f'pre-normalization migration is not canonical: {old}')
+              src=root/old
+              if not src.is_file():
+                  raise SystemExit(f'catalog file missing: {old}')
+              new=old[3:]
+              if not re.fullmatch(r'[a-z][a-z0-9]+\.sql',new):
+                  raise SystemExit(f'invalid semantic migration name: {new}')
+              targets.append(new)
+          if len(set(targets)) != len(targets):
+              raise SystemExit('semantic migration rename collision detected')
+          for target in targets:
+              if (root/target).exists():
+                  raise SystemExit(f'semantic migration target already exists: {target}')
+          for old,new in zip(names,targets):
+              (root/old).rename(root/new)
+          catalog.write_text('\n'.join(targets)+'\n',encoding='utf-8')
+          PY
+          cat > scripts/checkschema.py <<'PY'
+          #!/usr/bin/env python3
+          from pathlib import Path
+          import re
+          import sys
+
+          root = Path(__file__).resolve().parents[1]
+          migration_dir = root / "database" / "migrations"
+          catalog_path = migration_dir / "migrationcatalog.txt"
+          if not catalog_path.is_file():
+              raise SystemExit("migration catalog is missing")
+          catalog = [line.strip() for line in catalog_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+          if not catalog:
+              raise SystemExit("migration catalog is empty")
+          if len(catalog) != len(set(catalog)):
+              raise SystemExit("migration catalog contains duplicate entries")
+
+          filename_re = re.compile(r"^[a-z][a-z0-9]+\.sql$")
+          for name in catalog:
+              if not filename_re.fullmatch(name):
+                  raise SystemExit(f"migration filename is not semantic: {name}")
+              if name[0].isdigit():
+                  raise SystemExit(f"engineering migration prefix is forbidden: {name}")
+
+          files = {path.name: path for path in migration_dir.glob("*.sql")}
+          if set(files) != set(catalog):
+              missing = [name for name in catalog if name not in files]
+              extra = sorted(set(files) - set(catalog))
+              raise SystemExit(f"migration catalog mismatch; missing={missing}, extra={extra}")
+
+          identifier_re = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+          violations = []
+          tables = set()
+          columns = set()
+          indexes = set()
+          constraints = set()
+
+          def check(kind: str, identifier: str, source: str) -> None:
+              identifier = identifier.strip("` ")
+              if identifier.upper() == "PRIMARY":
+                  return
+              if not identifier_re.fullmatch(identifier):
+                  violations.append(f"{source}: {kind} '{identifier}' is not lower_snake_case")
+
+          create_re = re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([A-Za-z0-9_]+)`?", re.I)
+          alter_re = re.compile(r"\bALTER\s+TABLE\s+`?([A-Za-z0-9_]+)`?", re.I)
+          index_decl_re = re.compile(r"^\s*(?:UNIQUE\s+)?KEY\s+`?([A-Za-z0-9_]+)`?", re.I | re.M)
+          create_index_re = re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+`?([A-Za-z0-9_]+)`?", re.I)
+          constraint_re = re.compile(r"^\s*CONSTRAINT\s+`?([A-Za-z0-9_]+)`?", re.I | re.M)
+
+          for name in catalog:
+              path = files[name]
+              text = path.read_text(encoding="utf-8")
+              for match in create_re.finditer(text):
+                  value = match.group(1); check("table", value, name); tables.add(value)
+              for match in alter_re.finditer(text):
+                  check("altered table", match.group(1), name)
+              for regex in (index_decl_re, create_index_re):
+                  for match in regex.finditer(text):
+                      value = match.group(1); check("index", value, name); indexes.add(value)
+              for match in constraint_re.finditer(text):
+                  value = match.group(1); check("constraint", value, name); constraints.add(value)
+              in_create = False
+              for raw_line in text.splitlines():
+                  line = raw_line.strip()
+                  if create_re.search(line):
+                      in_create = True; continue
+                  if in_create and line.startswith(")"):
+                      in_create = False; continue
+                  if not in_create or not line or line.startswith("--"):
+                      continue
+                  upper = line.upper()
+                  if upper.startswith(("PRIMARY ", "UNIQUE ", "KEY ", "CONSTRAINT ", "FOREIGN ", "CHECK ", "FULLTEXT ", "SPATIAL ")):
+                      continue
+                  token = line.split(None, 1)[0].rstrip(",").strip("`")
+                  if token and re.fullmatch(r"[A-Za-z0-9_]+", token):
+                      check("column", token, name); columns.add(token)
+
+          if violations:
+              print("Database schema naming violations:", file=sys.stderr)
+              for violation in violations:
+                  print(violation, file=sys.stderr)
+              raise SystemExit(1)
+          print(
+              f"Database schema source naming: PASS ({len(catalog)} semantic migrations, "
+              f"{len(tables)} tables, {len(columns)} column names, "
+              f"{len(indexes)} index names, {len(constraints)} constraint names; lower_snake_case)"
+          )
+          PY
+          chmod 0755 scripts/checkschema.py scripts/runmigrations.sh
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
+          bash -n scripts/runmigrations.sh
+          if find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -Eq '^[0-9]'; then
+            echo 'numeric migration prefix remains' >&2
+            exit 1
+          fi
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
+      - name: Apply semantic catalog to fresh MySQL and validate live schema
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_semantic_migrations
+        run: |
+          set -euo pipefail
+          bash scripts/runmigrations.sh
+          test "$(MYSQL_PWD=root mysql -N -s -h127.0.0.1 -P3306 -uroot gojet_semantic_migrations -e 'SELECT COUNT(*) FROM schema_migrations')" -eq 37
+          if MYSQL_PWD=root mysql -N -s -h127.0.0.1 -P3306 -uroot gojet_semantic_migrations -e 'SELECT name FROM schema_migrations' | grep -Eq '^[0-9]'; then
+            echo 'numeric migration identity leaked into fresh database' >&2
+            exit 1
+          fi
+          bash tests/integration/schemanaming.sh
+      - name: Commit semantic migration layout
+        run: |
+          set -euo pipefail
+          git restore -- .github/workflows
+          git config user.name 'GoJet Database Normalization'
+          git config user.email 'actions@users.noreply.github.com'
+          git add database/migrations scripts/checkschema.py scripts/runmigrations.sh
+          git diff --cached --check
+          git diff --cached --name-status
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Use semantic database migration names'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
