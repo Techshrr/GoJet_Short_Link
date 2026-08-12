@@ -167,6 +167,9 @@ jobs:
       - name: Billing external-payment conflict protection
         env: *integration-env
         run: bash tests/integration/billing-payment-conflict.sh
+      - name: Signed Epay callback settles invoice and subscription
+        env: *integration-env
+        run: bash tests/integration/epaycallback.sh
       - name: Billing currency conversion and frozen FX snapshot
         env: *integration-env
         run: bash tests/integration/billing-fx-freeze.sh
