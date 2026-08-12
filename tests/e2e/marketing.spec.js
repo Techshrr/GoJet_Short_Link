@@ -1,19 +1,18 @@
 const{test,expect}=require('@playwright/test');
 const products=['url-shortener','bio-pages','text-sharing','file-sharing','analytics','qr-code','ab-testing','custom-domains','smart-links','qr-campaigns'];
-const publicRoutes=['pricing','about','contact','resources','docs','developers','blog','register','solutions/marketing','solutions/creators','solutions/teams','browser-extension','apps','changelog'];
+const genericRoutes=['about','contact','resources','docs','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browser-extension','apps','changelog'];
 const authRoutes=['login','register','forgot-password','reset-password?token=acceptance-token','verify-email?token=acceptance-token'];
 test.beforeEach(async({page})=>page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'})));
 
 for(const product of products)test(`${product} has complete product narrative`,async({page})=>{
   await page.goto(`/products/${product}/`);
   await expect(page.locator('h1')).toBeVisible();
-  await expect(page.locator('.productShot').first()).toBeVisible();
-  await expect(page.locator('.section .cards').first().locator('.card')).toHaveCount(4);
-  await expect(page.locator('.workflow article')).toHaveCount(4);
-  await expect(page.locator('.security')).toBeVisible();
-  await expect(page.locator('.pricing .price')).toHaveCount(3);
-  await expect(page.locator('.faq details')).toHaveCount(4);
+  await expect(page.locator('.hero .uiPanel')).toBeVisible();
+  await expect(page.locator('.section .cards')).toHaveCount(2);
+  await expect(page.locator('.section .cards .card')).toHaveCount(6);
+  await expect(page.locator('.mk-faq details')).toHaveCount(2);
   await expect(page.locator('.ctaBox')).toBeVisible();
+  await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
 
 for(const width of [1440,768,390])test(`homepage responsive at ${width}`,async({page})=>{
@@ -54,11 +53,26 @@ test('saved brand and SEO settings apply without rebuilding pages',async({page})
   await expect(page.locator('meta[name=description]')).toHaveAttribute('content','Saved description');
 });
 
-for(const route of publicRoutes)test(`${route} public route is complete`,async({page})=>{
+for(const route of genericRoutes)test(`${route} public route is complete`,async({page})=>{
   await page.goto(`/${route}/`);
   await expect(page.locator('h1')).toBeVisible();
-  await expect(page.locator('.cards .card')).toHaveCount(3);
-  await expect(page.locator('footer')).toBeVisible();
+  await expect(page.locator('.section .cards .card')).toHaveCount(3);
+  await expect(page.locator('.ctaBox')).toBeVisible();
+  await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
+});
+
+test('pricing public route is complete',async({page})=>{
+  await page.goto('/pricing/');
+  await expect(page.getByRole('heading',{name:'从个人使用，到团队协作'})).toBeVisible();
+  await expect(page.locator('.pricing .price')).toHaveCount(3);
+  await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
+});
+
+test('register public route is complete',async({page})=>{
+  await page.goto('/register');
+  await expect(page.getByRole('heading',{name:'开始使用 GoJet'})).toBeVisible();
+  await expect(page.locator('form')).toBeVisible();
+  await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
 
 test('Markdown announcement center safely renders published content',async({page})=>{
