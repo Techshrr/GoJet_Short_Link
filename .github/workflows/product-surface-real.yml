@@ -47,7 +47,7 @@ jobs:
           chmod 0755 scripts/prepare-pdf-fonts.sh
           scripts/prepare-pdf-fonts.sh
           go mod download
-      - name: Build canonical public site and validate frontend sources
+      - name: Build canonical public site and validate runtime sources
         run: |
           set -euo pipefail
           python3 scripts/build-public-site.py --output /tmp/gojet-public-build
@@ -56,8 +56,11 @@ jobs:
           test ! -e scripts/rebuild-public-product-pages.py
           test ! -e frontend/admin-console/settings-full.js
           test -z "$(find frontend/public-site/pages -type f -name index.html -print -quit)"
-          if grep -R -n -E '\?v=(brand|rc)[A-Za-z0-9._-]*' frontend/public-site frontend/admin-console frontend/user-console; then echo 'release-stage cache token leaked into canonical frontend source' >&2; exit 1; fi
+          RUNTIME_PATHS='frontend/public-site frontend/admin-console frontend/user-console services/platform-api/cmd/server'
+          if grep -R -n -E '\?v=(brand|rc)[A-Za-z0-9._-]*' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go'; then echo 'release-stage cache token leaked into canonical runtime source' >&2; exit 1; fi
+          if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go'; then echo 'retired system-image namespace leaked into canonical runtime source' >&2; exit 1; fi
           node --check frontend/public-site/assets/app.js
+          node --check frontend/public-site/assets/file-share.js
           node --check frontend/admin-console/settings.js
           for file in frontend/user-console/pages.js frontend/user-console/router.js frontend/user-console/links.js frontend/user-console/bio.js frontend/user-console/domains.js frontend/user-console/analytics.js frontend/user-console/files.js frontend/user-console/team.js frontend/user-console/organization.js frontend/user-console/billing.js frontend/user-console/support.js; do node --check "$file"; done
           if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/user-console; then echo 'retired customer-console page registry detected' >&2; exit 1; fi
