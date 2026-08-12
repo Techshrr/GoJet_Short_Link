@@ -1,0 +1,69 @@
+name: GoJet Repository Gate Cleanup
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/repository-gate-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+
+      - name: Consolidate release and authentication gate naming
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          release = Path('.github/workflows/release-package.yml')
+          text = release.read_text(encoding='utf-8')
+          if "      - 'tests/integration/**'" not in text:
+              anchor = "      - 'database/**'\n"
+              if anchor not in text:
+                  raise SystemExit('release trigger anchor missing')
+              text = text.replace(anchor, anchor + "      - 'tests/integration/**'\n", 1)
+              release.write_text(text, encoding='utf-8')
+
+          auth = Path('.github/workflows/product-rebuild-auth-policy.yml')
+          if not auth.exists():
+              raise SystemExit('legacy auth policy workflow missing')
+          auth_text = auth.read_text(encoding='utf-8')
+          auth_text = auth_text.replace('name: V4 authentication policy acceptance', 'name: GoJet Authentication Policy Gate', 1)
+          auth_text = auth_text.replace(
+              'on:\n  workflow_dispatch:\n  pull_request:\n',
+              "on:\n  workflow_dispatch:\n  pull_request:\n  push:\n    branches:\n      - rebuild/v4-rc12-real-install-fixes\n    paths:\n      - '.github/workflows/auth-policy.yml'\n      - 'tests/integration/auth-policy.sh'\n      - 'services/platform-api/cmd/server/**'\n      - 'app/settings/**'\n      - 'database/migrations/**'\n",
+              1,
+          )
+          auth.write_text(auth_text, encoding='utf-8')
+
+          test = Path('tests/integration/auth-policy.sh')
+          test_text = test.read_text(encoding='utf-8')
+          old = "printf 'GoJet V4 authentication policy acceptance: PASS\\n'"
+          if old not in test_text:
+              raise SystemExit('auth policy engineering-stage output marker missing')
+          test.write_text(test_text.replace(old, "printf 'GoJet authentication policy acceptance: PASS\\n'", 1), encoding='utf-8')
+          PY
+
+          git mv .github/workflows/product-rebuild-auth-policy.yml .github/workflows/auth-policy.yml
+          git rm .github/workflows/rebuild-public-product-pages.yml
+
+      - name: Commit cleanup and remove maintenance workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'GoJet Repository Maintenance'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git rm .github/workflows/repository-gate-cleanup.yml
+          git add .github/workflows/release-package.yml .github/workflows/auth-policy.yml tests/integration/auth-policy.sh
+          git diff --cached --check
+          git commit -m 'Normalize release and authentication gates'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
