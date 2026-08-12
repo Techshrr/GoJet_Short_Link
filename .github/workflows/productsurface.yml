@@ -61,6 +61,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/buildpublicsite.py --output /tmp/gojetpublicbuild
+          test -f /tmp/gojetpublicbuild/index.html
+          test -f /tmp/gojetpublicbuild/privacy.html
+          test -f /tmp/gojetpublicbuild/terms.html
+          test -f /tmp/gojetpublicbuild/forgotpassword.html
+          test -f /tmp/gojetpublicbuild/reportabuse.html
+          test -f /tmp/gojetpublicbuild/products/urlshortener.html
+          test -z "$(find /tmp/gojetpublicbuild -mindepth 2 -type f -name index.html -print -quit)"
           test ! -e frontend/marketingsite
           test ! -e scripts/rebuildmarketingpages.py
           test ! -e scripts/rebuildpublicproductpages.py
@@ -154,17 +161,15 @@ jobs:
             location ^~ /app/ { try_files $uri $uri/ /app/index.html; }
             location = /admin { return 302 /admin/; }
             location ^~ /admin/ { try_files $uri $uri/ /admin/index.html; }
-            location / { try_files $uri $uri/ $uri/index.html @redirect; }
+            location / { try_files $uri $uri.html @redirect; }
             location @redirect { proxy_pass http://127.0.0.1:18080; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
           }
           NGINX
           sudo cp /tmp/gojetsurfacenginx.conf /etc/nginx/conf.d/gojetsurface.conf
           sudo nginx -t
           sudo nginx
-          for i in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:4180/ >/dev/null && break
-            sleep 1
-            test "$i" -lt 30
+          for path in / /privacy /terms /forgotpassword /reportabuse /products/urlshortener; do
+            curl -fsS "http://127.0.0.1:4180$path" >/dev/null
           done
 
       - name: Run browser product surface acceptance
