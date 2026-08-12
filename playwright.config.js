@@ -2,6 +2,10 @@ const {defineConfig, devices}=require('@playwright/test');
 
 module.exports=defineConfig({
   testDir:'./tests/e2e',
+  testIgnore:[
+    '**/product-surface.spec.js',
+    '**/full-surface-consistency.spec.js'
+  ],
   timeout:30000,
   reporter:'line',
   use:{
