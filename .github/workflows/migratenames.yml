@@ -46,7 +46,7 @@ jobs:
               print('announcement ServeMux patterns already canonical')
 
           for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts or path.parts[:3] == ('.github', 'workflows'):
+              if not path.is_file() or '.git' in path.parts or path.parts[:2] == ('.github', 'workflows'):
                   continue
               try:
                   raw = path.read_text(encoding='utf-8')
@@ -62,6 +62,7 @@ jobs:
           subprocess.run(['python3', '-m', 'py_compile', 'scripts/buildpublicsite.py', 'tests/e2e/browserfixtureserver.py'], check=True)
           PY
 
+          git restore -- .github/workflows
           git config user.name "GoJet Repository Cleanup"
           git config user.email "actions@users.noreply.github.com"
           git add -A
