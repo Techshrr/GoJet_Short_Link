@@ -9,10 +9,11 @@ MYSQL_PORT=${MYSQL_PORT:-3306}
 MYSQL_USER=${MYSQL_USER:-root}
 MYSQL_DATABASE=${MYSQL_DATABASE:?MYSQL_DATABASE must be configured}
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-${MYSQL_PWD:-}}
+MYSQL_BIN=${MYSQL_BIN:-mysql}
 
 [[ -d "$MIGRATION_ROOT" ]] || { echo "migration directory missing: $MIGRATION_ROOT" >&2; exit 1; }
 [[ -f "$CATALOG" ]] || { echo "migration catalog missing: $CATALOG" >&2; exit 1; }
-command -v mysql >/dev/null 2>&1 || { echo 'mysql client is required' >&2; exit 1; }
+[[ "$MYSQL_BIN" == */* ]] && [[ -x "$MYSQL_BIN" ]] || command -v "$MYSQL_BIN" >/dev/null 2>&1 || { echo "mysql client is required: $MYSQL_BIN" >&2; exit 1; }
 
 mapfile -t migrations < <(sed -e 's/\r$//' -e '/^[[:space:]]*$/d' "$CATALOG")
 (( ${#migrations[@]} > 0 )) || { echo 'migration catalog is empty' >&2; exit 1; }
@@ -31,8 +32,8 @@ for name in "${sqlfiles[@]}"; do
   [[ -n "${seen[$name]:-}" ]] || { echo "unregistered migration file: $name" >&2; exit 1; }
 done
 
-mysqlcmd=(mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE")
-mysqlquery=(mysql -N -s -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE")
+mysqlcmd=("$MYSQL_BIN" -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE")
+mysqlquery=("$MYSQL_BIN" -N -s -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE")
 export MYSQL_PWD="$MYSQL_PASSWORD"
 
 "${mysqlcmd[@]}" -e "CREATE TABLE IF NOT EXISTS schema_migrations(name VARCHAR(255) PRIMARY KEY,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
