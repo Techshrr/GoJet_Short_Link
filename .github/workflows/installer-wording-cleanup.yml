@@ -1,0 +1,48 @@
+name: GoJet Installer Wording Cleanup
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/installer-wording-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+      - name: Remove release-stage wording
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('installer/index.php')
+          s = p.read_text(encoding='utf-8')
+          old = '<h1>GoJet V4 标准安装向导</h1>'
+          new = '<h1>GoJet 标准安装向导</h1>'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one legacy installer heading, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          if grep -R -I -n -E '\bGoJet V4\b|\bRC[0-9]+\b' installer launch-web-installer.sh; then
+            echo 'release-stage wording still exists in installer surface' >&2
+            exit 1
+          fi
+          php -l installer/index.php
+      - name: Commit cleanup and remove maintenance workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'GoJet Repository Maintenance'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git rm .github/workflows/installer-wording-cleanup.yml
+          git add installer/index.php
+          git diff --cached --check
+          git commit -m 'Remove release-stage wording from installer'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
