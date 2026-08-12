@@ -51,4 +51,4 @@ expect 429 "$(req POST /api/auth/login '{"email":"rate@example.test","password":
 echo '[8/8] disabling password recovery changes real endpoint behavior'
 expect 200 "$(req PUT /api/admin/settings/registration '{"registration.forgot_password":false}' "$ADMIN")" disable-forgot >/dev/null
 expect 403 "$(req POST /api/auth/forgot-password '{"email":"verify@example.test"}')" forgot-disabled >/dev/null
-printf 'GoJet V4 authentication policy acceptance: PASS\n'
+printf 'GoJet authentication policy acceptance: PASS\n'
