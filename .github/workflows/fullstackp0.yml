@@ -54,14 +54,15 @@ jobs:
         run: bash tests/integration/adminsettingssourcecontract.sh
       - name: Apply fresh MySQL schema and verify P0 contracts
         env:
-          MYSQL_PWD: root
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
         run: |
           set -euo pipefail
-          for f in database/migrations/*.sql; do
-            echo "Applying $f"
-            mysql -h127.0.0.1 -P3306 -uroot gojet_test < "$f"
-          done
-          mysql -h127.0.0.1 -P3306 -uroot gojet_test -N -B <<'SQL' >/tmp/gojetschemacheck
+          bash scripts/runmigrations.sh
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -N -B <<'SQL' >/tmp/gojetschemacheck
           SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='file_shares' AND COLUMN_NAME='password_hash';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='payment_transactions';
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='fx_rate_cache';
