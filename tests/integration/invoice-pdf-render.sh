@@ -36,6 +36,19 @@ mysqlq "UPDATE system_settings SET setting_value='0',is_encrypted=FALSE WHERE se
 mysqlq "UPDATE system_settings SET setting_value='{\"USD/CNY\":\"7.20\"}',is_encrypted=FALSE WHERE setting_key='billing.fx.manual_rates';"
 mysqlq "DELETE FROM fx_rate_cache;"
 
+# The shipped static font must actually contain the Chinese glyphs used by
+# customer invoices. A Latin-only or accidentally subsetted font is a hard fail.
+python3 - <<'PY'
+from fontTools.ttLib import TTFont
+font=TTFont('resources/fonts/NotoSansSC-Regular.ttf', lazy=True)
+cmap={cp for table in font['cmap'].tables for cp in table.cmap}
+text='霍召席账单验收的工作区专业版购买套餐服务方客户支付期限结算金额最终自动生成汇率快照'
+missing=[ch for ch in text if ord(ch) not in cmap]
+if missing:
+    raise SystemExit('PDF font misses required Chinese glyphs: '+''.join(sorted(set(missing))))
+print('PDF Chinese glyph coverage: PASS')
+PY
+
 # Brand linkage is part of PDF acceptance, not an optional visual nicety. Upload
 # a deterministic RGBA PNG so the test covers admin upload -> setting -> storage
 # path -> PDF decoder -> embedded PDF image in one real process.
@@ -67,10 +80,12 @@ logo_status=$(curl -sS -o "$OUT_DIR/logo-upload.json" -w '%{http_code}' -H "Auth
 grep -Fq '"url":"/assets/images/logo.png"' "$OUT_DIR/logo-upload.json"
 
 suffix="$(date +%s)-$RANDOM"
-registration=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"pdf-$suffix@example.test\",\"display_name\":\"PDF Render Acceptance\",\"password\":\"PDFRenderAcceptance!2026\"}")" register)
+registration=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"pdf-$suffix@example.test\",\"display_name\":\"霍召席账单验收\",\"password\":\"PDFRenderAcceptance!2026\"}")" register)
 token=$(printf '%s' "$registration" | field "['token']")
 workspaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$workspaces" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
+workspace_name=$(mysqlq "SELECT name FROM workspaces WHERE id=$wid;")
+[[ "$workspace_name" == '霍召席账单验收 的工作区' ]] || { echo "unexpected Chinese workspace name: $workspace_name" >&2; exit 1; }
 invoice=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" create-invoice)
 invoice_id=$(printf '%s' "$invoice" | field "['id']")
 invoice_number=$(mysqlq "SELECT invoice_number FROM billing_invoices WHERE id=$invoice_id AND workspace_id=$wid;")
@@ -92,8 +107,22 @@ grep -Eq '^Page size:[[:space:]]+595 x 842 pts' "$OUT_DIR/pdfinfo.txt"
 pdftotext -enc UTF-8 "$pdf" "$OUT_DIR/invoice.txt"
 grep -Fq "$invoice_number" "$OUT_DIR/invoice.txt"
 grep -Fq 'GoJet' "$OUT_DIR/invoice.txt"
+grep -Fq '账单' "$OUT_DIR/invoice.txt"
+grep -Fq '账单编号' "$OUT_DIR/invoice.txt"
+grep -Fq '服务方' "$OUT_DIR/invoice.txt"
+grep -Fq '客户 / 工作区' "$OUT_DIR/invoice.txt"
+grep -Fq "$workspace_name" "$OUT_DIR/invoice.txt"
+grep -Fq '专业版' "$OUT_DIR/invoice.txt"
+grep -Fq '购买套餐' "$OUT_DIR/invoice.txt"
+grep -Fq '最终结算金额' "$OUT_DIR/invoice.txt"
+grep -Fq '此账单由 GoJet 自动生成。金额与汇率以账单生成时保存的快照为准。' "$OUT_DIR/invoice.txt"
 grep -Fq 'USD 12.34' "$OUT_DIR/invoice.txt"
 grep -Fq "$amount" "$OUT_DIR/invoice.txt"
+if grep -Fq '�' "$OUT_DIR/invoice.txt"; then
+  echo 'PDF extracted text contains Unicode replacement characters' >&2
+  cat "$OUT_DIR/invoice.txt" >&2
+  exit 1
+fi
 
 # The configured brand mark must be embedded as an actual PDF image object.
 pdfimages -list "$pdf" | tee "$OUT_DIR/pdfimages.txt"
@@ -139,4 +168,4 @@ test -s "$OUT_DIR/invoice-page.png"
 file "$OUT_DIR/invoice-page.png" | tee "$OUT_DIR/render-file.txt"
 grep -Fq 'PNG image data' "$OUT_DIR/render-file.txt"
 
-printf 'GoJet invoice PDF real render acceptance: PASS (%s, %s, branded logo embedded)\n' "$invoice_number" "$amount"
+printf 'GoJet invoice PDF real Chinese render acceptance: PASS (%s, %s, %s)\n' "$invoice_number" "$amount" "$workspace_name"
