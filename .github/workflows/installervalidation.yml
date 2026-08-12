@@ -45,7 +45,7 @@ jobs:
           cache: npm
           cache-dependency-path: packagelock.json
 
-      - name: Validate installer and deployment syntax
+      - name: Validate installer deployment and naming syntax
         run: |
           set -euo pipefail
           php -l installer/index.php
@@ -53,8 +53,9 @@ jobs:
           for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh; do bash -n "$script"; done
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
-          python3 -m py_compile scripts/buildpublicsite.py
+          python3 -m py_compile scripts/buildpublicsite.py scripts/checknames.py scripts/checkschema.py
           python3 scripts/checknames.py
+          python3 scripts/checkschema.py
 
       - name: Validate canonical frontend and flat public build
         run: |
@@ -70,7 +71,7 @@ jobs:
           python3 scripts/buildpublicsite.py --output /tmp/gojetinstallerpublic
           for file in index.html privacy.html terms.html forgotpassword.html reportabuse.html products/urlshortener.html; do test -f "/tmp/gojetinstallerpublic/$file"; done
           test -z "$(find /tmp/gojetinstallerpublic -mindepth 2 -type f -name index.html -print -quit)"
-          test -z "$(find /tmp/gojetinstallerpublic -mindepth 1 -printf '%f\n' | grep -F -- '-' || true)"
+          test -z "$(find /tmp/gojetinstallerpublic -mindepth 1 -printf '%f\n' | grep -E '[-_]' || true)"
           test ! -e frontend/marketingsite
           grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetbtrewrite.conf
           grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojethost.conf
@@ -90,7 +91,7 @@ jobs:
             echo 'retired engineering or runtime contract detected in installer sources' >&2
             exit 1
           fi
-          grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/packagerelease.sh
+          grep -Fq 'FRESHINSTALLONLY=1' scripts/packagerelease.sh
           grep -Fq 'stop_existing_services' scripts/nativeinstallerrun.sh
           grep -Fq 'information_schema.tables' scripts/nativeinstallerrun.sh
           test -z "$(grep -F 'upgradenative.sh' scripts/packagerelease.sh || true)"
