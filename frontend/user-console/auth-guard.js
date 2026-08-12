@@ -7,7 +7,7 @@
     redirectToLogin();
     return;
   }
-  // The legacy console bootstrap removes an expired token after /api/me fails.
+  // The console bootstrap removes an expired token after /api/me fails.
   // Keep the routing invariant: /app is always the authenticated product UI,
   // while /login is the only interactive login page.
   const timer=setInterval(()=>{
