@@ -1,0 +1,119 @@
+name: GoJet Installer Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/installer-validation.yml'
+      - 'installer/**'
+      - 'public/install/**'
+      - 'deploy/**'
+      - 'database/**'
+      - 'frontend/**'
+      - 'services/**'
+      - 'app/**'
+      - 'scripts/native-installer-*.sh'
+      - 'scripts/install-docker.sh'
+      - 'scripts/package-release.sh'
+      - 'scripts/verify-release.sh'
+      - 'scripts/build-public-site.py'
+      - 'install.sh'
+      - 'install-host-nginx.sh'
+      - 'install-native-lemp.sh'
+      - 'launch-web-installer.sh'
+      - 'tests/integration/release-storage-namespaces.sh'
+
+concurrency:
+  group: gojet-installer-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Validate installer and deployment syntax
+        run: |
+          set -euo pipefail
+          php -l installer/index.php
+          php -l public/install/index.php
+          for script in \
+            install.sh \
+            install-host-nginx.sh \
+            install-native-lemp.sh \
+            launch-web-installer.sh \
+            scripts/install-docker.sh \
+            scripts/native-installer-run.sh \
+            scripts/native-installer-apply.sh; do
+            bash -n "$script"
+          done
+          sh -n scripts/package-release.sh
+          sh -n scripts/verify-release.sh
+          python3 -m py_compile scripts/build-public-site.py
+
+      - name: Validate canonical frontend sources
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          node --check frontend/public-site/assets/app.js
+          node --check frontend/public-site/assets/auth.js
+          node --check frontend/public-site/assets/home.js
+          node --check frontend/public-site/assets/file-share.js
+          node --check frontend/admin-console/app.js
+          node --check frontend/admin-console/settings.js
+          for file in frontend/user-console/*.js; do node --check "$file"; done
+          python3 scripts/build-public-site.py --output /tmp/gojet-installer-public
+          test -f /tmp/gojet-installer-public/index.html
+          test ! -e frontend/marketing-site
+
+      - name: Reject retired engineering contracts
+        run: |
+          set -euo pipefail
+          PATHS='installer public/install deploy scripts/native-installer-run.sh scripts/native-installer-apply.sh install.sh install-host-nginx.sh install-native-lemp.sh launch-web-installer.sh'
+          if grep -R -I -n -E '\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release|SYSTEM_IMAGE_PATH|/system-images/|frontend/marketing-site' $PATHS; then
+            echo 'retired engineering or runtime contract detected in installer sources' >&2
+            exit 1
+          fi
+          grep -Fq 'FRESH_INSTALL_ONLY=1' scripts/package-release.sh
+          grep -Fq 'stop_existing_services' scripts/native-installer-run.sh
+          grep -Fq 'information_schema.tables' scripts/native-installer-run.sh
+          test -z "$(grep -F 'upgrade-native.sh' scripts/package-release.sh || true)"
+          test -z "$(grep -F 'upgrade.sh' scripts/package-release.sh || true)"
+
+      - name: Validate storage namespaces and source contracts
+        run: |
+          set -euo pipefail
+          bash tests/integration/release-storage-namespaces.sh
+          bash tests/integration/admin-settings-source-contract.sh
+
+      - name: Test and build production services
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+          mkdir -p /tmp/gojet-installer-bin
+          for spec in \
+            'redirect-engine ./services/redirect-engine/cmd/server' \
+            'analytics-worker ./services/analytics-worker/cmd/worker' \
+            'analytics-reconciler ./services/analytics-reconciler/cmd/reconciler' \
+            'platform-api ./services/platform-api/cmd/server' \
+            'mail-worker ./services/platform-api/cmd/mail-worker' \
+            'file-worker ./services/platform-api/cmd/file-worker' \
+            'operations-monitor ./services/platform-api/cmd/operations-monitor' \
+            'log-receiver ./services/log-receiver/cmd/server'; do
+            set -- $spec
+            go build -o "/tmp/gojet-installer-bin/$1" "$2"
+          done
+          test "$(find /tmp/gojet-installer-bin -maxdepth 1 -type f | wc -l)" -eq 8
