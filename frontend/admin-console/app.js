@@ -3,7 +3,7 @@ let token=sessionStorage.getItem('gojet_admin')||'';let me=null;let currentView=
 const titles={overview:'平台概览',users:'用户管理',administrators:'管理员与权限',links:'链接管理',workspaces:'工作区',announcements:'公告运营',mail:'邮件中心',billing:'套餐与账单',files:'文件安全',abuse:'滥用举报',domains:'域名风险',security:'安全事件',diagnostics:'系统运维',settings:'系统设置',audit:'审计日志'};
 const permissionNames={'platform.read':'平台查看','users.manage':'用户管理','links.manage':'链接管理','content.manage':'内容与公告','mail.manage':'邮件管理','security.manage':'安全与资源','settings.manage':'系统设置','billing.manage':'套餐与账单','operations.manage':'平台运维','admins.manage':'管理员管理'};
 const roleNames={super_admin:'超级管理员',operator:'运营管理员',security:'安全管理员',support:'客服管理员',analyst:'只读分析员',custom:'自定义权限'};
-function esc(v=''){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
+function esc(v=''){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function dt(v){if(!v)return'—';const d=new Date(v);return Number.isNaN(d.valueOf())?'—':d.toLocaleString('zh-CN')}
 function num(v){return Number(v||0).toLocaleString('zh-CN')}
 function state(v){return`<span class="state ${esc(v)}">${esc(({active:'正常',suspended:'已封禁',deleted:'已删除',published:'已发布',draft:'草稿',archived:'已归档',pending:'等待',sent:'已发送',failed:'失败',clean:'安全',infected:'病毒',resolved:'已处理',open:'待处理',operational:'正常',degraded:'降级',outage:'异常'})[v]||v)}</span>`}
