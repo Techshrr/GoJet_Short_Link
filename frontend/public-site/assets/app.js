@@ -46,6 +46,8 @@ function applyPublicSettings(settings){
     document.documentElement.style.setProperty('--brand-hover',darker(primary));
     document.documentElement.style.setProperty('--blue',primary);
   }
+  const title=settings['seo.default_title'];
+  if(title)document.title=title;
   const description=settings['seo.meta_description'];
   if(description){let meta=document.querySelector('meta[name=description]');if(!meta){meta=document.createElement('meta');meta.name='description';document.head.append(meta)}meta.content=description}
   if(settings['brand.favicon_url']){let icon=document.querySelector('link[rel=icon]');if(!icon){icon=document.createElement('link');icon.rel='icon';document.head.append(icon)}icon.href=settings['brand.favicon_url']}
