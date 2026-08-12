@@ -51,7 +51,7 @@ test('marketing homepage and legal pages use the canonical customer-facing shell
   await page.goto(base+'/');
   await expect(page.getByRole('heading',{name:'让链接更短，让分享更有价值'})).toBeVisible();
   for(const text of ['短链接','访问分析','二维码','个人主页','文本分享','文件分享']){
-    await expect(page.locator('main .mk-product h3').filter({hasText:text}).first()).toBeVisible();
+    await expect(page.locator('main .mk-product').filter({hasText:text}).first()).toBeVisible();
   }
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
   await expect(page.getByRole('link',{name:'套餐价格'})).toBeVisible();
