@@ -149,6 +149,9 @@ jobs:
       - name: Administrator link lifecycle
         env: *integration-env
         run: bash tests/integration/admin-link-lifecycle.sh
+      - name: Plan catalog lifecycle
+        env: *integration-env
+        run: bash tests/integration/plancatalog.sh
       - name: Settings, payment, mail and Turnstile round-trip
         env: *integration-env
         run: bash tests/integration/settings-roundtrip.sh
