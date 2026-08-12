@@ -142,7 +142,7 @@ jobs:
           UPLOAD_STORAGE_PATH: /tmp/gojet/uploads
           BRAND_ASSET_PATH: /tmp/gojet/brand
           GENERATED_QR_STORAGE_PATH: /tmp/gojet/generated/qr
-        run: bash tests/integration/product-rebuild-api.sh
+        run: bash tests/integration/core-product-api.sh
       - name: Administrator permission boundary
         env: *integration-env
         run: bash tests/integration/admin-permission-boundary.sh
