@@ -11,7 +11,7 @@ PUBLIC_BUILD="$STAGE/public-build"
 for tool in go zip sha256sum sed python3 curl git; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 "$ROOT/scripts/prepare-pdf-fonts.sh"
 python3 "$ROOT/scripts/build-public-site.py" --output "$PUBLIC_BUILD"
-mkdir -p "$TARGET/bin" "$TARGET/installer" "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/deploy/docker" "$TARGET/scripts" "$TARGET/docs" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/storage/installer" "$TARGET/resources/fonts"
+mkdir -p "$TARGET/bin" "$TARGET/installer" "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/deploy/docker" "$TARGET/scripts" "$TARGET/docs" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/public/assets/images" "$TARGET/public/generated/qr" "$TARGET/storage/installer" "$TARGET/resources/fonts"
 build() { (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$TARGET/bin/$1" "$2"); }
 build redirect-engine ./services/redirect-engine/cmd/server
 build analytics-worker ./services/analytics-worker/cmd/worker
