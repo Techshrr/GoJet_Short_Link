@@ -158,7 +158,7 @@ test.describe.serial('real product surface',()=>{
   });
 
   test('public abuse report fields have stable non-overlapping layout',async({page})=>{
-    await page.goto(base+'/reportabuse/');
+    await page.goto(base+'/reportabuse');
     const form=page.locator('#abuseReportForm');
     await expect(form).toBeVisible();
     const labels=await form.locator('label').all();
