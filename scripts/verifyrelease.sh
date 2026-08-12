@@ -1,23 +1,23 @@
 #!/usr/bin/env sh
 set -eu
-[ "$#" -eq 1 ] || { echo "usage: $0 <GoJet_Production.zip>" >&2; exit 2; }
+[ "$#" -eq 1 ] || { echo "usage: $0 <GoJetProduction.zip>" >&2; exit 2; }
 ARCHIVE=$1
 [ -f "$ARCHIVE" ] || { echo "archive not found: $ARCHIVE" >&2; exit 1; }
-for tool in unzip sha256sum; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+for tool in unzip sha256sum python3; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 unzip -tq "$ARCHIVE" >/dev/null
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM
 unzip -q "$ARCHIVE" -d "$TMP"
 ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
 [ -n "$ROOT" ] || { echo "release root is missing" >&2; exit 1; }
 
-for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh \
+for path in INSTALL.md VERSION FRESHINSTALLONLY MANIFEST.sha256 install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh \
   installer/index.php public/index.html public/install/index.php \
   public/login.html public/register.html public/forgotpassword.html public/resetpassword.html public/verifyemail.html \
   public/reportabuse.html public/privacy.html public/terms.html public/products/urlshortener.html \
   public/assets/auth.js public/assets/auth.css public/assets/home.js public/assets/home.css public/assets/gojetdesignsystem.css public/assets/brandruntime.js \
   public/app/index.html public/app/app.js public/app/authguard.js public/app/pendinglink.js public/app/router.js public/app/pages.js public/app/links.js public/app/product.css \
   public/admin/index.html public/admin/app.js public/admin/productactions.js public/admin/billingadmin.js public/admin/supportsecurity.js public/admin/styles.css \
-  scripts/verifypublishedrelease.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/installdocker.sh \
+  scripts/checkschema.py scripts/verifypublishedrelease.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/installdocker.sh \
   deploy/compose.production.yaml deploy/compose.hostnginx.yaml deploy/.env.production.example \
   deploy/docker/service.Dockerfile deploy/docker/platform.Dockerfile \
   deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf \
@@ -42,9 +42,9 @@ if find "$ROOT" -iname '*hardening*' -o -iname '*rc12*' | grep -q .; then
   echo 'engineering-stage filename leaked into production package' >&2
   exit 1
 fi
-if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -F -- '-' | grep -q .; then
-  echo 'hyphenated file or directory name leaked into production package' >&2
-  find "$ROOT" -mindepth 1 -printf '%P\n' | grep -F -- '-' >&2 || true
+if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then
+  echo 'connector-bearing file or directory name leaked into production package' >&2
+  find "$ROOT" -mindepth 1 -printf '%P\n' | grep -E '[-_]' >&2 || true
   exit 1
 fi
 if find "$ROOT/public" -mindepth 2 -type f -name index.html ! -path "$ROOT/public/app/index.html" ! -path "$ROOT/public/admin/index.html" | grep -q .; then
@@ -53,19 +53,18 @@ if find "$ROOT/public" -mindepth 2 -type f -name index.html ! -path "$ROOT/publi
 fi
 if find "$ROOT" -type f -name '*_test.go' | grep -q .; then echo "Go test sources must not ship" >&2; exit 1; fi
 if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUCT_HARDENING|product-hardening|hardening-release' "$ROOT" --exclude=MANIFEST.sha256 --exclude=verifyrelease.sh; then
-  echo 'retired engineering or system-image contract leaked into production package' >&2
-  exit 1
+  echo 'retired engineering or system-image contract leaked into production package' >&2; exit 1
 fi
 VERSION_QUERY=$(printf '?%s' 'v=')
 if grep -R -I -n -F "$VERSION_QUERY" "$ROOT/public"; then
-  echo 'version query string is forbidden in production public assets' >&2
-  exit 1
+  echo 'version query string is forbidden in production public assets' >&2; exit 1
 fi
 if grep -R -n -E 'installer\.token|MYSQL_ADMIN_PASSWORD' "$ROOT/install.sh" "$ROOT/installnativelemp.sh" "$ROOT/installer" "$ROOT/public/install" "$ROOT/deploy/native"; then
   echo "deprecated installer behavior leaked into production package" >&2; exit 1
 fi
 
-grep -Fq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY" || { echo 'fresh install marker is invalid' >&2; exit 1; }
+grep -Fq 'FRESHINSTALLONLY=1' "$ROOT/FRESHINSTALLONLY" || { echo 'fresh install marker is invalid' >&2; exit 1; }
+python3 "$ROOT/scripts/checkschema.py"
 grep -Fq 'CREATE TABLE administrator_permissions' "$ROOT/database/migrations/015adminidentity.sql" || { echo 'administrator permission schema is missing' >&2; exit 1; }
 grep -Fq "status ENUM('active','suspended','deleted')" "$ROOT/database/migrations/003identityandworkspaces.sql" || { echo 'user lifecycle schema is missing' >&2; exit 1; }
 grep -Fq '{{verification_url}}' "$ROOT/database/migrations/025mailtemplates.sql" || { echo 'verification mail link is missing' >&2; exit 1; }
