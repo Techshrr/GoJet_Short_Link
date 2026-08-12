@@ -199,6 +199,10 @@ func applyCreatePolicy(l Link, policy CreatePolicy, now time.Time) (Link, error)
 	if l.RedirectStatus == 0 && policy.DefaultRedirectStatus != 0 {
 		l.RedirectStatus = policy.DefaultRedirectStatus
 	}
+	if l.MaxClicks == nil && policy.DefaultClickLimit > 0 {
+		value := policy.DefaultClickLimit
+		l.MaxClicks = &value
+	}
 	if l.ExpiresAt == nil && policy.DefaultExpiryDays > 0 {
 		value := now.AddDate(0, 0, policy.DefaultExpiryDays).Format(time.RFC3339)
 		l.ExpiresAt = &value
@@ -221,6 +225,7 @@ func applyCreatePolicy(l Link, policy CreatePolicy, now time.Time) (Link, error)
 			if !strings.ContainsRune(policy.AllowedCharacters, char) {
 				return Link{}, errors.New("短码包含系统策略禁止的字符")
 			}
+		}
 	}
 	lowerCode := strings.ToLower(l.Code)
 	for _, reserved := range policy.ReservedCodes {
@@ -674,7 +679,7 @@ func (s *Service) Analytics(ctx context.Context, userID, workspaceID, linkID int
 	base := `link_id=? AND occurred_at>=? AND occurred_at<?`
 	args := []any{fmt.Sprint(linkID), from, to}
 	var out Analytics
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*),COUNT(DISTINCT IF(is_bot=0,visitor_hash,NULL)),COALESCE(SUM(is_bot),0) FROM analytics_events WHERE `+base, args...).Scan(&out.Clicks, &out.UniqueVisitors, &out.BotVisits); err != nil {
+	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*),COUNT(DISTINCT IF(is_bot=0,visitor_hash,NULL)),SUM(is_bot) FROM analytics_events WHERE `+base, args...).Scan(&out.Clicks, &out.UniqueVisitors, &out.BotVisits); err != nil {
 		return out, err
 	}
 	dimension := func(column string) ([]Dimension, error) {
@@ -783,6 +788,7 @@ func validateRouting(rulesRaw, destinationsRaw, utmRaw json.RawMessage) error {
 			if !map[string]bool{"utm_source": true, "utm_medium": true, "utm_campaign": true, "utm_content": true, "utm_term": true}[key] || len(value) > 255 {
 				return errors.New("UTM 参数名称或长度无效")
 			}
+		}
 	}
 	return nil
 }
