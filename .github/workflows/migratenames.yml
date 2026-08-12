@@ -1,6 +1,7 @@
-name: GoJet stale reference cleanup
+name: GoJet repository connector cleanup
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - rebuild/v4-rc12-real-install-fixes
@@ -10,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: gojetrepositoryconnectorcleanup
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest
@@ -18,34 +23,111 @@ jobs:
         with:
           ref: rebuild/v4-rc12-real-install-fixes
           fetch-depth: 0
-      - name: Replace retired non-workflow path references
+
+      - name: Normalize project-defined file names and stale route references
         shell: bash
         run: |
           set -euo pipefail
           python3 <<'PY'
+          from collections import Counter
           from pathlib import Path
+          import re
           import subprocess
 
           root = Path.cwd()
-          workflow = '.github/workflows/'
-          replacements = {
-              'NotoSansSC-Regular.ttf': 'NotoSansSCRegular.ttf',
-              'NotoSansSC-VF.ttf': 'NotoSansSCVF.ttf',
-              'login/index.html': 'login.html',
-              'register/index.html': 'register.html',
-              'forgotpassword/index.html': 'forgotpassword.html',
-              'resetpassword/index.html': 'resetpassword.html',
-              'verifyemail/index.html': 'verifyemail.html',
-              'reportabuse/index.html': 'reportabuse.html',
-              'privacy/index.html': 'privacy.html',
-              'terms/index.html': 'terms.html',
+          workflow_prefix = '.github/workflows/'
+          tracked = [p for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\0') if p]
+
+          def clean_component(component: str) -> str:
+              # Go requires the literal *_test.go suffix for test discovery.
+              if component.endswith('_test.go'):
+                  prefix = component[:-len('_test.go')].replace('_', '').replace('-', '')
+                  return prefix + '_test.go'
+              return component.replace('_', '').replace('-', '')
+
+          migrations = []
+          for rel in tracked:
+              if rel.startswith('database/migrations/') and rel.endswith('.sql'):
+                  m = re.match(r'^database/migrations/(\d+)[_-]*(.+)\.sql$', rel)
+                  if not m:
+                      raise SystemExit(f'unrecognized migration filename: {rel}')
+                  migrations.append((int(m.group(1)), rel, m.group(2)))
+          migrations.sort(key=lambda item: (item[0], item[1]))
+
+          migration_targets = {}
+          for sequence, (_, rel, description) in enumerate(migrations, start=1):
+              description = re.sub(r'[-_]+', '', description).lower()
+              migration_targets[rel] = f'database/migrations/{sequence:03d}{description}.sql'
+
+          mapping = {}
+          for rel in tracked:
+              if rel.startswith(workflow_prefix):
+                  continue
+              if rel in migration_targets:
+                  new = migration_targets[rel]
+              else:
+                  new = '/'.join(clean_component(part) for part in rel.split('/'))
+              if new != rel:
+                  mapping[rel] = new
+
+          final_paths = [mapping.get(rel, rel) for rel in tracked]
+          duplicates = sorted(path for path, count in Counter(final_paths).items() if count > 1)
+          if duplicates:
+              raise SystemExit('connector cleanup collisions:\n' + '\n'.join(duplicates))
+
+          for old, new in sorted(mapping.items(), key=lambda item: (-item[0].count('/'), item[0])):
+              target = root / new
+              target.parent.mkdir(parents=True, exist_ok=True)
+              subprocess.run(['git', 'mv', old, new], check=True)
+
+          # Exact filename/path references can now follow the renamed files. Basename
+          # replacement is limited to unique old basenames so unrelated files cannot
+          # be conflated by the mechanical pass.
+          basename_counts = Counter(Path(old).name for old in mapping)
+          text_replacements = list(mapping.items())
+          for old, new in mapping.items():
+              old_name, new_name = Path(old).name, Path(new).name
+              if old_name != new_name and basename_counts[old_name] == 1:
+                  text_replacements.append((old_name, new_name))
+
+          # Canonical flat/no-connector public routes. These are explicit product
+          # contracts, not generic slash stripping.
+          route_replacements = {
+              '/products/url-shortener/': '/products/urlshortener',
+              '/products/url-shortener': '/products/urlshortener',
+              '/products/qr-codes/': '/products/qrcodes',
+              '/products/qr-codes': '/products/qrcodes',
+              '/products/bio-pages/': '/products/biopages',
+              '/products/bio-pages': '/products/biopages',
+              '/products/file-share/': '/products/fileshare',
+              '/products/file-share': '/products/fileshare',
+              '/solutions/personal/': '/solutions/personal',
+              '/solutions/developers/': '/solutions/developers',
+              '/solutions/marketing/': '/solutions/marketing',
+              '/solutions/team/': '/solutions/team',
+              '/report-abuse/': '/reportabuse',
+              '/report-abuse': '/reportabuse',
+              '/privacy/': '/privacy',
+              '/terms/': '/terms',
+              '/login/': '/login',
+              '/register/': '/register',
+              '/forgotpassword/': '/forgotpassword',
+              '/resetpassword/': '/resetpassword',
+              '/verifyemail/': '/verifyemail',
+              '/announcements/': '/announcements',
+              '/status/': '/status',
+              '/tmp/gojet/test-env': '/tmp/gojet/testenv',
           }
-          files = [p for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\0') if p]
-          changed = []
-          for rel in files:
-              if rel.startswith(workflow):
+          text_replacements.extend(route_replacements.items())
+
+          current = [p for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\0') if p]
+          changed_text = []
+          for rel in current:
+              if rel.startswith(workflow_prefix):
                   continue
               path = root / rel
+              if not path.exists() or not path.is_file():
+                  continue
               raw = path.read_bytes()
               if b'\x00' in raw:
                   continue
@@ -54,40 +136,37 @@ jobs:
               except UnicodeDecodeError:
                   continue
               updated = text
-              for old, new in replacements.items():
+              for old, new in text_replacements:
                   updated = updated.replace(old, new)
               if updated != text:
                   path.write_text(updated, encoding='utf-8')
-                  changed.append(rel)
+                  changed_text.append(rel)
 
-          stale = []
-          for rel in files:
-              if rel.startswith(workflow):
-                  continue
-              path = root / rel
-              if not path.exists():
-                  continue
-              raw = path.read_bytes()
-              if b'\x00' in raw:
-                  continue
-              try:
-                  text = raw.decode('utf-8')
-              except UnicodeDecodeError:
-                  continue
-              for old in replacements:
-                  if old in text:
-                      stale.append(f'{rel}: {old}')
-          if stale:
-              raise SystemExit('stale references remain:\n' + '\n'.join(stale))
-          subprocess.run(['python3','scripts/checknames.py'], check=True)
-          print('updated:', ', '.join(changed) if changed else 'none')
+          # Any remaining project-defined connector in tracked paths is a hard fail.
+          subprocess.run(['python3', 'scripts/checknames.py'], check=True)
+          subprocess.run(['go', 'test', './...'], check=True)
+          subprocess.run(['python3', '-m', 'py_compile', 'scripts/buildpublicsite.py', 'tests/e2e/browserfixtureserver.py'], check=True)
+
+          expected = [f'database/migrations/{i:03d}' for i in range(1, len(migrations) + 1)]
+          actual = sorted(str(p.relative_to(root)) for p in (root/'database'/'migrations').glob('*.sql'))
+          if len(actual) != len(expected):
+              raise SystemExit(f'migration count changed unexpectedly: {len(actual)} != {len(expected)}')
+          for prefix, path in zip(expected, actual):
+              if not path.startswith(prefix):
+                  raise SystemExit(f'migration sequence is not contiguous: expected {prefix}, got {path}')
+
+          print(f'normalized paths: {len(mapping)}')
+          print(f'updated text files: {len(changed_text)}')
+          print(f'migrations: {len(actual)}, contiguous 001..{len(actual):03d}')
           PY
+
           git config user.name "GoJet Repository Cleanup"
           git config user.email "actions@users.noreply.github.com"
           git add -A
+          git diff --cached --name-status
           if git diff --cached --quiet; then
-            echo 'No stale references required changes.'
+            echo 'No connector cleanup changes required.'
             exit 0
           fi
-          git commit -m "Remove stale font and public route references"
+          git commit -m "Normalize repository and migration names"
           git push origin HEAD:rebuild/v4-rc12-real-install-fixes
