@@ -1,6 +1,6 @@
--- RC12: all built-in templates own content only. The mail service owns the
--- single GoJet brand/document shell so templates cannot drift into separate
--- cards, widths, backgrounds or nested HTML documents.
+-- Built-in templates own content only. The mail service owns the single
+-- GoJet brand/document shell so templates cannot drift into separate cards,
+-- widths, backgrounds or nested HTML documents.
 --
 -- Keep every placeholder aligned with the durable variable contract emitted
 -- by account_lifecycle.go, lifecycle.go, security_workspace_lifecycle.go and
