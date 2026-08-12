@@ -2,10 +2,10 @@
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
-import json, mimetypes, time
+import json, mimetypes, os, subprocess, sys, time
 
 ROOT=Path(__file__).resolve().parents[2]
-MARKETING=ROOT/'frontend'/'marketing-site'
+PUBLIC=Path(os.environ.get('GOJET_FIXTURE_PUBLIC', '/tmp/gojet-browser-fixture'))
 APP=ROOT/'frontend'/'user-console'
 ADMIN=ROOT/'frontend'/'admin-console'
 
@@ -16,6 +16,11 @@ PERMISSIONS=['platform.read','users.manage','workspaces.manage','links.manage','
 TICKET={'id':1,'ticket_number':'GJ-260811-A1B2C3D4','user_id':1,'user_email':'user@example.test','workspace_id':1,'department_id':1,'department_name':'技术支持','subject':'短链接跳转问题','priority':'normal','status':'customer_reply','last_reply_at':'2026-08-11T01:20:00Z','last_reply_by':'customer','closed_at':None,'created_at':'2026-08-11T01:00:00Z'}
 TICKET_MESSAGES=[{'id':1,'author_type':'customer','author_user_id':1,'author_name':'Browser User','body':'访问短链接时出现异常，请协助检查。','internal':False,'created_at':'2026-08-11T01:00:00Z'},{'id':2,'author_type':'administrator','author_administrator_id':1,'author_name':'Owner','body':'已收到，我们正在检查。','internal':False,'created_at':'2026-08-11T01:10:00Z'}]
 BOT={'turnstile.enabled':False,'turnstile.site_key':'','turnstile.fail_open':False,'turnstile.allowed_hostnames':['gojet.cc','app.gojet.cc'],'turnstile.registration':True,'turnstile.login':True,'turnstile.forgot_password':True,'turnstile.reset_password':True,'turnstile.ticket_create':True,'turnstile.ticket_reply':True,'turnstile.abuse_report':True,'turnstile.secret_configured':True}
+
+def ensure_public_build():
+    if (PUBLIC/'index.html').is_file():
+        return
+    subprocess.run([sys.executable,str(ROOT/'scripts'/'build-public-site.py'),'--output',str(PUBLIC)],check=True)
 
 class H(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -30,10 +35,8 @@ class H(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n) or b'{}')
     def static(self,path):
         p=urlparse(path).path
-        auth={'/login':'login','/register':'register','/forgot-password':'forgot-password','/reset-password':'reset-password','/verify-email':'verify-email'}
-        if p=='/': return MARKETING/'index.html'
-        if p in auth: return MARKETING/auth[p]/'index.html'
-        if p.startswith('/assets/'): return MARKETING/p.lstrip('/')
+        if p=='/': return PUBLIC/'index.html'
+        if p.startswith('/assets/'): return PUBLIC/p.lstrip('/')
         if p=='/app' or p.startswith('/app/'):
             rel=p[len('/app/'):]
             if p=='/app' or not rel or '/' not in rel and '.' not in rel: return APP/'index.html'
@@ -41,9 +44,11 @@ class H(BaseHTTPRequestHandler):
         if p=='/admin' or p=='/admin/': return ADMIN/'index.html'
         if p.startswith('/admin/'): return ADMIN/p[len('/admin/'):]
         rel=p.lstrip('/')
-        candidate=MARKETING/rel
+        candidate=PUBLIC/rel
         if candidate.is_dir(): return candidate/'index.html'
         if candidate.is_file(): return candidate
+        html=PUBLIC/(rel+'.html')
+        if html.is_file(): return html
         return None
     def do_GET(self):
         p=urlparse(self.path).path
@@ -116,4 +121,5 @@ class H(BaseHTTPRequestHandler):
         self.send_error(404)
 
 if __name__=='__main__':
+    ensure_public_build()
     ThreadingHTTPServer(('127.0.0.1',4173),H).serve_forever()

@@ -24,6 +24,11 @@ on:
       - 'install-host-nginx.sh'
       - 'install-native-lemp.sh'
       - 'launch-web-installer.sh'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'playwright.config.js'
+      - 'tests/e2e/**'
+      - 'tests/integration/admin-settings-source-contract.sh'
       - 'tests/integration/release-storage-namespaces.sh'
 
 concurrency:
@@ -77,6 +82,12 @@ jobs:
           python3 scripts/build-public-site.py --output /tmp/gojet-installer-public
           test -f /tmp/gojet-installer-public/index.html
           test ! -e frontend/marketing-site
+
+      - name: Run browser fixture acceptance
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e -- --project=chromium
 
       - name: Reject retired engineering contracts
         run: |
