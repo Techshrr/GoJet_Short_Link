@@ -8,9 +8,7 @@ services:
       - "${HTTP_PORT:-80}:80"
     volumes:
       - ./nginx/gojet.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/user-console:/usr/share/nginx/html/app:ro
-      - ../frontend/admin-console:/usr/share/nginx/html/admin:ro
-      - ../frontend/marketing-site:/usr/share/nginx/html/site:ro
+      - ../public:/usr/share/nginx/html/site:ro
       - ./data/brand:/usr/share/nginx/html/assets/images:ro
       - ./data/generated/qr:/usr/share/nginx/html/generated/qr:ro
       - ./data/uploads:/usr/share/nginx/html/uploads:ro
@@ -23,7 +21,9 @@ services:
   log-receiver:
     build:
       context: ..
-      dockerfile: services/log-receiver/Dockerfile
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        BINARY: log-receiver
     restart: unless-stopped
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
@@ -35,7 +35,9 @@ services:
   redirect-engine:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        BINARY: redirect-engine
     restart: unless-stopped
     environment:
       HTTP_ADDRESS: :8080
@@ -47,7 +49,7 @@ services:
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
       VISIT_RATE_LIMIT_PER_MINUTE: ${VISIT_RATE_LIMIT_PER_MINUTE:-60}
     healthcheck:
-      test: ["CMD", "/redirect-engine", "healthcheck"]
+      test: ["CMD", "/service", "healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -58,7 +60,9 @@ services:
   analytics-worker:
     build:
       context: ..
-      dockerfile: services/analytics-worker/Dockerfile
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        BINARY: analytics-worker
     restart: unless-stopped
     environment:
       REDIS_ADDRESS: redis:6379
@@ -78,7 +82,9 @@ services:
   analytics-reconciler:
     build:
       context: ..
-      dockerfile: services/analytics-reconciler/Dockerfile
+      dockerfile: deploy/docker/service.Dockerfile
+      args:
+        BINARY: analytics-reconciler
     restart: unless-stopped
     environment:
       REDIS_ADDRESS: redis:6379
@@ -93,9 +99,10 @@ services:
         condition: service_healthy
 
   platform-api:
+    image: gojet-platform-runtime:local
     build:
       context: ..
-      dockerfile: services/platform-api/Dockerfile
+      dockerfile: deploy/docker/platform.Dockerfile
     restart: unless-stopped
     environment:
       PLATFORM_HTTP_ADDRESS: :8090
@@ -138,9 +145,7 @@ services:
         condition: service_healthy
 
   mail-worker:
-    build:
-      context: ..
-      dockerfile: services/platform-api/Dockerfile
+    image: gojet-platform-runtime:local
     entrypoint: ["/mail-worker"]
     restart: unless-stopped
     environment:
@@ -151,11 +156,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      platform-api:
+        condition: service_started
 
   file-worker:
-    build:
-      context: ..
-      dockerfile: services/platform-api/Dockerfile
+    image: gojet-platform-runtime:local
     entrypoint: ["/file-worker"]
     restart: unless-stopped
     environment:
@@ -178,11 +183,11 @@ services:
         condition: service_healthy
       clamav:
         condition: service_started
+      platform-api:
+        condition: service_started
 
   operations-monitor:
-    build:
-      context: ..
-      dockerfile: services/platform-api/Dockerfile
+    image: gojet-platform-runtime:local
     entrypoint: ["/operations-monitor"]
     restart: unless-stopped
     environment:
@@ -195,6 +200,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      platform-api:
+        condition: service_started
 
   clamav:
     image: clamav/clamav:1.4.5
