@@ -50,29 +50,30 @@ var fileShareTemplate = template.Must(template.New("file-share").Funcs(template.
         <p class="resourceEyebrow">FILE SHARE</p>
         <h1>文件分享</h1>
       </div>
-      <div class="resourceMeta">通过安全检查后开放下载</div>
+      <div class="resourceMeta">安全检查已通过</div>
     </div>
     <section class="resourceCard">
       <div class="fileIdentity">
         <div class="fileIcon">⇩</div>
-        <div><h1>{{.OriginalName}}</h1><p>{{.MIMEType}} · {{bytes .SizeBytes}}</p></div>
+        <div><h1>{{.OriginalName}}</h1><p>{{bytes .SizeBytes}}</p></div>
       </div>
       <div class="fileMeta">
         <div><small>已下载</small><b>{{.Downloads}} 次</b></div>
         <div><small>有效期</small><b>{{when .ExpiresAt}}</b></div>
-        <div><small>下载次数</small><b>{{if .MaxDownloads}}{{.Downloads}} / {{.MaxDownloads}}{{else}}不限{{end}}</b></div>
+        <div><small>下载限制</small><b>{{if .MaxDownloads}}{{.Downloads}} / {{.MaxDownloads}}{{else}}不限{{end}}</b></div>
       </div>
       <div class="fileDownload">
         {{if .Protected}}
-          <p>这份文件需要访问密码。密码不会出现在分享地址中。</p>
+          <p>这份文件设置了访问密码，请输入密码后下载。</p>
           <div class="resourceForm"><input id="filePassword" type="password" autocomplete="current-password" placeholder="输入访问密码"></div>
-        {{else}}
-          <p>文件已经可以下载。</p>
         {{end}}
-        <div id="fileError" class="resourceError"></div>
+        <div id="fileError" class="resourceError" hidden></div>
         <button id="fileDownload" class="resourceButton" data-protected="{{.Protected}}">下载文件</button>
       </div>
-      <div class="resourceHint">下载前已通过文件安全检查</div>
+      <div class="resourceFooterActions">
+        <span>由 {{.SiteName}} 提供安全文件分享</span>
+        <a href="/report-abuse?url={{urlquery .SharePath}}">举报此文件</a>
+      </div>
     </section>
   </div>
 </main>
@@ -87,8 +88,9 @@ func (s *server) serveFileSharePage(w http.ResponseWriter, r *http.Request) {
 	}
 	view := struct {
 		appresources.PublicFileMetadata
-		SiteName string
-	}{PublicFileMetadata: item, SiteName: s.stringSetting(r.Context(), "site.name", "GoJet")}
+		SiteName  string
+		SharePath string
+	}{PublicFileMetadata: item, SiteName: s.stringSetting(r.Context(), "site.name", "GoJet"), SharePath: r.URL.Path}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
