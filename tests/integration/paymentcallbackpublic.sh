@@ -137,10 +137,13 @@ echo '[6/8] billing administrator can query callback observability'
 admin=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" adminlogin)
 admin_token=$(printf '%s' "$admin"|field "['token']")
 callbacks=$(expect 200 "$(req GET '/api/admin/payment-callbacks?limit=100' '' "$admin_token")" callbacks)
-printf '%s' "$callbacks" | python3 - "$order" "$transaction_id" "$invoice_id" <<'PY'
+callbacks_file=$(mktemp)
+printf '%s' "$callbacks" > "$callbacks_file"
+python3 - "$callbacks_file" "$order" "$transaction_id" "$invoice_id" <<'PY'
 import json,sys
-order,transaction,invoice=sys.argv[1:]
-data=json.load(sys.stdin)['data']
+path,order,transaction,invoice=sys.argv[1:]
+with open(path,encoding='utf-8') as handle:
+    data=json.load(handle)['data']
 rows=[row for row in data if row.get('merchant_order_no')==order]
 assert len(rows)==3, rows
 assert sorted(row['outcome'] for row in rows)==['accepted','accepted','rejected']
@@ -156,7 +159,6 @@ PY
 echo '[7/8] callback route remains public while observability query remains protected'
 unauthorized=$(curl -sS -o /tmp/gojetcallbackunauthorized -w '%{http_code}' "$BASE/api/admin/payment-callbacks")
 [[ "$unauthorized" == 401 || "$unauthorized" == 403 ]]
-# A malformed public callback is rejected by provider verification, not by user authentication.
 public_probe=$(curl -sS -o /tmp/gojetcallbackprobe -w '%{http_code}' -X POST -H 'Content-Type: application/x-www-form-urlencoded' --data 'pid=1000' "$BASE/api/payments/epay/notify")
 [[ "$public_probe" == 400 ]]
 grep -Fxq fail /tmp/gojetcallbackprobe
