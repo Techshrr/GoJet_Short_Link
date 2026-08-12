@@ -3,7 +3,10 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 COMPOSE="$ROOT/deploy/compose.production.yaml"
 NGINX="$ROOT/deploy/nginx/gojet.conf"
+HOST_NGINX="$ROOT/deploy/nginx/gojet-host.conf"
+NATIVE_NGINX="$ROOT/deploy/nginx/gojet-native.conf"
 PACKAGE="$ROOT/scripts/package-release.sh"
+HOST_INSTALLER="$ROOT/install-host-nginx.sh"
 
 need(){ grep -Fq "$2" "$1" || { echo "missing release storage contract in $1: $2" >&2; exit 1; }; }
 forbid(){ if grep -Fq "$2" "$1"; then echo "retired release storage contract in $1: $2" >&2; exit 1; fi; }
@@ -20,6 +23,9 @@ forbid "$COMPOSE" '/usr/share/nginx/html/site/assets/images'
 forbid "$COMPOSE" '/usr/share/nginx/html/site/generated/qr'
 forbid "$COMPOSE" '/usr/share/nginx/html/site/uploads'
 
+need "$NGINX" 'alias /usr/share/nginx/html/site/app/;'
+need "$NGINX" 'alias /usr/share/nginx/html/site/admin/;'
+need "$NGINX" 'root /usr/share/nginx/html/site;'
 need "$NGINX" 'location ^~ /assets/images/'
 need "$NGINX" 'alias /usr/share/nginx/html/assets/images/;'
 need "$NGINX" 'location ^~ /generated/qr/'
@@ -27,8 +33,18 @@ need "$NGINX" 'alias /usr/share/nginx/html/generated/qr/;'
 need "$NGINX" 'location ^~ /uploads/'
 need "$NGINX" 'alias /usr/share/nginx/html/uploads/;'
 
+for config in "$HOST_NGINX" "$NATIVE_NGINX"; do
+  need "$config" '__GOJET_ROOT__/public/app/'
+  need "$config" '__GOJET_ROOT__/public/admin/'
+  need "$config" 'root __GOJET_ROOT__/public;'
+  forbid "$config" '__GOJET_ROOT__/frontend/'
+done
+
+need "$HOST_INSTALLER" '"$ROOT/public"'
+forbid "$HOST_INSTALLER" 'frontend/marketing-site'
 need "$PACKAGE" 'deploy/compose.production.yaml'
 forbid "$PACKAGE" 'compose.release.yaml'
+forbid "$PACKAGE" 'frontend/marketing-site#__GOJET_ROOT__/public'
 [ ! -e "$ROOT/deploy/compose.release.yaml" ] || { echo 'duplicate deploy/compose.release.yaml must not exist' >&2; exit 1; }
 
-printf 'published asset storage namespace contract: PASS\n'
+printf 'published web/storage namespace contract: PASS\n'
