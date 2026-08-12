@@ -47,10 +47,8 @@ var settingSections = map[string]map[string]bool{
 
 var sensitiveSettings = map[string]bool{"turnstile.secret": true}
 var brandAssets = map[string]string{
-	"logo": "brand.logo_url", "logo-dark": "brand.logo_dark_url", "logo-light": "brand.logo_light_url",
-	"logo-square": "brand.logo_square_url", "favicon": "brand.favicon_url",
-	"apple-touch-icon": "brand.apple_touch_icon_url", "pwa-icon": "brand.pwa_icon_url",
-	"share-image": "brand.share_image_url", "login-image": "brand.login_image_url", "mail-logo": "brand.mail_logo_url",
+	"logo": "brand.logo_url",
+	"favicon": "brand.favicon_url",
 }
 
 func canonicalSettingSection(key string) (string, bool) {
