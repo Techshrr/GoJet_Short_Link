@@ -18,7 +18,7 @@ func TestRenderInvoicePDFRequiresBundledUnicodeFont(t *testing.T) {
 }
 
 func TestRenderInvoicePDFEmbedsUnicodeFontForChineseAndLatin(t *testing.T) {
-	font := filepath.Join("..", "..", "resources", "fonts", "NotoSansSC-VF.ttf")
+	font := filepath.Join("..", "..", "resources", "fonts", "NotoSansSCVF.ttf")
 	if _, err := os.Stat(font); err != nil {
 		t.Skip("run scripts/preparepdffonts.sh before the PDF render test")
 	}

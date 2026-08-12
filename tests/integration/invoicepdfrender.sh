@@ -40,7 +40,7 @@ mysqlq "DELETE FROM fx_rate_cache;"
 # customer invoices. A Latin-only or accidentally subsetted font is a hard fail.
 python3 - <<'PY'
 from fontTools.ttLib import TTFont
-font=TTFont('resources/fonts/NotoSansSC-Regular.ttf', lazy=True)
+font=TTFont('resources/fonts/NotoSansSCRegular.ttf', lazy=True)
 cmap={cp for table in font['cmap'].tables for cp in table.cmap}
 text='霍召席账单验收的工作区专业版购买套餐服务方客户支付期限结算金额最终自动生成汇率快照'
 missing=[ch for ch in text if ord(ch) not in cmap]

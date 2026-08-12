@@ -52,7 +52,7 @@ func RenderInvoicePDF(data InvoicePDFData) ([]byte, error) {
 		fontPath = strings.TrimSpace(os.Getenv("PDF_FONT_PATH"))
 	}
 	if fontPath == "" {
-		fontPath = filepath.Join("resources", "fonts", "NotoSansSC-VF.ttf")
+		fontPath = filepath.Join("resources", "fonts", "NotoSansSCVF.ttf")
 	}
 	if info, err := os.Stat(fontPath); err != nil || info.IsDir() || info.Size() < 1_000_000 {
 		if err == nil {

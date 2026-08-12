@@ -18,8 +18,8 @@ COPY --from=build /platformapi /platformapi
 COPY --from=build /mailworker /mailworker
 COPY --from=build /fileworker /fileworker
 COPY --from=build /operationsmonitor /operationsmonitor
-COPY --from=build /src/resources/fonts/NotoSansSC-Regular.ttf /app/resources/fonts/NotoSansSC-Regular.ttf
+COPY --from=build /src/resources/fonts/NotoSansSCRegular.ttf /app/resources/fonts/NotoSansSCRegular.ttf
 COPY --from=build /src/resources/fonts/OFL.txt /app/resources/fonts/OFL.txt
-ENV PDF_FONT_PATH=/app/resources/fonts/NotoSansSC-Regular.ttf
+ENV PDF_FONT_PATH=/app/resources/fonts/NotoSansSCRegular.ttf
 EXPOSE 8090
 ENTRYPOINT ["/platformapi"]

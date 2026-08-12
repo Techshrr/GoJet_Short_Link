@@ -9,7 +9,7 @@ NOTO_COMMIT='f8d157532fbfaeda587e826d4cd5b21a49186f7c'
 FONT_BLOB='5371a543be5fc670c7cdee9760c03554ee3e9b8e'
 LICENSE_BLOB='d952d62c065f3f35fb83a173496e90b21525aef3'
 FONT_SIZE='17773132'
-FONT_URL="https://raw.githubusercontent.com/notofonts/noto-cjk/$NOTO_COMMIT/Sans/Variable/TTF/Subset/NotoSansSC-VF.ttf"
+FONT_URL="https://raw.githubusercontent.com/notofonts/noto-cjk/$NOTO_COMMIT/Sans/Variable/TTF/Subset/NotoSansSCVF.ttf"
 LICENSE_URL="https://raw.githubusercontent.com/notofonts/noto-cjk/$NOTO_COMMIT/Sans/LICENSE"
 
 for tool in curl git stat python3; do
