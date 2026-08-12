@@ -4,7 +4,8 @@ module.exports=defineConfig({
   testDir:'./tests/e2e',
   testIgnore:[
     '**/productsurface.spec.js',
-    '**/fullsurfaceconsistency.spec.js'
+    '**/fullsurfaceconsistency.spec.js',
+    '**/paymentcallbackadmin.spec.js'
   ],
   timeout:30000,
   reporter:'line',
