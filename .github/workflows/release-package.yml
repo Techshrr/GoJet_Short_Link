@@ -251,7 +251,7 @@ jobs:
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
             ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='fresh-candidate-qr-key-2026' \
+            QR_TRACKING_KEY='fresh-install-candidate-qr-tracking-key-2026' \
             PUBLIC_BASE_URL='http://127.0.0.1:18080' \
             PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
             UPLOAD_STORAGE_PATH='/tmp/gojet-candidate/uploads' \
@@ -264,7 +264,7 @@ jobs:
             REDIS_ADDRESS='127.0.0.1:6379' \
             HTTP_ADDRESS='127.0.0.1:18080' \
             VISITOR_HASH_KEY='fresh-candidate-visitor-key-2026' \
-            QR_TRACKING_KEY='fresh-candidate-qr-key-2026' \
+            QR_TRACKING_KEY='fresh-install-candidate-qr-tracking-key-2026' \
             "$ROOT/bin/redirect-engine" >/tmp/gojet-candidate-redirect-engine.log 2>&1 &
           echo $! >/tmp/gojet-candidate-redirect-engine.pid
           env \
@@ -298,7 +298,7 @@ jobs:
           FILE_STORAGE_PATH: /tmp/gojet-candidate/files
         run: |
           set -euo pipefail
-          bash tests/integration/product-rebuild-api.sh
+          bash tests/integration/core-product-api.sh
           bash tests/integration/admin-permission-boundary.sh
           bash tests/integration/admin-link-lifecycle.sh
           bash tests/integration/settings-roundtrip.sh
