@@ -1,4 +1,4 @@
-name: GoJet repository path normalization
+name: GoJet stale reference cleanup
 
 on:
   push:
@@ -11,14 +11,14 @@ permissions:
   contents: write
 
 jobs:
-  migrate:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: rebuild/v4-rc12-real-install-fixes
           fetch-depth: 0
-      - name: Normalize non-workflow repository paths
+      - name: Replace retired non-workflow path references
         shell: bash
         run: |
           set -euo pipefail
@@ -26,148 +26,68 @@ jobs:
           from pathlib import Path
           import subprocess
 
-          ROOT = Path.cwd()
-          WORKFLOW_PREFIX = '.github/workflows/'
-
-          def git(*args):
-              return subprocess.check_output(['git', *args], cwd=ROOT)
-
-          tracked = [p for p in git('ls-files', '-z').decode().split('\0') if p]
-
-          def clean_path(path: str) -> str:
-              return '/'.join(part.replace('-', '') for part in path.split('/'))
-
-          # GitHub Actions' job token cannot update workflow files. Normalize the
-          # entire remainder of the repository here; workflow paths/content are
-          # migrated immediately afterwards through the connected GitHub API.
-          mapping = {
-              old: clean_path(old)
-              for old in tracked
-              if not old.startswith(WORKFLOW_PREFIX) and clean_path(old) != old
+          root = Path.cwd()
+          workflow = '.github/workflows/'
+          replacements = {
+              'NotoSansSC-Regular.ttf': 'NotoSansSCRegular.ttf',
+              'NotoSansSC-VF.ttf': 'NotoSansSCVF.ttf',
+              'login/index.html': 'login.html',
+              'register/index.html': 'register.html',
+              'forgotpassword/index.html': 'forgotpassword.html',
+              'resetpassword/index.html': 'resetpassword.html',
+              'verifyemail/index.html': 'verifyemail.html',
+              'reportabuse/index.html': 'reportabuse.html',
+              'privacy/index.html': 'privacy.html',
+              'terms/index.html': 'terms.html',
           }
-          destinations = {}
-          tracked_set = set(tracked)
-          for old, new in mapping.items():
-              if new in destinations and destinations[new] != old:
-                  raise SystemExit(f'path collision: {destinations[new]} and {old} -> {new}')
-              if new in tracked_set and new not in mapping:
-                  raise SystemExit(f'path collision with existing tracked file: {old} -> {new}')
-              destinations[new] = old
-
-          replacements = {}
-          def add(old, new):
-              if old and old != new:
-                  existing = replacements.get(old)
-                  if existing is not None and existing != new:
-                      raise SystemExit(f'ambiguous replacement: {old} -> {existing} / {new}')
-                  replacements[old] = new
-
-          for old, new in mapping.items():
-              add(old, new)
-              old_parts = old.split('/')
-              new_parts = new.split('/')
-              for index in range(1, len(old_parts)):
-                  add('/'.join(old_parts[:index]), '/'.join(new_parts[:index]))
-              for old_part, new_part in zip(old_parts, new_parts):
-                  if '-' in old_part:
-                      add(old_part, new_part)
-                      old_stem = old_part.rsplit('.', 1)[0] if '.' in old_part else old_part
-                      new_stem = new_part.rsplit('.', 1)[0] if '.' in new_part else new_part
-                      if '-' in old_stem:
-                          add(old_stem, new_stem)
-
-          for old, new in sorted(mapping.items(), key=lambda item: (-item[0].count('/'), -len(item[0]), item[0])):
-              target = ROOT / new
-              target.parent.mkdir(parents=True, exist_ok=True)
-              subprocess.run(['git', 'mv', old, new], cwd=ROOT, check=True)
-
-          ordered = sorted(replacements.items(), key=lambda item: (-len(item[0]), item[0]))
-          renamed = [p for p in git('ls-files', '-z').decode().split('\0') if p]
-          for rel in renamed:
-              if rel.startswith(WORKFLOW_PREFIX):
-                  continue
-              path = ROOT / rel
-              try:
-                  raw = path.read_bytes()
-              except FileNotFoundError:
-                  continue
-              if b'\x00' in raw:
-                  continue
-              try:
-                  text = raw.decode('utf-8')
-              except UnicodeDecodeError:
-                  continue
-              original = text
-              for old, new in ordered:
-                  text = text.replace(old, new)
-              if rel != 'scripts/npmci.sh':
-                  text = text.replace('npm ci', 'bash scripts/npmci.sh')
-              if text != original:
-                  path.write_text(text, encoding='utf-8')
-
-          (ROOT / 'scripts' / 'npmci.sh').write_text('''#!/usr/bin/env bash
-          set -euo pipefail
-          ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-          cd "$ROOT"
-          [[ -f packagelock.json ]] || { echo "packagelock.json is missing" >&2; exit 1; }
-          cp packagelock.json package-lock.json
-          cleanup(){ rm -f package-lock.json; }
-          trap cleanup EXIT
-          npm ci "$@"
-          ''', encoding='utf-8')
-
-          gate = ROOT / 'scripts' / 'checknames.py'
-          gate.write_text('''#!/usr/bin/env python3
-          from pathlib import Path
-          import subprocess
-          import sys
-
-          root = Path(__file__).resolve().parents[1]
-          files = [p for p in subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode().split("\\0") if p]
-          bad = [p for p in files if any("-" in part for part in p.split("/"))]
-          if bad:
-              print("Repository path policy violation: hyphen is forbidden in tracked file and directory names.", file=sys.stderr)
-              for path in bad:
-                  print(path, file=sys.stderr)
-              raise SystemExit(1)
-          print(f"Repository path policy: PASS ({len(files)} tracked files, zero hyphenated paths)")
-          ''', encoding='utf-8')
-
-          # Before workflow migration, every non-workflow tracked path must already
-          # satisfy the final naming policy.
-          files = [p for p in git('ls-files', '-z').decode().split('\0') if p]
-          bad = [p for p in files if not p.startswith(WORKFLOW_PREFIX) and any('-' in part for part in p.split('/'))]
-          if bad:
-              raise SystemExit('non-workflow path normalization failed: ' + ', '.join(bad))
-
-          # Keep the source/release query-marker rule active for all files this job
-          # is allowed to mutate. Workflow detectors are cleaned in the API phase.
-          needle = '?' + 'v='
-          detector_files = {'scripts/buildpublicsite.py', 'scripts/packagerelease.sh', 'scripts/verifyrelease.sh'}
-          violations = []
+          files = [p for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\0') if p]
+          changed = []
           for rel in files:
-              if rel.startswith(WORKFLOW_PREFIX) or rel in detector_files:
+              if rel.startswith(workflow):
                   continue
-              path = ROOT / rel
-              try:
-                  raw = path.read_bytes()
-              except FileNotFoundError:
-                  continue
+              path = root / rel
+              raw = path.read_bytes()
               if b'\x00' in raw:
                   continue
               try:
                   text = raw.decode('utf-8')
               except UnicodeDecodeError:
                   continue
-              if needle in text:
-                  violations.append(rel)
-          if violations:
-              raise SystemExit('forbidden static version query marker found in: ' + ', '.join(violations))
-          PY
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+                  changed.append(rel)
 
-          git config user.name "GoJet Repository Migration"
+          stale = []
+          for rel in files:
+              if rel.startswith(workflow):
+                  continue
+              path = root / rel
+              if not path.exists():
+                  continue
+              raw = path.read_bytes()
+              if b'\x00' in raw:
+                  continue
+              try:
+                  text = raw.decode('utf-8')
+              except UnicodeDecodeError:
+                  continue
+              for old in replacements:
+                  if old in text:
+                      stale.append(f'{rel}: {old}')
+          if stale:
+              raise SystemExit('stale references remain:\n' + '\n'.join(stale))
+          subprocess.run(['python3','scripts/checknames.py'], check=True)
+          print('updated:', ', '.join(changed) if changed else 'none')
+          PY
+          git config user.name "GoJet Repository Cleanup"
           git config user.email "actions@users.noreply.github.com"
           git add -A
-          git status --short
-          git commit -m "Normalize non-workflow repository paths and references"
+          if git diff --cached --quiet; then
+            echo 'No stale references required changes.'
+            exit 0
+          fi
+          git commit -m "Remove stale font and public route references"
           git push origin HEAD:rebuild/v4-rc12-real-install-fixes
