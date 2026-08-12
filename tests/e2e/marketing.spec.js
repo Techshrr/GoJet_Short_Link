@@ -1,11 +1,11 @@
 const{test,expect}=require('@playwright/test');
-const products=['url-shortener','bio-pages','text-sharing','file-sharing','analytics','qr-code','ab-testing','custom-domains','smart-links','qr-campaigns'];
-const genericRoutes=['about','contact','resources','docs','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browser-extension','apps','changelog'];
-const authRoutes=['login','register','forgotpassword','resetpassword?token=acceptance-token','verifyemail?token=acceptance-token'];
+const products=['urlshortener','biopages','textsharing','filesharing','analytics','qrcode','abtesting','customdomains','smartlinks','qrcampaigns'];
+const genericRoutes=['about','contact','resources','docs','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browserextension','apps','changelog'];
+const authRoutes=['login','register','forgotpassword','resetpassword?token=acceptancetoken','verifyemail?token=acceptancetoken'];
 test.beforeEach(async({page})=>page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'})));
 
 for(const product of products)test(`${product} has complete product narrative`,async({page})=>{
-  await page.goto(`/products/${product}/`);
+  await page.goto(`/products/${product}`);
   await expect(page.locator('h1')).toBeVisible();
   await expect(page.locator('.hero .uiPanel')).toBeVisible();
   await expect(page.locator('.section .cards')).toHaveCount(2);
@@ -25,7 +25,7 @@ for(const width of [1440,768,390])test(`homepage responsive at ${width}`,async({
 for(const width of [1440,768,390])test(`all product pages are responsive at ${width}`,async({page})=>{
   await page.setViewportSize({width,height:1000});
   for(const product of products){
-    await page.goto(`/products/${product}/`);
+    await page.goto(`/products/${product}`);
     await expect(page.locator('h1')).toBeVisible();
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth);
     expect(overflow,`${product} overflow at ${width}px`).toBeFalsy();
@@ -45,17 +45,17 @@ for(const width of [1440,768,390])test(`authentication pages are responsive and 
 
 test('saved brand and SEO settings apply without rebuilding pages',async({page})=>{
   await page.unroute('**/api/public/settings');
-  await page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({'site.name':'Acme GoJet','brand.logo_url':'/assets/test-logo.png','brand.primary_color':'#9b2c2c','seo.default_title':'Acme Links','seo.meta_description':'Saved description'})}));
-  await page.route('**/assets/test-logo.png',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="32"><rect width="120" height="32" rx="6" fill="#9b2c2c"/></svg>'}));
+  await page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({'site.name':'Acme GoJet','brand.logo_url':'/assets/testlogo.png','brand.primary_color':'#9b2c2c','seo.default_title':'Acme Links','seo.meta_description':'Saved description'})}));
+  await page.route('**/assets/testlogo.png',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="32"><rect width="120" height="32" rx="6" fill="#9b2c2c"/></svg>'}));
   await page.goto('/');
   await expect(page).toHaveTitle('Acme Links');
-  await expect(page.locator('.logo img').first()).toHaveAttribute('src','/assets/test-logo.png');
+  await expect(page.locator('.logo img').first()).toHaveAttribute('src','/assets/testlogo.png');
   expect(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--blue').trim())).toBe('#9b2c2c');
   await expect(page.locator('meta[name=description]')).toHaveAttribute('content','Saved description');
 });
 
 for(const route of genericRoutes)test(`${route} public route is complete`,async({page})=>{
-  await page.goto(`/${route}/`);
+  await page.goto(`/${route}`);
   await expect(page.locator('h1')).toBeVisible();
   await expect(page.locator('.section .cards .card')).toHaveCount(3);
   await expect(page.locator('.ctaBox')).toBeVisible();
@@ -63,7 +63,7 @@ for(const route of genericRoutes)test(`${route} public route is complete`,async(
 });
 
 test('pricing public route is complete',async({page})=>{
-  await page.goto('/pricing/');
+  await page.goto('/pricing');
   await expect(page.getByRole('heading',{name:'从个人使用，到团队协作'})).toBeVisible();
   await expect(page.locator('.pricing .price')).toHaveCount(3);
   await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
