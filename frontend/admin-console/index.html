@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GoJet 管理中心</title>
 <meta name="robots" content="noindex,nofollow">
-<link rel="stylesheet" href="/assets/gojet-design-system.css?v=brand-2">
-<link rel="stylesheet" href="/admin/styles.css?v=brand-2">
-<link rel="stylesheet" href="/admin/shell.css?v=brand-2">
-<link rel="stylesheet" href="/admin/brand.css?v=brand-2">
+<link rel="stylesheet" href="/assets/gojet-design-system.css">
+<link rel="stylesheet" href="/admin/styles.css">
+<link rel="stylesheet" href="/admin/shell.css">
+<link rel="stylesheet" href="/admin/brand.css">
 </head>
 <body>
 <div id="loginView" class="login-view">
@@ -23,7 +23,6 @@
     <button class="btn primary wide" type="submit">登录</button>
   </form>
 </div>
-
 <div id="adminView" class="admin-shell hidden">
   <aside class="sidebar">
     <a href="/" class="brand">GoJet<span>.</span></a>
@@ -45,35 +44,22 @@
       <button data-view="settings" data-permission="settings.manage">系统设置</button>
       <button data-view="audit" data-permission="platform.read">审计日志</button>
     </nav>
-    <div class="sidebar-account">
-      <strong id="adminName">—</strong>
-      <span id="adminEmail">—</span>
-      <span id="adminRole" class="role-pill">—</span>
-    </div>
+    <div class="sidebar-account"><strong id="adminName">—</strong><span id="adminEmail">—</span><span id="adminRole" class="role-pill">—</span></div>
   </aside>
   <main class="workspace">
-    <header class="topbar">
-      <div><h1 id="pageTitle">平台概览</h1></div>
-      <div class="top-actions">
-        <button id="enableMfa" class="btn ghost">登录双因素认证</button>
-        <button id="changePassword" class="btn ghost">修改密码</button>
-        <button id="reload" class="btn ghost">刷新</button>
-        <button id="logout" class="btn">退出登录</button>
-      </div>
-    </header>
+    <header class="topbar"><div><h1 id="pageTitle">平台概览</h1></div><div class="top-actions"><button id="enableMfa" class="btn ghost">登录双因素认证</button><button id="changePassword" class="btn ghost">修改密码</button><button id="reload" class="btn ghost">刷新</button><button id="logout" class="btn">退出登录</button></div></header>
     <section id="content" class="content"></section>
   </main>
 </div>
-
 <div id="modal" class="modal-layer hidden" aria-hidden="true"><div class="modal" id="modalBody"></div></div>
 <div id="toast" class="toast hidden"></div>
 <script src="/assets/brand-runtime.js"></script>
-<script src="/admin/app.js?v=brand-2"></script>
-<script src="/admin/mail-status.js?v=brand-2"></script>
-<script src="/admin/mail-templates.js?v=brand-2"></script>
-<script src="/admin/product-actions.js?v=brand-2"></script>
-<script src="/admin/settings.js?v=brand-2"></script>
-<script src="/admin/billing-fx-settings.js?v=brand-2"></script>
-<script src="/admin/support-security.js?v=brand-2"></script>
+<script src="/admin/app.js"></script>
+<script src="/admin/mail-status.js"></script>
+<script src="/admin/mail-templates.js"></script>
+<script src="/admin/product-actions.js"></script>
+<script src="/admin/settings.js"></script>
+<script src="/admin/billing-fx-settings.js"></script>
+<script src="/admin/support-security.js"></script>
 </body>
 </html>

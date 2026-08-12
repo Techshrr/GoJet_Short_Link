@@ -17,9 +17,7 @@ jobs:
     services:
       mysql:
         image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: gojet_surface
+        env: {MYSQL_ROOT_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
         ports: ['3306:3306']
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
@@ -56,12 +54,15 @@ jobs:
           test ! -e frontend/marketing-site
           test ! -e scripts/rebuild-marketing-pages.py
           test ! -e scripts/rebuild-public-product-pages.py
+          test ! -e frontend/admin-console/settings-full.js
           test -z "$(find frontend/public-site/pages -type f -name index.html -print -quit)"
+          if grep -R -n -E '\?v=(brand|rc)[A-Za-z0-9._-]*' frontend/public-site frontend/admin-console frontend/user-console; then echo 'release-stage cache token leaked into canonical frontend source' >&2; exit 1; fi
           node --check frontend/public-site/assets/app.js
           node --check frontend/admin-console/settings.js
           for file in frontend/user-console/pages.js frontend/user-console/router.js frontend/user-console/links.js frontend/user-console/bio.js frontend/user-console/domains.js frontend/user-console/analytics.js frontend/user-console/files.js frontend/user-console/team.js frontend/user-console/organization.js frontend/user-console/billing.js frontend/user-console/support.js; do node --check "$file"; done
           if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/user-console; then echo 'retired customer-console page registry detected' >&2; exit 1; fi
           node --check tests/e2e/product-surface-real.spec.js
+          node --check tests/e2e/full-surface-consistency.spec.js
           python3 -m py_compile tests/integration/assert-pdf-contrast.py
       - name: Run source-level tests before starting product surface
         run: |
@@ -126,7 +127,7 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4180/ >/dev/null && break; sleep 1; test "$i" -lt 30; done
       - name: Run real browser product-surface acceptance
         env: {GOJET_SURFACE_BASE: 'http://127.0.0.1:4180'}
-        run: npx playwright test product-surface-real.spec.js --config=tests/e2e/playwright.real.config.js --project=chromium
+        run: npx playwright test product-surface-real.spec.js full-surface-consistency.spec.js --config=tests/e2e/playwright.real.config.js --project=chromium
       - name: Run invoice PDF visual contrast acceptance
         env: {GOJET_TEST_BASE: 'http://127.0.0.1:18090', MYSQL_HOST: '127.0.0.1', MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
         run: |
