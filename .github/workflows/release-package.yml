@@ -1,0 +1,125 @@
+name: GoJet Release Package Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/release-package.yml'
+      - 'scripts/package-release.sh'
+      - 'scripts/verify-release.sh'
+      - 'scripts/verify-hardening-release.sh'
+      - 'scripts/build-public-site.py'
+      - 'deploy/**'
+      - 'frontend/**'
+      - 'services/**'
+      - 'app/**'
+      - 'database/**'
+      - 'go.mod'
+      - 'go.sum'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gojet-release-package-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOJET_RELEASE_VERSION: 4.0.0-rc.12
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Validate release source
+        run: |
+          set -euo pipefail
+          sh -n scripts/package-release.sh
+          sh -n scripts/verify-release.sh
+          sh -n scripts/verify-hardening-release.sh
+          python3 -m py_compile scripts/build-public-site.py
+          go test ./...
+          go vet ./...
+
+      - name: Build production archive
+        run: |
+          set -euo pipefail
+          ./scripts/package-release.sh "$GOJET_RELEASE_VERSION"
+          ZIP=$(find dist -maxdepth 1 -type f -name "*${GOJET_RELEASE_VERSION}*linux-production.zip" | head -1)
+          test -n "$ZIP"
+          printf '%s\n' "$ZIP" | tee /tmp/gojet-release-zip
+
+      - name: Verify archive independently
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-release-zip)
+          sh scripts/verify-release.sh "$ZIP"
+          sh scripts/verify-hardening-release.sh "$ZIP"
+          unzip -tq "$ZIP"
+          test -f "$ZIP.sha256"
+          (cd "$(dirname "$ZIP")" && sha256sum -c "$(basename "$ZIP.sha256")")
+
+      - name: Inspect production payload
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-release-zip)
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+          unzip -q "$ZIP" -d "$TMP"
+          ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
+          test -n "$ROOT"
+          test "$(cat "$ROOT/VERSION")" = "$GOJET_RELEASE_VERSION"
+          grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
+          for binary in redirect-engine analytics-worker analytics-reconciler platform-api mail-worker file-worker operations-monitor log-receiver; do
+            test -x "$ROOT/bin/$binary"
+            file "$ROOT/bin/$binary" | grep -Eq 'ELF 64-bit.*x86-64'
+          done
+          test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
+          test -f "$ROOT/public/index.html"
+          test -f "$ROOT/public/app/index.html"
+          test -f "$ROOT/public/admin/index.html"
+          test -d "$ROOT/public/assets/images"
+          test -d "$ROOT/public/generated/qr"
+          test ! -e "$ROOT/tests"
+          test ! -e "$ROOT/frontend"
+          test ! -e "$ROOT/system-images"
+          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml' "$ROOT" --exclude='*.map'; then
+            echo 'retired engineering/runtime path leaked into release package' >&2
+            exit 1
+          fi
+
+      - name: Write immutable build evidence
+        run: |
+          set -euo pipefail
+          ZIP=$(cat /tmp/gojet-release-zip)
+          {
+            echo "tested_sha=$GITHUB_SHA"
+            echo "version=$GOJET_RELEASE_VERSION"
+            echo "archive=$(basename "$ZIP")"
+            echo "size_bytes=$(wc -c < "$ZIP")"
+            echo "sha256=$(sha256sum "$ZIP" | awk '{print $1}')"
+          } | tee dist/RELEASE-EVIDENCE.txt
+
+      - name: Upload tested release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-release-package-${{ github.sha }}
+          path: |
+            dist/*${{ env.GOJET_RELEASE_VERSION }}*linux-production.zip
+            dist/*${{ env.GOJET_RELEASE_VERSION }}*linux-production.zip.sha256
+            dist/RELEASE-EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 14
