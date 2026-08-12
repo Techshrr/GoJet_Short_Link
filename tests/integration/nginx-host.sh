@@ -30,6 +30,19 @@ cleanup(){
 }
 trap cleanup EXIT
 
+# Host/native Nginx deliberately target the packaged public tree rather than
+# source frontend directories. Build that exact layout here so this gate proves
+# what a user actually installs.
+stage="$tmp/gojet-install"
+mkdir -p "$stage/public/app" "$stage/public/admin" \
+  "$stage/deploy/data/brand" "$stage/deploy/data/generated/qr" "$stage/deploy/data/uploads"
+python3 scripts/build-public-site.py --output "$stage/public"
+cp -a frontend/user-console/. "$stage/public/app/"
+cp -a frontend/admin-console/. "$stage/public/admin/"
+test -s "$stage/public/index.html"
+test -s "$stage/public/app/index.html"
+test -s "$stage/public/admin/index.html"
+
 cat >"$tmp/upstream.py" <<'PY'
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import sys
@@ -45,8 +58,8 @@ ThreadingHTTPServer(('127.0.0.1',int(sys.argv[1])),Handler).serve_forever()
 PY
 
 # Full-stack acceptance already runs the real GoJet services on 18080/18090.
-# Use isolated upstream ports here so this routing test cannot accidentally hit
-# those processes and produce a false pass/failure.
+# Use isolated upstream ports so this routing gate cannot accidentally talk to
+# those real processes and create a false pass.
 REDIRECT_TEST_PORT=18180
 PLATFORM_TEST_PORT=18190
 NGINX_TEST_PORT=18081
@@ -69,14 +82,17 @@ done
 # Rewrite only the temporary runtime copy. The checked-in production config
 # remains pinned to the real native ports 18080/18090.
 sed \
-  -e "s|__GOJET_ROOT__|$(pwd)|g" \
+  -e "s|__GOJET_ROOT__|$stage|g" \
   -e "s/listen 80;/listen 127.0.0.1:$NGINX_TEST_PORT;/" \
   -e "s/127\.0\.0\.1:18080/127.0.0.1:$REDIRECT_TEST_PORT/g" \
   -e "s/127\.0\.0\.1:18090/127.0.0.1:$PLATFORM_TEST_PORT/g" \
   deploy/nginx/gojet-host.conf >"$tmp/gojet.conf"
 
-# Guard the test fixture itself: both isolated ports must actually be present in
-# the generated Nginx config or the test would not prove upstream ownership.
+# Guard the fixture itself: the staged public tree and both isolated upstreams
+# must be present in the generated config or this test proves nothing.
+grep -Fq "root $stage/public;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged public root' >&2; exit 1; }
+grep -Fq "alias $stage/public/app/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged customer console' >&2; exit 1; }
+grep -Fq "alias $stage/public/admin/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged administrator console' >&2; exit 1; }
 grep -Fq "127.0.0.1:$REDIRECT_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate redirect-engine upstream' >&2; exit 1; }
 grep -Fq "127.0.0.1:$PLATFORM_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate platform-api upstream' >&2; exit 1; }
 
@@ -132,4 +148,4 @@ assert_upstream /p/demo platform-api 'bio page to platform-api'
 assert_upstream /f/demo platform-api 'file share to platform-api'
 assert_upstream /example-code redirect-engine 'short link fallback to redirect-engine'
 
-printf 'four-deployment public routing and host Nginx acceptance passed\n'
+printf 'packaged public tree and four-deployment Nginx routing acceptance passed\n'
