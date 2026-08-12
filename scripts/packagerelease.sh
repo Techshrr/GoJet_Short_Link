@@ -55,13 +55,13 @@ cp "$ROOT/deploy/nginx/gojethost.conf" "$TARGET/deploy/nginx/gojethost.conf"
 cp "$ROOT/deploy/nginx/gojetnative.conf" "$TARGET/deploy/nginx/gojetnative.conf"
 cp "$ROOT/deploy/nginx/gojetbtrewrite.conf" "$TARGET/deploy/nginx/gojetbtrewrite.conf"
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" "$ROOT/deploy/native/gojetinstaller.service" "$ROOT/deploy/native/gojetinstaller.path" "$TARGET/deploy/native/"
-cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/checkschema.py" "$ROOT/scripts/verifyrelease.sh" "$ROOT/scripts/verifypublishedrelease.sh" "$ROOT/scripts/nativeinstallerrun.sh" "$ROOT/scripts/nativeinstallerapply.sh" "$ROOT/scripts/installdocker.sh" "$TARGET/scripts/"
+cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/checkschema.py" "$ROOT/scripts/runmigrations.sh" "$ROOT/scripts/verifyrelease.sh" "$ROOT/scripts/verifypublishedrelease.sh" "$ROOT/scripts/nativeinstallerrun.sh" "$ROOT/scripts/nativeinstallerapply.sh" "$ROOT/scripts/installdocker.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zhCN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/objectstorage.zhCN.md" "$ROOT/docs/operationsalerting.zhCN.md" "$TARGET/docs/"
 cp "$ROOT/install.sh" "$ROOT/installhostnginx.sh" "$ROOT/installnativelemp.sh" "$ROOT/launchwebinstaller.sh" "$ROOT/LICENSE" "$TARGET/"
 cp "$ROOT/deploy/INSTALL.zhCN.md" "$TARGET/INSTALL.md"
 printf '%s\n' "$VERSION" > "$TARGET/VERSION"
 printf '%s\n' 'FRESHINSTALLONLY=1' > "$TARGET/FRESHINSTALLONLY"
-chmod 0755 "$TARGET/install.sh" "$TARGET/installhostnginx.sh" "$TARGET/installnativelemp.sh" "$TARGET/launchwebinstaller.sh" "$TARGET/scripts/verifyrelease.sh" "$TARGET/scripts/verifypublishedrelease.sh" "$TARGET/scripts/nativeinstallerrun.sh" "$TARGET/scripts/nativeinstallerapply.sh" "$TARGET/scripts/installdocker.sh" "$TARGET"/bin/*
+chmod 0755 "$TARGET/install.sh" "$TARGET/installhostnginx.sh" "$TARGET/installnativelemp.sh" "$TARGET/launchwebinstaller.sh" "$TARGET/scripts/runmigrations.sh" "$TARGET/scripts/verifyrelease.sh" "$TARGET/scripts/verifypublishedrelease.sh" "$TARGET/scripts/nativeinstallerrun.sh" "$TARGET/scripts/nativeinstallerapply.sh" "$TARGET/scripts/installdocker.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'testresults' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +
 test -s "$TARGET/resources/fonts/NotoSansSCRegular.ttf" || { echo 'PDF Unicode Regular font missing from production package' >&2; exit 1; }
