@@ -9,9 +9,9 @@ services:
     volumes:
       - ./nginx/gojet.conf:/etc/nginx/conf.d/default.conf:ro
       - ../public:/usr/share/nginx/html/site:ro
-      - ./data/brand:/usr/share/nginx/html/site/assets/images:ro
-      - ./data/generated/qr:/usr/share/nginx/html/site/generated/qr:ro
-      - ./data/uploads:/usr/share/nginx/html/site/uploads:ro
+      - ./data/brand:/usr/share/nginx/html/assets/images:ro
+      - ./data/generated/qr:/usr/share/nginx/html/generated/qr:ro
+      - ./data/uploads:/usr/share/nginx/html/uploads:ro
     depends_on:
       redirect-engine:
         condition: service_healthy
