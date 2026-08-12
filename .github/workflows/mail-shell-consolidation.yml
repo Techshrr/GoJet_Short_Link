@@ -105,6 +105,7 @@ jobs:
 
           test = Path('app/mail/service_inline_test.go')
           t = test.read_text(encoding='utf-8')
+          t = t.replace('"font-size:22px"', '"font-size:24px"')
           t = t.replace('"border-radius:4px"', '"border-radius:6px"')
           test.write_text(t, encoding='utf-8')
 
