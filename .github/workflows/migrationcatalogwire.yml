@@ -1,0 +1,68 @@
+name: GoJet migration catalog installer wiring
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/migrationcatalogwire.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+      - name: Wire native install and upgrade to catalog runner
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path=Path('scripts/nativeinstallerapply.sh')
+          text=path.read_text(encoding='utf-8')
+          pattern=r'''status database 27 '正在执行数据库迁移'\nfor migration in "\$ROOT"/database/migrations/\*\.sql; do\n.*?\ndone\n\nstatus redis'''
+          replacement='''status database 27 '正在执行数据库迁移'\nMYSQL_HOST="$MYSQL_HOST" MYSQL_PORT="${cfg[MYSQL_PORT]}" MYSQL_USER="${cfg[MYSQL_USER]}" MYSQL_PASSWORD="${cfg[MYSQL_PASSWORD]}" MYSQL_DATABASE="${cfg[MYSQL_DATABASE]}" MYSQL_BIN="$mysql" "$ROOT/scripts/runmigrations.sh" || fail '数据库迁移失败'\n\nstatus redis'''
+          text,count=re.subn(pattern,replacement,text,flags=re.S)
+          if count != 1:
+              raise SystemExit(f'native installer migration loop replacement count={count}')
+          old='''  "$(basename "$(ls -1 "$ROOT"/database/migrations/*.sql | tail -1)")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"'''
+          new='''  "$(tail -n 1 "$ROOT/database/migrations/migrationcatalog.txt")" "${CLAMAV_ADDRESS:-unavailable}" > "$LOCK"'''
+          if old not in text:
+              raise SystemExit('native installer lock migration marker not found')
+          path.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          path=Path('upgradenative.sh')
+          text=path.read_text(encoding='utf-8')
+          pattern=r'''mysql_exec -e "CREATE TABLE IF NOT EXISTS schema_migrations\(name VARCHAR\(255\) PRIMARY KEY,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\)" >/dev/null\nfor migration in "\$SOURCE"/database/migrations/\*\.sql; do\n.*?\ndone\nmkdir -p "\$TARGET/database/migrations"'''
+          replacement='''MYSQL_HOST="$MYSQL_HOST" MYSQL_PORT="$MYSQL_PORT" MYSQL_USER="$MYSQL_USER" MYSQL_PASSWORD="$MYSQL_PASSWORD" MYSQL_DATABASE="$MYSQL_DATABASE" MYSQL_BIN="$mysql_bin" MIGRATION_ROOT="$SOURCE/database/migrations" "$SOURCE/scripts/runmigrations.sh"\nmkdir -p "$TARGET/database/migrations"'''
+          text,count=re.subn(pattern,replacement,text,flags=re.S)
+          if count != 1:
+              raise SystemExit(f'native upgrade migration loop replacement count={count}')
+          text=text.replace('''mkdir -p "$TARGET/database/migrations"\ncp -a "$SOURCE/database/migrations/." "$TARGET/database/migrations/"''','''rm -rf "$TARGET/database/migrations"\nmkdir -p "$TARGET/database/migrations"\ncp -a "$SOURCE/database/migrations/." "$TARGET/database/migrations/"''',1)
+          path.write_text(text,encoding='utf-8')
+          PY
+          bash -n scripts/nativeinstallerapply.sh
+          bash -n upgradenative.sh
+          grep -Fq 'scripts/runmigrations.sh' scripts/nativeinstallerapply.sh
+          grep -Fq 'scripts/runmigrations.sh' upgradenative.sh
+          ! grep -Fq 'database/migrations/*.sql' scripts/nativeinstallerapply.sh
+          ! grep -Fq 'database/migrations/*.sql' upgradenative.sh
+      - name: Commit validated installer wiring
+        run: |
+          set -euo pipefail
+          git restore -- .github/workflows
+          git config user.name 'GoJet Migration Catalog Wiring'
+          git config user.email 'actions@users.noreply.github.com'
+          git add scripts/nativeinstallerapply.sh upgradenative.sh
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Use migration catalog for native database changes'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
