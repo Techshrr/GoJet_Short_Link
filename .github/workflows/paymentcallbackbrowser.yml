@@ -1,0 +1,171 @@
+name: GoJet Payment Callback Browser Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'database/**'
+      - 'deploy/nginx/**'
+      - 'frontend/adminconsole/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'tests/e2e/paymentcallbackadmin.spec.js'
+      - '.github/workflows/paymentcallbackbrowser.yml'
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - 'database/**'
+      - 'deploy/nginx/**'
+      - 'frontend/adminconsole/**'
+      - 'services/platformapi/cmd/server/**'
+      - 'tests/e2e/paymentcallbackadmin.spec.js'
+      - '.github/workflows/paymentcallbackbrowser.yml'
+
+concurrency:
+  group: gojetpaymentcallbackbrowser${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_callback_browser
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: packagelock.json
+
+      - name: Install browser callback dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client nginx
+          bash scripts/npmci.sh
+          npx playwright install --with-deps chromium
+
+      - name: Validate callback browser sources
+        run: |
+          set -euo pipefail
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
+          node --check frontend/adminconsole/paymentcallbacks.js
+          node --check tests/e2e/paymentcallbackadmin.spec.js
+          go test ./...
+          go vet ./...
+
+      - name: Apply fresh schema and start platform
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            mysql -h127.0.0.1 -P3306 -uroot gojet_callback_browser < "$migration"
+          done
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
+          mkdir -p /tmp/gojetcallbackbrowser/{uploads,files,brand,generated/qr,bin}
+          go build -o /tmp/gojetcallbackbrowser/bin/platformapi ./services/platformapi/cmd/server
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          QR_KEY='e691395440d4a3454a1e830746dcfe2929670ef3f5ac6a6be93d83f9d87a59ea'
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_callback_browser?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
+            ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY="$QR_KEY" \
+            PUBLIC_BASE_URL='http://127.0.0.1:4180' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
+            UPLOAD_STORAGE_PATH='/tmp/gojetcallbackbrowser/uploads' \
+            BRAND_ASSET_PATH='/tmp/gojetcallbackbrowser/brand' \
+            GENERATED_QR_STORAGE_PATH='/tmp/gojetcallbackbrowser/generated/qr' \
+            FILE_STORAGE_PATH='/tmp/gojetcallbackbrowser/files' \
+            PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" \
+            /tmp/gojetcallbackbrowser/bin/platformapi >/tmp/gojetcallbackbrowser/platformapi.log 2>&1 &
+          echo $! >/tmp/gojetcallbackbrowser/platformapi.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:18090/health >/dev/null 2>&1 && break
+            sleep 1
+            test "$i" -lt 60
+          done
+
+      - name: Serve administrator through real host Nginx template
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/gojetcallbackbrowserroot
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
+          python3 scripts/buildpublicsite.py --output "$ROOT/public"
+          mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
+          cp -a frontend/adminconsole/. "$ROOT/public/admin/"
+          cp -a frontend/userconsole/. "$ROOT/public/app/"
+          chmod -R a+rX "$ROOT"
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root=sys.argv[1]
+          text=Path('deploy/nginx/gojethost.conf').read_text(encoding='utf-8')
+          text=text.replace('__GOJET_ROOT__',root).replace('listen 80;','listen 4180;')
+          Path('/tmp/gojetcallbackbrowserhost.conf').write_text(text,encoding='utf-8')
+          PY
+          sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
+          sudo cp /tmp/gojetcallbackbrowserhost.conf /etc/nginx/conf.d/gojetcallbackbrowserhost.conf
+          sudo nginx -t
+          sudo nginx
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:4180/admin/ >/dev/null 2>&1 && break
+            sleep 1
+            test "$i" -lt 30
+          done
+
+      - name: Run administrator callback observability browser acceptance
+        env:
+          GOJET_SURFACE_BASE: http://127.0.0.1:4180
+        run: npx playwright test paymentcallbackadmin.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
+
+      - name: Callback browser diagnostics
+        if: failure()
+        env:
+          MYSQL_PWD: root
+        run: |
+          echo '===== platformapi ====='
+          cat /tmp/gojetcallbackbrowser/platformapi.log 2>/dev/null || true
+          echo '===== nginx ====='
+          sudo nginx -T 2>&1 || true
+          echo '===== callbacks ====='
+          mysql -h127.0.0.1 -P3306 -uroot gojet_callback_browser -e 'SELECT id,provider,request_id,merchant_order_no,outcome,response_status,remote_ip,created_at FROM payment_callback_events ORDER BY id DESC LIMIT 20;' 2>/dev/null || true
+
+      - name: Stop callback browser runtime
+        if: always()
+        run: |
+          sudo nginx -s stop 2>/dev/null || true
+          if [ -f /tmp/gojetcallbackbrowser/platformapi.pid ]; then
+            kill "$(cat /tmp/gojetcallbackbrowser/platformapi.pid)" 2>/dev/null || true
+          fi
