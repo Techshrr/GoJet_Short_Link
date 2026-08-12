@@ -78,12 +78,35 @@ wait_healthy() {
 }
 
 apply_migrations() {
-  for migration in "$ROOT"/database/migrations/*.sql; do
-    name=$(basename "$migration")
-    applied=$(compose exec -T mysql mysql -N -ugojet -p"$MYSQL_PASSWORD" gojet -e "CREATE TABLE IF NOT EXISTS schema_migrations (name VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); SELECT COUNT(*) FROM schema_migrations WHERE name='$name';" | tail -1)
+  catalog="$ROOT/database/migrations/migrationcatalog.txt"
+  [ -f "$catalog" ] || die "migration catalog is missing"
+  compose exec -T mysql mysql -ugojet -p"$MYSQL_PASSWORD" gojet -e "CREATE TABLE IF NOT EXISTS schema_migrations (name VARCHAR(255) PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+
+  compose exec -T mysql mysql -N -s -ugojet -p"$MYSQL_PASSWORD" gojet -e "SELECT name FROM schema_migrations WHERE name REGEXP '^[0-9]{3}.*[.]sql$' ORDER BY name" | while IFS= read -r old; do
+    [ -n "$old" ] || continue
+    ordinal=$(printf '%s' "$old" | cut -c1-3)
+    case "$ordinal" in *[!0-9]*|'') die "invalid legacy migration record: $old";; esac
+    semantic=$(sed -n "$((10#$ordinal))p" "$catalog")
+    [ -n "$semantic" ] || die "legacy migration ordinal out of catalog: $old"
+    compose exec -T mysql mysql -ugojet -p"$MYSQL_PASSWORD" gojet -e "INSERT IGNORE INTO schema_migrations(name) VALUES('$semantic'); DELETE FROM schema_migrations WHERE name='$old';"
+  done
+
+  catalog_count=$(grep -cve '^[[:space:]]*$' "$catalog")
+  sql_count=$(find "$ROOT/database/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')
+  [ "$catalog_count" = "$sql_count" ] || die "migration catalog does not cover every SQL file"
+
+  while IFS= read -r name || [ -n "$name" ]; do
+    [ -n "$name" ] || continue
+    case "$name" in
+      [a-z]*.sql) ;;
+      *) die "invalid semantic migration name: $name" ;;
+    esac
+    migration="$ROOT/database/migrations/$name"
+    [ -f "$migration" ] || die "catalog migration missing: $name"
+    applied=$(compose exec -T mysql mysql -N -s -ugojet -p"$MYSQL_PASSWORD" gojet -e "SELECT COUNT(*) FROM schema_migrations WHERE name='$name'")
     if [ "$applied" = "0" ]; then
       compose exec -T mysql mysql -ugojet -p"$MYSQL_PASSWORD" gojet < "$migration"
       compose exec -T mysql mysql -ugojet -p"$MYSQL_PASSWORD" gojet -e "INSERT INTO schema_migrations(name) VALUES('$name')"
     fi
-  done
+  done < "$catalog"
 }
