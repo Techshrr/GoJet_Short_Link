@@ -70,6 +70,7 @@ jobs:
       - name: Run source-level tests before starting product surface
         run: |
           set -euo pipefail
+          bash tests/integration/release-storage-namespaces.sh
           go test ./...
           go vet ./...
       - name: Apply fresh schema and build exact runtime services
