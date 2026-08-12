@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOJET_RELEASE_VERSION: 4.0.0_${{ github.sha }}
+  GOJET_RELEASE_VERSION: 4.0.0.${{ github.sha }}
 
 jobs:
   package:
@@ -50,8 +50,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Enforce repository naming policy
-        run: python3 scripts/checknames.py
+      - name: Enforce repository and database naming policy
+        run: |
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
       - name: Install release build dependencies
         run: |
           sudo apt-get update
@@ -65,14 +67,14 @@ jobs:
           set -euo pipefail
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
-          python3 -m py_compile scripts/buildpublicsite.py
+          python3 -m py_compile scripts/buildpublicsite.py scripts/checkschema.py
           go test ./...
           go vet ./...
       - name: Build production archive
         run: |
           set -euo pipefail
           ./scripts/packagerelease.sh "$GOJET_RELEASE_VERSION"
-          ZIP="dist/GoJet_${GOJET_RELEASE_VERSION}_LinuxProduction.zip"
+          ZIP="dist/GoJet${GOJET_RELEASE_VERSION}LinuxProduction.zip"
           test -f "$ZIP"
           printf '%s\n' "$ZIP" | tee /tmp/gojetreleasezip
       - name: Verify archive independently
@@ -93,7 +95,7 @@ jobs:
           ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
           test -n "$ROOT"
           test "$(cat "$ROOT/VERSION")" = "$GOJET_RELEASE_VERSION"
-          grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
+          grep -Fxq 'FRESHINSTALLONLY=1' "$ROOT/FRESHINSTALLONLY"
           for binary in redirectengine analyticsworker analyticsreconciler platformapi mailworker fileworker operationsmonitor logreceiver; do test -x "$ROOT/bin/$binary"; file "$ROOT/bin/$binary" | grep -Eq 'ELF 64-bit.*x86-64'; done
           test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
           test -f "$ROOT/public/index.html"
@@ -109,7 +111,7 @@ jobs:
           test -z "$(find "$ROOT/public" -mindepth 2 -type f -name index.html ! -path "$ROOT/public/app/index.html" ! -path "$ROOT/public/admin/index.html" -print -quit)"
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
-          if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -F -- '-' | grep -q .; then echo 'hyphenated filename leaked into release payload' >&2; find "$ROOT" -mindepth 1 -printf '%P\n' | grep -F -- '-' >&2 || true; exit 1; fi
+          if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then echo 'connector-bearing filename leaked into release payload' >&2; find "$ROOT" -mindepth 1 -printf '%P\n' | grep -E '[-_]' >&2 || true; exit 1; fi
       - name: Write immutable build evidence
         run: |
           set -euo pipefail
@@ -120,8 +122,8 @@ jobs:
         with:
           name: gojetreleasepackage${{ github.sha }}
           path: |
-            dist/GoJet_${{ env.GOJET_RELEASE_VERSION }}_LinuxProduction.zip
-            dist/GoJet_${{ env.GOJET_RELEASE_VERSION }}_LinuxProduction.zip.sha256
+            dist/GoJet${{ env.GOJET_RELEASE_VERSION }}LinuxProduction.zip
+            dist/GoJet${{ env.GOJET_RELEASE_VERSION }}LinuxProduction.zip.sha256
             dist/RELEASEEVIDENCE.txt
           if-no-files-found: error
           retention-days: 14
@@ -159,7 +161,7 @@ jobs:
           set -euo pipefail
           ART=/tmp/gojetpackageartifact
           EVIDENCE="$ART/RELEASEEVIDENCE.txt"
-          ZIP="$ART/GoJet_${GOJET_RELEASE_VERSION}_LinuxProduction.zip"
+          ZIP="$ART/GoJet${GOJET_RELEASE_VERSION}LinuxProduction.zip"
           test -f "$EVIDENCE" && test -f "$ZIP" && test -f "$ZIP.sha256"
           grep -Fxq "tested_sha=$GITHUB_SHA" "$EVIDENCE"
           grep -Fxq "version=$GOJET_RELEASE_VERSION" "$EVIDENCE"
@@ -172,12 +174,13 @@ jobs:
           test -n "$ROOT"
           printf '%s\n' "$ROOT" >/tmp/gojetcandidaterootpath
           test "$(cat "$ROOT/VERSION")" = "$GOJET_RELEASE_VERSION"
-          grep -Fxq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY"
+          grep -Fxq 'FRESHINSTALLONLY=1' "$ROOT/FRESHINSTALLONLY"
           test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
           for binary in redirectengine analyticsworker analyticsreconciler platformapi mailworker fileworker operationsmonitor logreceiver; do test -x "$ROOT/bin/$binary"; done
           test -f "$ROOT/public/index.html" && test -f "$ROOT/public/privacy.html" && test -f "$ROOT/public/terms.html"
           test -f "$ROOT/public/app/index.html" && test -f "$ROOT/public/admin/index.html"
           test -d "$ROOT/public/assets/images" && test -d "$ROOT/public/generated/qr"
+          if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then echo 'connector-bearing path leaked into fresh candidate' >&2; exit 1; fi
       - name: Apply packaged migrations to a fresh database
         env: {MYSQL_PWD: root}
         run: |
@@ -193,6 +196,14 @@ jobs:
           SQL
           mapfile -t schema </tmp/gojetcandidateschema
           test "${schema[0]}" = 1 && test "${schema[1]}" = 1 && test "${schema[2]}" = 1 && test "${schema[3]}" = 1 && test "${schema[4]}" = 8
+      - name: Verify fresh database naming
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_candidate
+        run: bash tests/integration/schemanaming.sh
       - name: Start exact packaged runtime
         run: |
           set -euo pipefail
