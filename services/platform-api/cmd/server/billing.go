@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/billing"
 )
@@ -133,7 +134,15 @@ func (s *server) adminSettleInvoice(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "账单编号无效"})
 		return
 	}
-	if err = s.billing.Settle(r.Context(), currentAdmin(r).ID, id, in.Status, in.Note); err != nil {
+	note := strings.TrimSpace(in.Note)
+	if note == "" {
+		if in.Status == "void" {
+			note = "管理员手动作废"
+		} else {
+			note = "管理员手动确认支付"
+		}
+	}
+	if err = s.billing.Settle(r.Context(), currentAdmin(r).ID, id, in.Status, note); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
