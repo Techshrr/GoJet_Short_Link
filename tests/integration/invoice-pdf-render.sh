@@ -36,6 +36,36 @@ mysqlq "UPDATE system_settings SET setting_value='0',is_encrypted=FALSE WHERE se
 mysqlq "UPDATE system_settings SET setting_value='{\"USD/CNY\":\"7.20\"}',is_encrypted=FALSE WHERE setting_key='billing.fx.manual_rates';"
 mysqlq "DELETE FROM fx_rate_cache;"
 
+# Brand linkage is part of PDF acceptance, not an optional visual nicety. Upload
+# a deterministic RGBA PNG so the test covers admin upload -> setting -> storage
+# path -> PDF decoder -> embedded PDF image in one real process.
+logo="$OUT_DIR/acceptance-logo.png"
+python3 - "$logo" <<'PY'
+import struct,sys,zlib
+from pathlib import Path
+w,h=160,48
+raw=bytearray()
+for y in range(h):
+    raw.append(0)
+    for x in range(w):
+        if 8 <= x < 44 and 8 <= y < 40:
+            rgba=(22,166,106,255)
+        elif 54 <= x < 148 and 17 <= y < 31:
+            rgba=(18,28,24,255)
+        else:
+            rgba=(255,255,255,0)
+        raw.extend(rgba)
+def chunk(kind,data):
+    return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
+png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(bytes(raw),9))+chunk(b'IEND',b'')
+Path(sys.argv[1]).write_bytes(png)
+PY
+admin=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" admin-login)
+admin_token=$(printf '%s' "$admin" | field "['token']")
+logo_status=$(curl -sS -o "$OUT_DIR/logo-upload.json" -w '%{http_code}' -H "Authorization: Bearer $admin_token" -F "file=@$logo;type=image/png" "$BASE/api/admin/brand/logo")
+[[ "$logo_status" == 201 ]] || { echo "FAIL brand-logo-upload expected 201 got $logo_status" >&2; cat "$OUT_DIR/logo-upload.json" >&2; exit 1; }
+grep -Fq '"url":"/assets/images/logo.png"' "$OUT_DIR/logo-upload.json"
+
 suffix="$(date +%s)-$RANDOM"
 registration=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"pdf-$suffix@example.test\",\"display_name\":\"PDF Render Acceptance\",\"password\":\"PDFRenderAcceptance!2026\"}")" register)
 token=$(printf '%s' "$registration" | field "['token']")
@@ -64,6 +94,10 @@ grep -Fq "$invoice_number" "$OUT_DIR/invoice.txt"
 grep -Fq 'GoJet' "$OUT_DIR/invoice.txt"
 grep -Fq 'USD 12.34' "$OUT_DIR/invoice.txt"
 grep -Fq "$amount" "$OUT_DIR/invoice.txt"
+
+# The configured brand mark must be embedded as an actual PDF image object.
+pdfimages -list "$pdf" | tee "$OUT_DIR/pdfimages.txt"
+awk 'NR>2 && $3=="image" { found=1 } END { exit(found?0:1) }' "$OUT_DIR/pdfimages.txt" || { echo 'configured brand logo was not embedded in invoice PDF' >&2; exit 1; }
 
 # Render twice: PNG is retained as a human-inspectable artifact; pdftoppm's
 # default PPM output lets CI inspect actual pixels using only Python stdlib.
@@ -105,4 +139,4 @@ test -s "$OUT_DIR/invoice-page.png"
 file "$OUT_DIR/invoice-page.png" | tee "$OUT_DIR/render-file.txt"
 grep -Fq 'PNG image data' "$OUT_DIR/render-file.txt"
 
-printf 'GoJet invoice PDF real render acceptance: PASS (%s, %s)\n' "$invoice_number" "$amount"
+printf 'GoJet invoice PDF real render acceptance: PASS (%s, %s, branded logo embedded)\n' "$invoice_number" "$amount"
