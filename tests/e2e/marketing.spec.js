@@ -46,6 +46,7 @@ for(const width of [1440,768,390])test(`authentication pages are responsive and 
 test('saved brand and SEO settings apply without rebuilding pages',async({page})=>{
   await page.unroute('**/api/public/settings');
   await page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({'site.name':'Acme GoJet','brand.logo_url':'/assets/test-logo.png','brand.primary_color':'#9b2c2c','seo.default_title':'Acme Links','seo.meta_description':'Saved description'})}));
+  await page.route('**/assets/test-logo.png',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="32"><rect width="120" height="32" rx="6" fill="#9b2c2c"/></svg>'}));
   await page.goto('/');
   await expect(page).toHaveTitle('Acme Links');
   await expect(page.locator('.logo img').first()).toHaveAttribute('src','/assets/test-logo.png');
@@ -72,7 +73,7 @@ test('register public route is complete',async({page})=>{
   await page.goto('/register');
   await expect(page.getByRole('heading',{name:'开始使用 GoJet'})).toBeVisible();
   await expect(page.locator('form')).toBeVisible();
-  await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
+  await expect(page.locator('.auth-foot')).toBeVisible();
 });
 
 test('Markdown announcement center safely renders published content',async({page})=>{
