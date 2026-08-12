@@ -50,12 +50,22 @@ jobs:
           set -euo pipefail
           php -l installer/index.php
           php -l public/install/index.php
-          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh; do bash -n "$script"; done
+          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh; do bash -n "$script"; done
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
           python3 -m py_compile scripts/buildpublicsite.py scripts/checknames.py scripts/checkschema.py
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
+          test -f database/migrations/migrationcatalog.txt
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
+          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 37
+          test -z "$(find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -E '^[0-9]' || true)"
+          MIGRATION_GLOB='database/migrations/'
+          MIGRATION_GLOB+='*.sql'
+          if grep -R -I -n -F "$MIGRATION_GLOB" .github/workflows scripts install.sh upgradenative.sh upgrade.sh 2>/dev/null; then
+            echo 'migration glob execution is forbidden; use migrationcatalog.txt through scripts/runmigrations.sh' >&2
+            exit 1
+          fi
 
       - name: Validate canonical frontend and flat public build
         run: |
@@ -86,7 +96,7 @@ jobs:
       - name: Reject retired engineering contracts
         run: |
           set -euo pipefail
-          PATHS='installer public/install deploy scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh'
+          PATHS='installer public/install deploy scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh'
           if grep -R -I -n -E '\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release|SYSTEM_IMAGE_PATH|/system-images/|frontend/marketingsite' $PATHS; then
             echo 'retired engineering or runtime contract detected in installer sources' >&2
             exit 1
