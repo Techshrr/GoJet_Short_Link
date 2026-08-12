@@ -65,13 +65,31 @@ settings=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" settings-read
 printf '%s' "$settings" | python3 -c 'import json,sys; m=json.load(sys.stdin)["mail"]; assert m["host"]=="127.0.0.1"; assert int(m["port"])==2525; assert m["encryption"]=="none"; assert m["from_email"]=="noreply@gojet.test"; assert m["from_name"]=="GoJet"; assert m["reply_to"]=="support@gojet.test"; assert m["password_configured"] is True; assert "password" not in m'
 expect 200 "$(req POST /api/admin/mail/test '{"recipient":"smtp-acceptance@example.test"}' "$admin")" test-mail >/dev/null
 for _ in $(seq 1 30); do grep -q 'smtp-acceptance@example.test' "$MAIL_LOG" && break; sleep .2; done
-grep -q 'GoJet 邮件服务测试成功' "$MAIL_LOG"
-grep -q '#16A66A\|#16a66a' "$MAIL_LOG"
-grep -q 'border-radius:12px' "$MAIL_LOG"
-grep -q 'padding:0 8px 18px' "$MAIL_LOG"
-grep -q 'padding:18px 8px 0' "$MAIL_LOG"
-grep -q '此邮件由 GoJet 自动发送' "$MAIL_LOG"
-if grep -q 'border-bottom:3px solid' "$MAIL_LOG"; then echo 'legacy in-card mail brand stripe is still present' >&2; exit 1; fi
+python3 - "$MAIL_LOG" <<'PY'
+from email import policy
+from email.parser import Parser
+from email.header import decode_header, make_header
+import sys
+
+path = sys.argv[1]
+raw = open(path, encoding='utf-8').read()
+parts = [part.strip() for part in raw.split('---MESSAGE---') if part.strip()]
+target = next((part for part in parts if 'smtp-acceptance@example.test' in part), None)
+assert target is not None, 'SMTP acceptance message was not captured'
+message = Parser(policy=policy.default).parsestr(target)
+subject = str(make_header(decode_header(message.get('Subject', ''))))
+payload = message.get_payload(decode=True)
+assert payload is not None, 'SMTP acceptance body did not decode'
+body = payload.decode(message.get_content_charset() or 'utf-8')
+assert subject == 'GoJet 邮件服务测试成功', f'unexpected decoded subject: {subject!r}'
+assert '\ufffd' not in subject and '\ufffd' not in body, 'decoded SMTP message contains replacement characters'
+for expected in ('#16A66A', 'border-radius:12px', 'padding:0 8px 18px', 'padding:18px 8px 0', '此邮件由 GoJet 自动发送'):
+    if expected == '#16A66A':
+        assert expected.lower() in body.lower(), f'branded SMTP body missing {expected!r}'
+    else:
+        assert expected in body, f'branded SMTP body missing {expected!r}'
+assert 'border-bottom:3px solid' not in body, 'legacy in-card mail brand stripe is still present'
+PY
 
 required_templates=(verification account_welcome password_reset password_changed email_changed workspace_invitation workspace_role_changed workspace_owner_transferred workspace_member_removed invoice_created invoice_due_soon invoice_overdue invoice_paid invoice_voided payment_started payment_failed payment_refunded subscription_changed subscription_renewed subscription_cancellation_scheduled subscription_cancellation_revoked subscription_expiring subscription_cancelled file_quarantined domain_verification_failed)
 for key in "${required_templates[@]}"; do
