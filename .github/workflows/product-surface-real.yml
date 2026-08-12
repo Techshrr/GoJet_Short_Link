@@ -65,9 +65,25 @@ jobs:
           python3 scripts/rebuild-public-product-pages.py
           python3 scripts/rebuild-marketing-pages.py
           node --check frontend/marketing-site/assets/app.js
-          node --check frontend/admin-console/admin-settings-unified.js
-          node --check frontend/user-console/pages.js
-          node --check frontend/user-console/router.js
+          node --check frontend/admin-console/settings.js
+          for file in \
+            frontend/user-console/pages.js \
+            frontend/user-console/router.js \
+            frontend/user-console/links.js \
+            frontend/user-console/bio.js \
+            frontend/user-console/domains.js \
+            frontend/user-console/analytics.js \
+            frontend/user-console/files.js \
+            frontend/user-console/team.js \
+            frontend/user-console/organization.js \
+            frontend/user-console/billing.js \
+            frontend/user-console/support.js; do
+            node --check "$file"
+          done
+          if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/user-console; then
+            echo 'retired customer-console page registry detected' >&2
+            exit 1
+          fi
           node --check tests/e2e/product-surface-real.spec.js
           python3 -m py_compile tests/integration/assert-pdf-contrast.py
 
