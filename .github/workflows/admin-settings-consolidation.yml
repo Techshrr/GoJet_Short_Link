@@ -1,0 +1,112 @@
+name: GoJet Admin Settings Consolidation
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/admin-settings-consolidation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+
+      - name: Remove legacy settings owner and add contract gate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('frontend/admin-console/app.js')
+          text = app.read_text(encoding='utf-8')
+          lines = text.splitlines()
+          prefixes = (
+              "function settingInput(",
+              "async function renderSettings(",
+              "async function saveSettingForm(",
+              "async function saveBrand(",
+              "async function deleteBrand(",
+          )
+          removed = [line for line in lines if line.startswith(prefixes)]
+          if len(removed) != 5:
+              raise SystemExit(f'expected exactly 5 legacy settings lines, found {len(removed)}')
+          kept = [line for line in lines if not line.startswith(prefixes)]
+          app.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+
+          settings = Path('frontend/admin-console/settings.js').read_text(encoding='utf-8')
+          required = [
+              'async function renderSettings(',
+              'async function saveUnifiedSection(',
+          ]
+          for marker in required:
+              if marker not in settings:
+                  raise SystemExit(f'settings.js missing canonical owner marker: {marker}')
+
+          contract = Path('tests/integration/admin-settings-source-contract.sh')
+          contract.write_text("""#!/usr/bin/env bash
+          set -euo pipefail
+          cd \"$(dirname \"$0\")/../..\"
+
+          canonical='frontend/admin-console/settings.js'
+          core='frontend/admin-console/app.js'
+          index='frontend/admin-console/index.html'
+
+          test -f \"$canonical\"
+          test -f \"$core\"
+          test -f \"$index\"
+
+          grep -q 'async function renderSettings(' \"$canonical\"
+          grep -q 'async function saveUnifiedSection(' \"$canonical\"
+
+          for legacy in \\
+            'function settingInput(' \\
+            'async function renderSettings(' \\
+            'async function saveSettingForm(' \\
+            'async function saveBrand(' \\
+            'async function deleteBrand('
+          do
+            if grep -Fq \"$legacy\" \"$core\"; then
+              echo \"admin settings implementation leaked back into app.js: $legacy\" >&2
+              exit 1
+            fi
+          done
+
+          app_line=$(grep -n '<script src=\"/admin/app.js\"></script>' \"$index\" | cut -d: -f1)
+          settings_line=$(grep -n '<script src=\"/admin/settings.js\"></script>' \"$index\" | cut -d: -f1)
+          test -n \"$app_line\" -a -n \"$settings_line\"
+          test \"$app_line\" -lt \"$settings_line\"
+
+          printf 'administrator settings single-owner source contract: PASS\\n'
+          """.replace('          ', ''), encoding='utf-8')
+
+          p0 = Path('.github/workflows/full-stack-p0.yml')
+          p0_text = p0.read_text(encoding='utf-8')
+          needle = '          bash tests/integration/release-storage-namespaces.sh\n'
+          replacement = needle + '          bash tests/integration/admin-settings-source-contract.sh\n'
+          if 'admin-settings-source-contract.sh' not in p0_text:
+              if needle not in p0_text:
+                  raise SystemExit('full-stack-p0.yml missing release namespace anchor')
+              p0_text = p0_text.replace(needle, replacement, 1)
+              p0.write_text(p0_text, encoding='utf-8')
+          PY
+
+          bash tests/integration/admin-settings-source-contract.sh
+
+      - name: Commit consolidated source and remove maintenance workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'GoJet Repository Maintenance'
+          git config user.email '118724895+Techshrr@users.noreply.github.com'
+          git rm .github/workflows/admin-settings-consolidation.yml
+          git add frontend/admin-console/app.js tests/integration/admin-settings-source-contract.sh .github/workflows/full-stack-p0.yml
+          git diff --cached --check
+          git commit -m 'Consolidate administrator settings implementation'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
