@@ -149,6 +149,9 @@ jobs:
       - name: Administrator link lifecycle
         env: *integration-env
         run: bash tests/integration/admin-link-lifecycle.sh
+      - name: Zero visit analytics remains readable
+        env: *integration-env
+        run: bash tests/integration/analyticszero.sh
       - name: Plan catalog lifecycle
         env: *integration-env
         run: bash tests/integration/plancatalog.sh
