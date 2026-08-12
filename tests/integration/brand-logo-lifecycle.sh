@@ -14,32 +14,44 @@ import base64,sys
 raw='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 open(sys.argv[1],'wb').write(base64.b64decode(raw))
 PY
-raw=$(curl -sS -X POST -H "Authorization: Bearer $admin" -F "file=@$png;type=image/png" -w $'\n%{http_code}' "$BASE/api/admin/brand/logo")
-body=$(expect 201 "$raw" upload-logo)
-url=$(printf '%s' "$body"|field "['url']")
-[[ "$url" == "/assets/images/logo.png" ]] || { echo "brand logo URL is not stable: $url" >&2; exit 1; }
+
+upload_asset(){
+  local asset=$1 expected_url=$2
+  local raw body url
+  raw=$(curl -sS -X POST -H "Authorization: Bearer $admin" -F "file=@$png;type=image/png" -w $'\n%{http_code}' "$BASE/api/admin/brand/$asset")
+  body=$(expect 201 "$raw" "upload-$asset")
+  url=$(printf '%s' "$body"|field "['url']")
+  [[ "$url" == "$expected_url" ]] || { echo "brand $asset URL is not stable: $url" >&2; exit 1; }
+}
+
+upload_asset logo /assets/images/logo.png
+upload_asset favicon /assets/images/favicon.png
 
 settings1=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback-1)
-printf '%s' "$settings1" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['brand']['logo']=='$url',d['brand']"
-file="$BRAND_ROOT/logo.png"
-[[ -s "$file" ]] || { echo "uploaded brand logo missing at $file" >&2; exit 1; }
-[[ ! -e "$UPLOAD_ROOT/logo.png" ]] || { echo "brand logo leaked into user uploads: $UPLOAD_ROOT/logo.png" >&2; exit 1; }
-if find "$UPLOAD_ROOT" -maxdepth 1 -type f -name 'logo-*' -print -quit | grep -q .; then
-  echo "randomized brand logo leaked into user uploads" >&2
-  exit 1
-fi
-settings2=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback-2)
-printf '%s' "$settings2" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['brand']['logo']=='$url'"
+printf '%s' "$settings1" | python3 -c 'import json,sys; d=json.load(sys.stdin); b=d["brand"]; assert b["logo"]=="/assets/images/logo.png",b; assert b["favicon"]=="/assets/images/favicon.png",b; assert set(k for k in b if k not in {"brand.primary_color"}) <= {"logo","favicon"},b'
 
+[[ -s "$BRAND_ROOT/logo.png" ]] || { echo "uploaded brand logo missing" >&2; exit 1; }
+[[ -s "$BRAND_ROOT/favicon.png" ]] || { echo "uploaded favicon missing" >&2; exit 1; }
+[[ ! -e "$UPLOAD_ROOT/logo.png" && ! -e "$UPLOAD_ROOT/favicon.png" ]] || { echo "brand asset leaked into user uploads" >&2; exit 1; }
+
+for retired in logo-dark logo-light logo-square apple-touch-icon pwa-icon share-image login-image mail-logo; do
+  raw=$(curl -sS -X POST -H "Authorization: Bearer $admin" -F "file=@$png;type=image/png" -w $'\n%{http_code}' "$BASE/api/admin/brand/$retired")
+  expect 404 "$raw" "retired-$retired-rejected" >/dev/null
+done
+
+# Replacing the canonical logo must keep the stable URL and a single stored file.
 raw2=$(curl -sS -X POST -H "Authorization: Bearer $admin" -F "file=@$png;type=image/png" -w $'\n%{http_code}' "$BASE/api/admin/brand/logo")
 body2=$(expect 201 "$raw2" replace-logo)
 url2=$(printf '%s' "$body2"|field "['url']")
-[[ "$url2" == "$url" ]] || { echo "brand replacement changed stable URL: $url -> $url2" >&2; exit 1; }
+[[ "$url2" == "/assets/images/logo.png" ]] || { echo "brand replacement changed stable URL: $url2" >&2; exit 1; }
 [[ $(find "$BRAND_ROOT" -maxdepth 1 -type f -name 'logo*' | wc -l) -eq 1 ]] || { echo "brand replacement left duplicate logo files" >&2; exit 1; }
 
 expect 204 "$(req DELETE /api/admin/brand/logo '' "$admin")" delete-logo >/dev/null
-settings3=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback-after-delete)
-printf '%s' "$settings3" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "logo" not in d.get("brand",{}),d.get("brand")'
-[[ ! -e "$file" ]] || { echo 'deleted brand asset remained on disk' >&2; exit 1; }
+settings2=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" readback-after-delete)
+printf '%s' "$settings2" | python3 -c 'import json,sys; d=json.load(sys.stdin); b=d.get("brand",{}); assert "logo" not in b,b; assert b["favicon"]=="/assets/images/favicon.png",b'
+[[ ! -e "$BRAND_ROOT/logo.png" ]] || { echo 'deleted brand logo remained on disk' >&2; exit 1; }
+
+expect 204 "$(req DELETE /api/admin/brand/favicon '' "$admin")" delete-favicon >/dev/null
+[[ ! -e "$BRAND_ROOT/favicon.png" ]] || { echo 'deleted favicon remained on disk' >&2; exit 1; }
 rm -f "$png"
-printf 'GoJet brand asset upload/readback/replace/delete acceptance: PASS\n'
+printf 'GoJet canonical logo/favicon brand asset lifecycle acceptance: PASS\n'
