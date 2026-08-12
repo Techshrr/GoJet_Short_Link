@@ -15,11 +15,7 @@ on:
       - 'frontend/**'
       - 'services/**'
       - 'app/**'
-      - 'scripts/nativeinstaller*.sh'
-      - 'scripts/installdocker.sh'
-      - 'scripts/packagerelease.sh'
-      - 'scripts/verifyrelease.sh'
-      - 'scripts/buildpublicsite.py'
+      - 'scripts/**'
       - 'install.sh'
       - 'installhostnginx.sh'
       - 'installnativelemp.sh'
@@ -28,8 +24,7 @@ on:
       - 'packagelock.json'
       - 'playwright.config.js'
       - 'tests/e2e/**'
-      - 'tests/integration/adminsettingssourcecontract.sh'
-      - 'tests/integration/releasestoragenamespaces.sh'
+      - 'tests/integration/**'
 
 concurrency:
   group: gojetinstallervalidation${{ github.ref }}
@@ -55,22 +50,13 @@ jobs:
           set -euo pipefail
           php -l installer/index.php
           php -l public/install/index.php
-          for script in \
-            install.sh \
-            installhostnginx.sh \
-            installnativelemp.sh \
-            launchwebinstaller.sh \
-            scripts/installdocker.sh \
-            scripts/nativeinstallerrun.sh \
-            scripts/nativeinstallerapply.sh; do
-            bash -n "$script"
-          done
+          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh; do bash -n "$script"; done
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
           python3 -m py_compile scripts/buildpublicsite.py
           python3 scripts/checknames.py
 
-      - name: Validate canonical frontend sources
+      - name: Validate canonical frontend and flat public build
         run: |
           set -euo pipefail
           bash scripts/npmci.sh --ignore-scripts
@@ -82,8 +68,13 @@ jobs:
           node --check frontend/adminconsole/settings.js
           for file in frontend/userconsole/*.js; do node --check "$file"; done
           python3 scripts/buildpublicsite.py --output /tmp/gojetinstallerpublic
-          test -f /tmp/gojetinstallerpublic/index.html
+          for file in index.html privacy.html terms.html forgotpassword.html reportabuse.html products/urlshortener.html; do test -f "/tmp/gojetinstallerpublic/$file"; done
+          test -z "$(find /tmp/gojetinstallerpublic -mindepth 2 -type f -name index.html -print -quit)"
+          test -z "$(find /tmp/gojetinstallerpublic -mindepth 1 -printf '%f\n' | grep -F -- '-' || true)"
           test ! -e frontend/marketingsite
+          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetbtrewrite.conf
+          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojethost.conf
+          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetnative.conf
 
       - name: Run browser fixture acceptance
         run: |
