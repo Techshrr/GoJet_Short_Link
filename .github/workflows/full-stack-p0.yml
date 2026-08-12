@@ -79,6 +79,7 @@ jobs:
           go build -o /tmp/gojet/platform-api ./services/platform-api/cmd/server
           go build -o /tmp/gojet/redirect-engine ./services/redirect-engine/cmd/server
           go build -o /tmp/gojet/analytics-worker ./services/analytics-worker/cmd/worker
+          go build -o /tmp/gojet/mail-worker ./services/platform-api/cmd/mail-worker
       - name: Start platform, redirect and analytics services
         run: |
           set -euo pipefail
