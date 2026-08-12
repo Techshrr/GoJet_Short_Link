@@ -17,16 +17,16 @@ lid=$(printf '%s' "$created"|field "['id']")
 from=$(date -u -d '30 days ago' +%F)
 to=$(date -u -d 'tomorrow' +%F)
 analytics=$(expect 200 "$(req GET "/api/workspaces/$wid/links/$lid/analytics?from=$from&to=$to" '' "$token")" zero-analytics)
-printf '%s' "$analytics" | python3 - <<'PY'
+printf '%s' "$analytics" | python3 -c '
 import json,sys
 data=json.load(sys.stdin)
-for key in ('clicks','unique_visitors','bot_visits'):
-    if data.get(key) != 0:
-        raise SystemExit(f'{key} expected 0, got {data.get(key)!r}')
-for key in ('sources','countries','regions','cities','devices','browsers','operating_systems','languages','utm_sources','destinations','recent'):
+for key in ("clicks","unique_visitors","bot_visits"):
+    if data.get(key) not in (None,0):
+        raise SystemExit(f"{key} expected zero, got {data.get(key)!r}")
+for key in ("sources","countries","regions","cities","devices","browsers","operating_systems","languages","utm_sources","destinations","recent"):
     if data.get(key) != []:
-        raise SystemExit(f'{key} expected empty array, got {data.get(key)!r}')
-print('zero visit analytics payload: PASS')
-PY
+        raise SystemExit(f"{key} expected empty array, got {data.get(key)!r}")
+print("zero visit analytics payload: PASS")
+'
 
 printf 'GoJet zero visit analytics acceptance: PASS (link %s)\n' "$lid"
