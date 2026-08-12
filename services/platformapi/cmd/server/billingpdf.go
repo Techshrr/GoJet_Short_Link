@@ -51,7 +51,7 @@ func (s *server) invoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `attachment; filename="GoJet-Invoice-`+safeInvoiceFilename(number)+`.pdf"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="GoJetInvoice`+safeInvoiceFilename(number)+`.pdf"`)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(pdf)))
 	_, _ = w.Write(pdf)
@@ -80,7 +80,7 @@ func (s *server) stringSetting(ctx context.Context, key, fallback string) string
 
 func safeInvoiceFilename(value string) string {
 	var out strings.Builder
-	for _, ch := range value { if ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '-' || ch == '_' { out.WriteRune(ch) } }
-	if out.Len() == 0 { return "invoice" }
+	for _, ch := range value { if ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' { out.WriteRune(ch) } }
+	if out.Len() == 0 { return "Document" }
 	return out.String()
 }
