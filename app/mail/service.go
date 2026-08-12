@@ -142,10 +142,7 @@ func (s *Service) brandWrap(ctx context.Context, body string) string {
 		primary = "#16A66A"
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")), "/")
-	logo := get("brand.mail_logo_url", "")
-	if logo == "" {
-		logo = get("brand.logo_url", "")
-	}
+	logo := get("brand.logo_url", "")
 	if strings.HasPrefix(logo, "/") {
 		if baseURL != "" {
 			logo = baseURL + logo
