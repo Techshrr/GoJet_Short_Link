@@ -53,7 +53,9 @@ test -s "$TARGET/resources/fonts/NotoSansSC-Regular.ttf" || { echo 'PDF Unicode 
 test -s "$TARGET/resources/fonts/OFL.txt" || { echo 'PDF font license missing from production package' >&2; exit 1; }
 for forbidden in app frontend services go.mod go.sum Dockerfile tests .github; do [ ! -e "$TARGET/$forbidden" ] || { echo "development artifact must not ship: $forbidden" >&2; exit 1; }; done
 if find "$TARGET" -iname '*hardening*' -o -iname '*rc12*' | grep -q .; then echo 'engineering-stage filename leaked into production package' >&2; exit 1; fi
-if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUCT_HARDENING|product-hardening|hardening-release' "$TARGET" --exclude=MANIFEST.sha256; then echo 'retired engineering or system-image contract leaked into production package' >&2; exit 1; fi
+# The verifier contains the literal retired markers by definition. Scan the
+# runtime/deployment payload, not the rule file that documents those markers.
+if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUCT_HARDENING|product-hardening|hardening-release' "$TARGET" --exclude=MANIFEST.sha256 --exclude=verify-release.sh; then echo 'retired engineering or system-image contract leaked into production package' >&2; exit 1; fi
 (cd "$TARGET" && find . -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256)
 mkdir -p "$ROOT/dist"
 rm -f "$ROOT/dist/$NAME.zip" "$ROOT/dist/$NAME.zip.sha256"
