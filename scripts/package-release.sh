@@ -28,6 +28,18 @@ cp "$ROOT/resources/fonts/OFL.txt" "$TARGET/resources/fonts/OFL.txt"
 cp -R "$PUBLIC_BUILD/." "$TARGET/public/"
 cp -R "$ROOT/frontend/user-console/." "$TARGET/public/app/"
 cp -R "$ROOT/frontend/admin-console/." "$TARGET/public/admin/"
+# Administrator settings have exactly one implementation owner. Do not allow a
+# later release to silently reintroduce the legacy app.js implementation that
+# used to be overridden only by script load order.
+test -f "$TARGET/public/admin/settings.js" || { echo 'canonical administrator settings module is missing' >&2; exit 1; }
+grep -Fq 'renderSettings=async function(){' "$TARGET/public/admin/settings.js" || { echo 'canonical administrator settings renderer is missing' >&2; exit 1; }
+grep -Fq 'async function saveUnifiedSection(' "$TARGET/public/admin/settings.js" || { echo 'canonical administrator settings save contract is missing' >&2; exit 1; }
+for legacy in 'function settingInput(' 'async function renderSettings(' 'async function saveSettingForm(' 'async function saveBrand(' 'async function deleteBrand('; do
+  if grep -Fq "$legacy" "$TARGET/public/admin/app.js"; then
+    echo "legacy administrator settings implementation leaked into production app.js: $legacy" >&2
+    exit 1
+  fi
+done
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
 find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(\?[^'\"]*)?(['\"])#\1?v=$SAFE_VERSION\5#g" {} \;
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
