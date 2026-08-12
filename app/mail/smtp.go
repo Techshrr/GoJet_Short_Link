@@ -1,9 +1,12 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"mime"
+	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -35,7 +38,9 @@ func (c SMTPConfig) Validate() error {
 	}
 	return nil
 }
+
 func (c SMTPConfig) address() string { return net.JoinHostPort(c.Host, fmt.Sprint(c.Port)) }
+
 func (c SMTPConfig) dial(ctx context.Context) (*smtp.Client, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -93,6 +98,7 @@ func (c SMTPConfig) dial(ctx context.Context) (*smtp.Client, error) {
 	}
 	return client, nil
 }
+
 func (c SMTPConfig) Test(ctx context.Context) error {
 	client, err := c.dial(ctx)
 	if err != nil {
@@ -104,6 +110,23 @@ func (c SMTPConfig) Test(ctx context.Context) error {
 	}
 	return client.Quit()
 }
+
+func encodeHTMLBody(value string) (string, error) {
+	var encoded bytes.Buffer
+	writer := quotedprintable.NewWriter(&encoded)
+	if _, err := writer.Write([]byte(value)); err != nil {
+		return "", err
+	}
+	if err := writer.Close(); err != nil {
+		return "", err
+	}
+	return encoded.String(), nil
+}
+
+func encodedSubject(value string) string {
+	return mime.QEncoding.Encode("UTF-8", sanitize(value))
+}
+
 func (c SMTPConfig) Send(ctx context.Context, m Message) error {
 	client, err := c.dial(ctx)
 	if err != nil {
@@ -120,13 +143,25 @@ func (c SMTPConfig) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return classify(err)
 	}
+	body, err := encodeHTMLBody(m.HTML)
+	if err != nil {
+		_ = writer.Close()
+		return err
+	}
 	fromAddress := &mail.Address{Name: c.FromName, Address: c.FromEmail}
-	from := fromAddress.String()
-	headers := []string{"From: " + from, "To: " + m.To, "Subject: " + sanitize(m.Subject), "Message-ID: <" + m.MessageID + ">", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8"}
+	headers := []string{
+		"From: " + fromAddress.String(),
+		"To: " + m.To,
+		"Subject: " + encodedSubject(m.Subject),
+		"Message-ID: <" + sanitize(m.MessageID) + ">",
+		"MIME-Version: 1.0",
+		"Content-Type: text/html; charset=UTF-8",
+		"Content-Transfer-Encoding: quoted-printable",
+	}
 	if c.ReplyTo != "" {
 		headers = append(headers, "Reply-To: "+c.ReplyTo)
 	}
-	_, err = fmt.Fprintf(writer, "%s\r\n\r\n%s", strings.Join(headers, "\r\n"), m.HTML)
+	_, err = fmt.Fprintf(writer, "%s\r\n\r\n%s", strings.Join(headers, "\r\n"), body)
 	closeErr := writer.Close()
 	if err != nil {
 		return err
@@ -136,7 +171,9 @@ func (c SMTPConfig) Send(ctx context.Context, m Message) error {
 	}
 	return client.Quit()
 }
+
 func sanitize(v string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(v) }
+
 func classify(err error) error {
 	if err == nil {
 		return nil
