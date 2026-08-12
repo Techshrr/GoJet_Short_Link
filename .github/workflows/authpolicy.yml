@@ -12,6 +12,7 @@ on:
       - 'services/platformapi/cmd/server/**'
       - 'app/settings/**'
       - 'database/migrations/**'
+      - 'scripts/runmigrations.sh'
 
 jobs:
   authpolicy:
@@ -41,14 +42,18 @@ jobs:
       - name: Install MySQL client
         run: |
           if ! command -v mysql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y mysql-client; fi
-      - name: Apply every fresh migration
-        env: {MYSQL_PWD: root}
-        run: |
-          for f in database/migrations/*.sql; do echo "Applying $f"; mysql -h127.0.0.1 -P3306 -uroot gojet_auth_policy < "$f"; done
+      - name: Apply migration catalog
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_auth_policy
+        run: bash scripts/runmigrations.sh
       - name: Start platform API
         run: |
-          mkdir -p /tmp/gojet-auth/uploads /tmp/gojet-auth/files /tmp/gojet-auth/brand /tmp/gojet-auth/generated/qr
-          go build -o /tmp/gojet-auth/platformapi ./services/platformapi/cmd/server
+          mkdir -p /tmp/gojetauth/uploads /tmp/gojetauth/files /tmp/gojetauth/brand /tmp/gojetauth/generated/qr
+          go build -o /tmp/gojetauth/platformapi ./services/platformapi/cmd/server
           SETTINGS_KEY=$(python3 - <<'PY'
           import base64
           print(base64.b64encode(bytes(range(32))).decode())
@@ -57,11 +62,11 @@ jobs:
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true' \
             REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
             ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='auth-policy-qr-key-2026' PUBLIC_BASE_URL='http://127.0.0.1:18091' \
-            PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojet-auth/uploads' FILE_STORAGE_PATH='/tmp/gojet-auth/files' \
-            BRAND_ASSET_PATH='/tmp/gojet-auth/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojet-auth/generated/qr' \
-            /tmp/gojet-auth/platformapi >/tmp/gojet-auth/platformapi.log 2>&1 &
-          echo $! >/tmp/gojet-auth/pid
+            QR_TRACKING_KEY='da36f0ea6470b3d23f69e1f3bf989136de2b23ea30b4af066097080475dd6cc0' PUBLIC_BASE_URL='http://127.0.0.1:18091' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojetauth/uploads' FILE_STORAGE_PATH='/tmp/gojetauth/files' \
+            BRAND_ASSET_PATH='/tmp/gojetauth/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetauth/generated/qr' \
+            /tmp/gojetauth/platformapi >/tmp/gojetauth/platformapi.log 2>&1 &
+          echo $! >/tmp/gojetauth/pid
       - name: Run authentication policy acceptance
         env:
           GOJET_TEST_BASE: http://127.0.0.1:18091
@@ -71,8 +76,8 @@ jobs:
       - name: Diagnostics on failure
         if: failure()
         run: |
-          cat /tmp/gojet-auth/platformapi.log 2>/dev/null || true
+          cat /tmp/gojetauth/platformapi.log 2>/dev/null || true
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_auth_policy -e 'SHOW TABLES; DESCRIBE mail_messages; SELECT * FROM mail_health;' || true
       - name: Stop API
         if: always()
-        run: kill "$(cat /tmp/gojet-auth/pid)" 2>/dev/null || true
+        run: kill "$(cat /tmp/gojetauth/pid)" 2>/dev/null || true
