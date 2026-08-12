@@ -13,15 +13,15 @@ async function noBrokenImages(page){const bad=await page.locator('img:visible').
 async function noEngineering(page){expect((await page.locator('body').innerText())).not.toMatch(engineering);}
 async function branded(locator){
  await expect(locator).toBeVisible();
- const logo=locator.locator('.logo').first();
- await expect(logo).toBeVisible();
- const image=logo.locator('img');
+ const mark=locator.locator('.logo,.brand').first();
+ await expect(mark).toBeVisible();
+ const image=mark.locator('img');
  if(await image.count()){
   await expect(image).toBeVisible();
   await expect(image).toHaveAttribute('alt',/\S+/);
   expect(await image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
  }else{
-  await expect(logo).toContainText('GoJet');
+  await expect(mark).toContainText('GoJet');
  }
 }
 
@@ -34,10 +34,10 @@ test.describe.serial('whole product visual and route consistency',()=>{
  });
  test('every customer-console route owns and renders its page',async({page,request})=>{
   const token=await user(request);await setSession(page,token);
-  for(const route of consoleRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('#shell')).toBeVisible();await expect(page.locator('.content h1').first(),route).toBeVisible({timeout:10000});await expect(page.locator('aside .brand')).toContainText('GoJet');await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
+  for(const route of consoleRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('#shell')).toBeVisible();await expect(page.locator('.content h1').first(),route).toBeVisible({timeout:10000});await branded(page.locator('aside'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
  });
  test('every administrator primary module renders inside the same branded shell',async({page})=>{
-  await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();await expect(page.locator('.sidebar .brand')).toContainText('GoJet');
+  await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();await branded(page.locator('.sidebar'));
   for(const view of adminViews){const button=page.locator(`#nav [data-view="${view}"]`);await expect(button,view).toBeVisible();await button.click();await expect.poll(async()=>((await page.locator('#content').innerText()).trim().length),{message:view,timeout:10000}).toBeGreaterThan(0);await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
  });
 });
