@@ -7,9 +7,15 @@ on:
       - rebuild/v4-rc12-real-install-fixes
     paths:
       - '.github/workflows/release-package.yml'
-      - 'scripts/package-release.sh'
-      - 'scripts/verify-release.sh'
-      - 'scripts/build-public-site.py'
+      - 'scripts/**'
+      - 'installer/**'
+      - 'public/install/**'
+      - 'resources/fonts/**'
+      - 'install.sh'
+      - 'install-host-nginx.sh'
+      - 'install-native-lemp.sh'
+      - 'launch-web-installer.sh'
+      - 'LICENSE'
       - 'deploy/**'
       - 'docs/**'
       - 'frontend/**'
