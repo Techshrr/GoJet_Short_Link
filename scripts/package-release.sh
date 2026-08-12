@@ -39,10 +39,6 @@ cp "$ROOT/deploy/nginx/gojet.conf" "$TARGET/deploy/nginx/gojet.conf"
 cp "$ROOT/deploy/nginx/gojet-host.conf" "$TARGET/deploy/nginx/gojet-host.conf"
 cp "$ROOT/deploy/nginx/gojet-native.conf" "$TARGET/deploy/nginx/gojet-native.conf"
 cp "$ROOT/deploy/nginx/gojet-bt-rewrite.conf" "$TARGET/deploy/nginx/gojet-bt-rewrite.conf"
-sed -i 's#/usr/share/nginx/html/app/#/usr/share/nginx/html/site/app/#g; s#/usr/share/nginx/html/admin/#/usr/share/nginx/html/site/admin/#g' "$TARGET/deploy/nginx/gojet.conf"
-for config in "$TARGET/deploy/nginx/gojet-host.conf" "$TARGET/deploy/nginx/gojet-native.conf"; do
-  sed -i 's#__GOJET_ROOT__/frontend/user-console/#__GOJET_ROOT__/public/app/#g; s#__GOJET_ROOT__/frontend/admin-console/#__GOJET_ROOT__/public/admin/#g; s#__GOJET_ROOT__/frontend/marketing-site#__GOJET_ROOT__/public#g; s#__GOJET_ROOT__/frontend/public-site#__GOJET_ROOT__/public#g' "$config"
-done
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" "$ROOT/deploy/native/gojet-installer.service" "$ROOT/deploy/native/gojet-installer.path" "$TARGET/deploy/native/"
 cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/verify-release.sh" "$ROOT/scripts/verify-published-release.sh" "$ROOT/scripts/native-installer-run.sh" "$ROOT/scripts/native-installer-apply.sh" "$ROOT/scripts/install-docker.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zh-CN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/object-storage.zh-CN.md" "$ROOT/docs/operations-alerting.zh-CN.md" "$TARGET/docs/"
