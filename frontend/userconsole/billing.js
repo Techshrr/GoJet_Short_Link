@@ -212,8 +212,9 @@ function downloadPDF(invoiceID,number){
     }
     const objectURL=URL.createObjectURL(xhr.response);
     const anchor=document.createElement('a');
+    const safeNumber=String(number||'Document').replace(/[-_]/g,'');
     anchor.href=objectURL;
-    anchor.download=`GoJet-${number||'账单'}.pdf`;
+    anchor.download=`GoJetInvoice${safeNumber}.pdf`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
