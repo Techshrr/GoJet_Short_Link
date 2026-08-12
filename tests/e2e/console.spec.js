@@ -136,13 +136,14 @@ test('link creator sends structured routing rules and stable A/B weights',async(
   ]);
 });
 
-test('customer billing renders invoice lifecycle and requests a plan upgrade',async({page})=>{
+test('customer billing continues a plan upgrade directly into payment choice',async({page})=>{
   let requested;
   await seedUser(page);
   await page.route('**/api/**',route=>{
     const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
     if(path.endsWith('/billing')&&method==='GET')return json(route,{subscription:{workspace_id:7,plan_code:'starter',plan_name:'基础版',status:'active',cancel_at_period_end:false},plans:[{id:1,code:'starter',name:'基础版',monthly_price_cents:0,currency:'CNY',description:'轻量项目',features:['100 条短链接']},{id:2,code:'pro',name:'专业版',monthly_price_cents:6900,currency:'CNY',description:'增长团队',features:['5,000 条短链接','180 天分析']}],invoices:[{id:9,invoice_number:'GJ-20260812-ABCDEF012345',plan_name:'专业版',invoice_type:'upgrade',amount_cents:6900,currency:'CNY',status:'pending',created_at:'2026-08-12T10:00:00Z',due_at:'2026-08-15T10:00:00Z'}]});
-    if(path.endsWith('/billing/invoices')&&method==='POST'){requested=request.postDataJSON();return json(route,{id:10},201)}
+    if(path.endsWith('/billing/invoices')&&method==='POST'){requested=request.postDataJSON();return json(route,{id:10,invoice_number:'GJ-NEW',amount_cents:6900,currency:'CNY',status:'pending'},201)}
+    if(path.endsWith('/billing/payment-methods')&&method==='GET')return json(route,{data:[{code:'epay',name:'易支付',mode:'redirect'}]});
     return json(route,commonUser(path));
   });
   await openUser(page);
@@ -150,8 +151,10 @@ test('customer billing renders invoice lifecycle and requests a plan upgrade',as
   await expect(page.getByRole('heading',{name:'专业版'})).toBeVisible();
   await expect(page.getByText('GJ-20260812-ABCDEF012345')).toBeVisible();
   await page.getByRole('button',{name:'选择套餐'}).click();
-  await page.getByRole('button',{name:'生成账单'}).click();
+  await page.getByRole('button',{name:'继续支付'}).click();
   await expect.poll(()=>requested).toEqual({plan_code:'pro',type:'upgrade'});
+  await expect(page.getByRole('heading',{name:'选择支付方式'})).toBeVisible();
+  await expect(page.getByRole('button',{name:/易支付/})).toBeVisible();
 });
 
 test('administrator console loads every canonical management module',async({page})=>{
@@ -159,7 +162,7 @@ test('administrator console loads every canonical management module',async({page
   await page.route('**/api/admin/**',route=>json(route,commonAdmin(new URL(route.request().url()).pathname)));
   await openAdmin(page);
   const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname));
-  for(const resource of ['/admin/app.js','/admin/mail-status.js','/admin/mail-templates.js','/admin/product-actions.js','/admin/settings.js','/admin/billing-fx-settings.js','/admin/support-security.js'])expect(resources).toContain(resource);
+  for(const resource of ['/admin/app.js','/admin/mail-status.js','/admin/mail-templates.js','/admin/product-actions.js','/admin/billingadmin.js','/admin/settings.js','/admin/billing-fx-settings.js','/admin/support-security.js'])expect(resources).toContain(resource);
   await expect(page.getByRole('button',{name:'客户工单'})).toBeVisible();
   await expect(page.getByRole('button',{name:'人机验证'})).toBeVisible();
 });
@@ -191,7 +194,7 @@ test('administrator file security center retries a failed malware scan',async({p
   let retried=false;
   await seedAdmin(page);
   await page.route('**/api/admin/**',route=>{
-    const request=route.request(),path=new URL(route.request().url()).pathname,method=request.method();
+    const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
     if(path==='/api/admin/files'&&method==='GET')return json(route,{data:[{id:9,name:'campaign-assets.zip',mime:'application/zip',size:4096,scan_status:'error',status:'active',scan_result:'clamd connection: timeout',workspace:'营销团队',creator:'owner@example.com'},{id:8,name:'brief.pdf',mime:'application/pdf',size:2048,scan_status:'clean',status:'active',scan_result:'stream: OK',workspace:'创作者团队',creator:'editor@example.com'}]});
     if(path==='/api/admin/resources')return json(route,{data:[]});
     if(path==='/api/admin/files/9/retry-scan'&&method==='POST'){retried=true;return json(route,{queued:true})}
@@ -220,7 +223,7 @@ test('administrator billing settles the current invoice through the canonical mo
   await page.getByRole('button',{name:'套餐与账单'}).click();
   await expect(page.getByText('GJ-20260812-ABCDEF012345')).toBeVisible();
   await page.getByRole('button',{name:'标记已支付'}).click();
-  await page.getByLabel('备注（可选）').fill('银行流水已核验');
+  await page.getByLabel('处理备注（可选）').fill('银行流水已核验');
   await page.locator('#invoiceForm').getByRole('button',{name:'确认'}).click();
   await expect.poll(()=>settlement).toEqual({status:'paid',note:'银行流水已核验'});
   await expect(page.locator('#toast')).toContainText('账单状态已更新');
