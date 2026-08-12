@@ -105,7 +105,7 @@ jobs:
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
           test ! -e "$ROOT/system-images"
-          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml|\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release' "$ROOT" --exclude='*.map' --exclude=verify-release.sh; then
+          if grep -R -I -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml|\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release' "$ROOT" --exclude='*.map' --exclude=verify-release.sh; then
             echo 'retired engineering/runtime terminology leaked into release package' >&2
             exit 1
           fi
