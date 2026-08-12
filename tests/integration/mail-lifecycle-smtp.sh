@@ -67,6 +67,11 @@ expect 200 "$(req POST /api/admin/mail/test '{"recipient":"smtp-acceptance@examp
 for _ in $(seq 1 30); do grep -q 'smtp-acceptance@example.test' "$MAIL_LOG" && break; sleep .2; done
 grep -q 'GoJet 邮件服务测试成功' "$MAIL_LOG"
 grep -q '#16A66A\|#16a66a' "$MAIL_LOG"
+grep -q 'border-radius:12px' "$MAIL_LOG"
+grep -q 'padding:0 8px 18px' "$MAIL_LOG"
+grep -q 'padding:18px 8px 0' "$MAIL_LOG"
+grep -q '此邮件由 GoJet 自动发送' "$MAIL_LOG"
+if grep -q 'border-bottom:3px solid' "$MAIL_LOG"; then echo 'legacy in-card mail brand stripe is still present' >&2; exit 1; fi
 
 required_templates=(verification account_welcome password_reset password_changed email_changed workspace_invitation workspace_role_changed workspace_owner_transferred workspace_member_removed invoice_created invoice_due_soon invoice_overdue invoice_paid invoice_voided payment_started payment_failed payment_refunded subscription_changed subscription_renewed subscription_cancellation_scheduled subscription_cancellation_revoked subscription_expiring subscription_cancelled file_quarantined domain_verification_failed)
 for key in "${required_templates[@]}"; do
