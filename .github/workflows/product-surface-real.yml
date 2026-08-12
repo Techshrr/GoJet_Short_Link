@@ -57,8 +57,8 @@ jobs:
           test ! -e frontend/admin-console/settings-full.js
           test -z "$(find frontend/public-site/pages -type f -name index.html -print -quit)"
           RUNTIME_PATHS='frontend/public-site frontend/admin-console frontend/user-console services/platform-api/cmd/server'
-          if grep -R -n -E '\?v=(brand|rc)[A-Za-z0-9._-]*' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go'; then echo 'release-stage cache token leaked into canonical runtime source' >&2; exit 1; fi
-          if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go'; then echo 'retired system-image namespace leaked into canonical runtime source' >&2; exit 1; fi
+          if grep -R -n -E '\?v=(brand|rc)[A-Za-z0-9._-]*' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then echo 'release-stage cache token leaked into canonical runtime source' >&2; exit 1; fi
+          if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then echo 'retired system-image namespace leaked into canonical runtime source' >&2; exit 1; fi
           node --check frontend/public-site/assets/app.js
           node --check frontend/public-site/assets/file-share.js
           node --check frontend/admin-console/settings.js
