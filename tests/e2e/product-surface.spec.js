@@ -57,21 +57,34 @@ test.describe.serial('real product surface',()=>{
   });
 
   test('uploaded brand logo is readable through the same public origin',async({page,request})=>{
+    let uploaded=false;
     await adminLogin(page);
-    await page.getByRole('button',{name:'系统设置',exact:true}).click();
-    await page.getByRole('button',{name:/品牌与视觉/}).click();
-    const chooserPromise=page.waitForEvent('filechooser');
-    await page.locator('[data-ah-upload="logo"]').click();
-    const chooser=await chooserPromise;
-    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR42mNk+M/wHwMDAwMjIACmBgB9ewQ/u2+z0AAAAABJRU5ErkJggg==','base64');
-    await chooser.setFiles({name:'gojet-logo.png',mimeType:'image/png',buffer:png});
-    const preview=page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img');
-    await expect(preview).toBeVisible();
-    await expect.poll(async()=>preview.evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
-    expect(new URL(await preview.getAttribute('src'),base).pathname).toBe('/assets/images/logo.png');
-    const response=await request.get(base+'/assets/images/logo.png');
-    expect(response.status()).toBe(200);
-    expect(response.headers()['content-type']||'').toContain('image/png');
+    try{
+      await page.getByRole('button',{name:'系统设置',exact:true}).click();
+      await page.getByRole('button',{name:/品牌与视觉/}).click();
+      const chooserPromise=page.waitForEvent('filechooser');
+      await page.locator('[data-ah-upload="logo"]').click();
+      const chooser=await chooserPromise;
+      const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR42mNk+M/wHwMDAwMjIACmBgB9ewQ/u2+z0AAAAABJRU5ErkJggg==','base64');
+      await chooser.setFiles({name:'gojet-logo.png',mimeType:'image/png',buffer:png});
+      uploaded=true;
+      const preview=page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img');
+      await expect(preview).toBeVisible();
+      await expect.poll(async()=>preview.evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
+      expect(new URL(await preview.getAttribute('src'),base).pathname).toBe('/assets/images/logo.png');
+      const response=await request.get(base+'/assets/images/logo.png');
+      expect(response.status()).toBe(200);
+      expect(response.headers()['content-type']||'').toContain('image/png');
+    }finally{
+      if(uploaded){
+        const remove=page.locator('[data-ah-delete="logo"]');
+        if(await remove.isVisible().catch(()=>false)){
+          page.once('dialog',dialog=>dialog.accept());
+          await remove.click();
+          await expect(page.locator('[data-ah-pane="brand"] .ah-asset').first().locator('img')).toHaveCount(0);
+        }
+      }
+    }
   });
 
   test('authenticated public site switches all guest conversion actions to account actions',async({page,request})=>{
