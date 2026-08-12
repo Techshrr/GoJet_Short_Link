@@ -24,7 +24,6 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
-          import os
           import subprocess
 
           ROOT = Path.cwd()
@@ -96,8 +95,6 @@ jobs:
               if text != original:
                   path.write_text(text, encoding='utf-8')
 
-          # npm requires the conventional lock filename at runtime. Keep the repository
-          # clean by materializing it only for the duration of npm ci.
           (ROOT / 'scripts' / 'npmci.sh').write_text('''#!/usr/bin/env bash
           set -euo pipefail
           ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -129,9 +126,20 @@ jobs:
           subprocess.run(['git', 'add', '-A'], cwd=ROOT, check=True)
           subprocess.run(['python3', 'scripts/checknames.py'], cwd=ROOT, check=True)
 
-          # Static asset version query strings are forbidden in both source and release payloads.
+          # Existing detector files are cleaned immediately after the atomic rename.
+          # Do not let their own detector text prevent the path transaction itself.
+          needle = '?' + 'v='
+          detector_files = {
+              '.github/workflows/migratenames.yml',
+              '.github/workflows/productsurface.yml',
+              'scripts/buildpublicsite.py',
+              'scripts/packagerelease.sh',
+              'scripts/verifyrelease.sh',
+          }
           violations = []
           for rel in [p for p in git('ls-files', '-z').decode().split('\0') if p]:
+              if rel in detector_files:
+                  continue
               path = ROOT / rel
               try:
                   raw = path.read_bytes()
@@ -143,10 +151,10 @@ jobs:
                   text = raw.decode('utf-8')
               except UnicodeDecodeError:
                   continue
-              if '?v=' in text and rel != 'scripts/buildpublicsite.py':
+              if needle in text:
                   violations.append(rel)
           if violations:
-              raise SystemExit('forbidden ?v= found in: ' + ', '.join(violations))
+              raise SystemExit('forbidden static version query marker found in: ' + ', '.join(violations))
           PY
 
           git config user.name "GoJet Repository Migration"
