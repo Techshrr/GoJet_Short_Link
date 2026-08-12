@@ -121,6 +121,17 @@ func (s *server) adminInvoices(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]any{"data": items})
 }
 
+func manualSettlementNote(status, note string) string {
+	note = strings.TrimSpace(note)
+	if note != "" {
+		return note
+	}
+	if status == "void" {
+		return "管理员手动作废"
+	}
+	return "管理员手动确认支付"
+}
+
 func (s *server) adminSettleInvoice(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r, "id")
 	var in struct {
@@ -134,15 +145,7 @@ func (s *server) adminSettleInvoice(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "账单编号无效"})
 		return
 	}
-	note := strings.TrimSpace(in.Note)
-	if note == "" {
-		if in.Status == "void" {
-			note = "管理员手动作废"
-		} else {
-			note = "管理员手动确认支付"
-		}
-	}
-	if err = s.billing.Settle(r.Context(), currentAdmin(r).ID, id, in.Status, note); err != nil {
+	if err = s.billing.Settle(r.Context(), currentAdmin(r).ID, id, in.Status, manualSettlementNote(in.Status, in.Note)); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
