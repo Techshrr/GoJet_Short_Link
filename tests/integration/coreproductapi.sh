@@ -93,7 +93,7 @@ RESET_MAILS=$(mysql_exec "SELECT COUNT(*) FROM mail_messages WHERE recipient='pu
 echo '[7/10] Markdown announcement CRUD and public publication'
 body=$(expect_status 201 "$(request POST /api/admin/announcements '{"title":"Acceptance Announcement","body":"# Release\n\n**Ready** for testing.","status":"draft"}' "$ADMIN_TOKEN")" 'announcement create')
 ANNOUNCEMENT_ID=$(printf '%s' "$body" | field "['id']")
-expect_status 200 "$(request PATCH "/api/admin/announcements$ANNOUNCEMENT_ID" '{"title":"Acceptance Announcement","body":"# Release\n\n**Published** from Markdown.","status":"published"}' "$ADMIN_TOKEN")" 'announcement publish' >/dev/null
+expect_status 200 "$(request PATCH "/api/admin/announcements/$ANNOUNCEMENT_ID" '{"title":"Acceptance Announcement","body":"# Release\n\n**Published** from Markdown.","status":"published"}' "$ADMIN_TOKEN")" 'announcement publish' >/dev/null
 body=$(expect_status 200 "$(request GET /api/public/announcements)" 'public announcements')
 printf '%s' "$body" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert any(x["title"]=="Acceptance Announcement" and "Published" in x["body_markdown"] for x in d["data"])'
 
