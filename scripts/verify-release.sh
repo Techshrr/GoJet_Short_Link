@@ -24,6 +24,8 @@ for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh ins
   database/migrations/003_identity_and_workspaces.sql database/migrations/015_admin_identity.sql database/migrations/025_mail_templates.sql \
   database/migrations/028_file_share_password.sql database/migrations/029_payment_transactions.sql \
   database/migrations/030_fx_and_mail_lifecycle.sql database/migrations/031_account_workspace_mail_events.sql \
+  database/migrations/032_support_tickets_and_turnstile.sql database/migrations/033_abuse_report_public_url.sql database/migrations/034_mail_brand_fragments.sql \
+  public/report-abuse/index.html public/privacy/index.html public/terms/index.html public/admin/support-security.js \
   resources/fonts/NotoSansSC-Regular.ttf resources/fonts/OFL.txt; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
@@ -41,7 +43,9 @@ if find "$ROOT" -iname '*hardening*' -o -iname '*rc12*' | grep -q .; then
   exit 1
 fi
 if find "$ROOT" -type f -name '*_test.go' | grep -q .; then echo "Go test sources must not ship" >&2; exit 1; fi
-if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUCT_HARDENING|product-hardening|hardening-release' "$ROOT" --exclude=MANIFEST.sha256; then
+# verify-release.sh intentionally names retired markers as rejection rules, so
+# exclude only that rule file while scanning the actual runtime payload.
+if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images|V4_PRODUCT_HARDENING|product-hardening|hardening-release' "$ROOT" --exclude=MANIFEST.sha256 --exclude=verify-release.sh; then
   echo 'retired engineering or system-image contract leaked into production package' >&2
   exit 1
 fi
@@ -60,6 +64,10 @@ grep -Fq 'invoice_paid' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql
 grep -Fq 'account_welcome' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'account lifecycle mail templates are missing' >&2; exit 1; }
 grep -Fq 'user_email_change_audit' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'account email-change audit trigger is missing' >&2; exit 1; }
 grep -Fq 'workspace_role_changed' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'workspace role-change mail update is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE support_tickets' "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support ticket schema is missing' >&2; exit 1; }
+grep -Fq "'turnstile.ticket_create'" "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support Turnstile policy is missing' >&2; exit 1; }
+grep -Fq 'ADD COLUMN reported_url' "$ROOT/database/migrations/033_abuse_report_public_url.sql" || { echo 'public abuse URL schema is missing' >&2; exit 1; }
+grep -Fq "'support_ticket_reply'" "$ROOT/database/migrations/034_mail_brand_fragments.sql" || { echo 'support mail fragment is missing' >&2; exit 1; }
 
 grep -Fq 'data-auth-page="login"' "$ROOT/public/login/index.html" || { echo 'dedicated login page is invalid' >&2; exit 1; }
 grep -Fq '/api/auth/forgot-password' "$ROOT/public/assets/auth.js" || { echo 'password recovery frontend is not connected' >&2; exit 1; }
@@ -70,6 +78,10 @@ grep -Fq '添加用户' "$ROOT/public/admin/app.js" || { echo 'administrator use
 grep -Fq 'Markdown 正文' "$ROOT/public/admin/app.js" || { echo 'Markdown announcement editor is missing' >&2; exit 1; }
 grep -Fq 'data-link-toggle' "$ROOT/public/admin/product-actions.js" || { echo 'administrator link operations are missing' >&2; exit 1; }
 grep -Fq 'data-plan-edit' "$ROOT/public/admin/product-actions.js" || { echo 'administrator plan editor is missing' >&2; exit 1; }
+grep -Fq '/api/admin/support/tickets' "$ROOT/public/admin/support-security.js" || { echo 'administrator support queue is not connected' >&2; exit 1; }
+grep -Fq '/api/admin/bot-protection' "$ROOT/public/admin/support-security.js" || { echo 'central Turnstile settings UI is not connected' >&2; exit 1; }
+grep -Fq '隐私政策' "$ROOT/public/privacy/index.html" || { echo 'privacy page content is missing' >&2; exit 1; }
+grep -Fq '服务条款' "$ROOT/public/terms/index.html" || { echo 'terms page content is missing' >&2; exit 1; }
 grep -Fq '<form id="loginForm" class="login-card" method="post" action="/api/admin/auth/login">' "$ROOT/public/admin/index.html" || { echo 'admin login form must fail closed with POST when JavaScript is unavailable' >&2; exit 1; }
 if grep -R -n -E 'step_up_required|X-GoJet-TOTP|MutationObserver' "$ROOT/public/admin"; then
   echo 'operation-level admin step-up or obsolete hotpatch leaked into admin UI' >&2; exit 1
