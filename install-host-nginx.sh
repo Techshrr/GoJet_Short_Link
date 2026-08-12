@@ -7,8 +7,11 @@ require docker; require curl; require openssl; require nginx; validate_env
 [ "${NGINX_MODE:-}" = host ] || die "set NGINX_MODE=host in deploy/.env.production before running this installer"
 [ "$(id -u)" -eq 0 ] || die "host Nginx installation must run as root (use sudo ./install-host-nginx.sh)"
 case "$ROOT" in *' '*) die "installation path must not contain spaces";; esac
+[ -d "$ROOT/public" ] || die "production public directory is missing"
+[ -d "$ROOT/public/app" ] || die "customer console assets are missing"
+[ -d "$ROOT/public/admin" ] || die "administrator console assets are missing"
 prepare_storage
-chmod 0755 "$ROOT" "$ROOT/frontend" "$ROOT/frontend/marketing-site" "$ROOT/frontend/user-console" "$ROOT/frontend/admin-console"
+chmod 0755 "$ROOT" "$ROOT/public" "$ROOT/public/app" "$ROOT/public/admin"
 compose build --pull
 compose up -d redis mysql
 apply_migrations
