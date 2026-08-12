@@ -110,10 +110,13 @@ func TestSMTPProtocolHealthAndChineseDelivery(t *testing.T) {
 		t.Fatalf("captured %d messages, want 1", len(server.messages))
 	}
 	raw := server.messages[0]
-	for _, expected := range []string{"Message-ID: <integration-001@gojet.test>", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: quoted-printable", "Subject: =?UTF-8?"} {
+	for _, expected := range []string{"Message-ID: <integration-001@gojet.test>", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: quoted-printable"} {
 		if !strings.Contains(raw, expected) {
 			t.Fatalf("delivered message missing %q: %s", expected, raw)
 		}
+	}
+	if strings.Contains(raw, "Subject: "+wantSubject) {
+		t.Fatalf("non-ASCII subject leaked into the transport header: %s", raw)
 	}
 	parsed, err := mail.ReadMessage(strings.NewReader(raw))
 	if err != nil {
