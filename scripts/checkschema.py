@@ -42,8 +42,11 @@ def check(kind: str, identifier: str, source: str) -> None:
 
 create_re = re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([A-Za-z0-9_]+)`?", re.I)
 alter_re = re.compile(r"\bALTER\s+TABLE\s+`?([A-Za-z0-9_]+)`?", re.I)
-index_re = re.compile(r"\b(?:UNIQUE\s+)?KEY\s+`?([A-Za-z0-9_]+)`?", re.I)
-constraint_re = re.compile(r"\bCONSTRAINT\s+`?([A-Za-z0-9_]+)`?", re.I)
+# KEY is also SQL syntax in expressions such as ON DUPLICATE KEY UPDATE. Only
+# table-definition lines beginning with KEY/UNIQUE KEY declare an index.
+index_decl_re = re.compile(r"^\s*(?:UNIQUE\s+)?KEY\s+`?([A-Za-z0-9_]+)`?", re.I | re.M)
+create_index_re = re.compile(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+`?([A-Za-z0-9_]+)`?", re.I)
+constraint_re = re.compile(r"^\s*CONSTRAINT\s+`?([A-Za-z0-9_]+)`?", re.I | re.M)
 
 for path in files:
     text = path.read_text(encoding="utf-8")
@@ -53,10 +56,11 @@ for path in files:
         tables.add(name)
     for match in alter_re.finditer(text):
         check("altered table", match.group(1), path.name)
-    for match in index_re.finditer(text):
-        name = match.group(1)
-        check("index", name, path.name)
-        indexes.add(name)
+    for regex in (index_decl_re, create_index_re):
+        for match in regex.finditer(text):
+            name = match.group(1)
+            check("index", name, path.name)
+            indexes.add(name)
     for match in constraint_re.finditer(text):
         name = match.group(1)
         check("constraint", name, path.name)
