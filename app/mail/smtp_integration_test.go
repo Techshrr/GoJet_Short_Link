@@ -6,7 +6,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"mime"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,16 +89,18 @@ func (s *smtpCapture) handle(conn net.Conn) {
 	}
 }
 
-func TestSMTPProtocolHealthAndDelivery(t *testing.T) {
+func TestSMTPProtocolHealthAndChineseDelivery(t *testing.T) {
 	server := newSMTPCapture(t)
 	port, _ := strconv.Atoi(strings.Split(server.listener.Addr().String(), ":")[1])
-	config := SMTPConfig{Host: "127.0.0.1", Port: port, Encryption: "none", EHLO: "api.gojet.test", FromEmail: "noreply@gojet.test", FromName: "GoJet"}
+	config := SMTPConfig{Host: "127.0.0.1", Port: port, Encryption: "none", EHLO: "api.gojet.test", FromEmail: "noreply@gojet.test", FromName: "GoJet 通知"}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := config.Test(ctx); err != nil {
 		t.Fatalf("SMTP health test failed: %v", err)
 	}
-	message := Message{To: "owner@example.test", Subject: "GoJet SMTP integration", HTML: "<strong>delivery confirmed</strong>", MessageID: "integration-001@gojet.test"}
+	wantSubject := "验证您的 GoJet 邮箱"
+	wantHTML := "<strong>您好，霍召席。请验证邮箱。</strong>"
+	message := Message{To: "owner@example.test", Subject: wantSubject, HTML: wantHTML, MessageID: "integration-001@gojet.test"}
 	if err := config.Send(ctx, message); err != nil {
 		t.Fatalf("SMTP delivery failed: %v", err)
 	}
@@ -103,9 +109,28 @@ func TestSMTPProtocolHealthAndDelivery(t *testing.T) {
 	if len(server.messages) != 1 {
 		t.Fatalf("captured %d messages, want 1", len(server.messages))
 	}
-	for _, expected := range []string{"Message-ID: <integration-001@gojet.test>", "Subject: GoJet SMTP integration", "delivery confirmed"} {
-		if !strings.Contains(server.messages[0], expected) {
-			t.Fatalf("delivered message missing %q: %s", expected, server.messages[0])
+	raw := server.messages[0]
+	for _, expected := range []string{"Message-ID: <integration-001@gojet.test>", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: quoted-printable", "Subject: =?UTF-8?"} {
+		if !strings.Contains(raw, expected) {
+			t.Fatalf("delivered message missing %q: %s", expected, raw)
 		}
+	}
+	parsed, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodedSubject, err := new(mime.WordDecoder).DecodeHeader(parsed.Header.Get("Subject"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decodedSubject != wantSubject {
+		t.Fatalf("subject round trip mismatch: %q", decodedSubject)
+	}
+	decodedBody, err := io.ReadAll(quotedprintable.NewReader(parsed.Body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decodedBody) != wantHTML {
+		t.Fatalf("HTML round trip mismatch: %q", decodedBody)
 	}
 }
