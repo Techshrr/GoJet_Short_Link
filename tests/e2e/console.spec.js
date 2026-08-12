@@ -46,14 +46,24 @@ test('team console renders active members and invitation lifecycle states',async
   await seedUser(page);
   await page.route('**/api/**',route=>{
     const path=new URL(route.request().url()).pathname;
-    if(path.includes('/members'))return json(route,{members:[{user_id:1,Email:'owner@example.com',DisplayName:'负责人',Role:'owner',Status:'active',joined_at:'2026-08-01T10:00:00Z'},{user_id:2,Email:'analyst@example.com',DisplayName:'数据分析员',Role:'analyst',Status:'active',joined_at:'2026-08-02T10:00:00Z'}],invitations:[{id:8,Email:'editor@example.com',Role:'editor',Status:'pending',ExpiresAt:'2026-08-19T10:00:00Z'},{id:9,Email:'viewer@example.com',Role:'viewer',Status:'expired',ExpiresAt:'2026-08-01T10:00:00Z'}]});
+    if(path==='/api/workspaces/7')return json(route,{
+      workspace:{id:7,name:'GoJet 产品团队',type:'company',role:'owner'},
+      members:[
+        {user_id:1,email:'owner@example.com',display_name:'负责人',role:'owner',status:'active',joined_at:'2026-08-01T10:00:00Z'},
+        {user_id:2,email:'analyst@example.com',display_name:'数据分析员',role:'analyst',status:'active',joined_at:'2026-08-02T10:00:00Z'}
+      ],
+      invitations:[
+        {id:8,email:'editor@example.com',role:'editor',status:'pending',expires_at:'2026-08-19T10:00:00Z'},
+        {id:9,email:'viewer@example.com',role:'viewer',status:'expired',expires_at:'2026-08-01T10:00:00Z'}
+      ]
+    });
     return json(route,commonUser(path));
   });
   await openUser(page);
   await page.getByRole('button',{name:'工作区与团队'}).click();
   await expect(page.getByText('数据分析员')).toBeVisible();
-  await expect(page.getByText('待接受')).toBeVisible();
-  await expect(page.getByRole('cell',{name:'已过期'})).toBeVisible();
+  await expect(page.getByText('等待接受')).toBeVisible();
+  await expect(page.getByText('已过期')).toBeVisible();
   await expect(page.getByRole('button',{name:'重新发送'})).toHaveCount(2);
 });
 
@@ -67,8 +77,8 @@ test('customer file sharing distinguishes clean downloads from quarantined scans
   await openUser(page);
   await page.getByRole('button',{name:'文件分享'}).click();
   await expect(page.getByText('campaign.pdf')).toBeVisible();
-  await expect(page.getByText('等待扫描')).toBeVisible();
-  await expect(page.getByRole('link',{name:'下载'})).toHaveAttribute('href','/api/public/files/safe-file');
+  await expect(page.getByText('等待检查')).toBeVisible();
+  await expect(page.getByRole('link',{name:'打开分享页'})).toHaveAttribute('href','http://127.0.0.1:4173/f/safe-file');
   await expect(page.getByRole('button',{name:'删除'})).toHaveCount(2);
 });
 
@@ -84,17 +94,17 @@ test('organization, text, bio and QR product surfaces use live API data',async({
   });
   await openUser(page);
   await page.getByRole('button',{name:'活动与组织'}).click();
-  await expect(page.getByRole('heading',{name:'夏季投放'})).toBeVisible();
+  await expect(page.getByText('夏季投放',{exact:true})).toBeVisible();
   await expect(page.getByText(/41 次转化/)).toBeVisible();
   await page.getByRole('button',{name:'文本分享'}).click();
   await expect(page.getByText(/发布说明/)).toBeVisible();
-  await expect(page.locator('#textBody script')).toHaveCount(0);
+  await expect(page.locator('.content script')).toHaveCount(0);
   await page.getByRole('button',{name:'个人主页'}).click();
   await expect(page.getByText('GoJet 创作者')).toBeVisible();
   await expect(page.getByText(/88 次浏览/)).toBeVisible();
   await page.getByRole('button',{name:'二维码'}).click();
   await expect(page.getByText('线下展会')).toBeVisible();
-  await expect(page.getByText(/127 次 QR 访问/)).toBeVisible();
+  await expect(page.getByText(/127 次访问/)).toBeVisible();
   await expect(page.getByRole('button',{name:'创建二维码'})).toBeVisible();
 });
 
@@ -108,20 +118,25 @@ test('link creator sends structured routing rules and stable A/B weights',async(
   });
   await openUser(page);
   await page.getByRole('button',{name:'创建链接'}).click();
-  await page.fill('[name=destination]','https://default.example/landing');
-  await page.selectOption('.ruleDimension','country');
-  await page.fill('.ruleValue','CN');
-  await page.fill('.ruleDestination','https://cn.example/landing');
-  const variants=page.locator('.abRow');
+  const editor=page.locator('#linkEditorForm');
+  await editor.locator('[name=destination]').fill('https://default.example/landing');
+  await page.locator('.linkAdvanced summary').click();
+  await editor.locator('.ruleDimension').selectOption('country');
+  await editor.locator('.ruleValue').fill('CN');
+  await editor.locator('.ruleDestination').fill('https://cn.example/landing');
+  const variants=editor.locator('.abRow');
   await variants.nth(0).locator('.abDestination').fill('https://a.example/landing');
   await variants.nth(1).locator('.abDestination').fill('https://b.example/landing');
-  await page.getByRole('button',{name:'创建并启用'}).click();
+  await editor.getByRole('button',{name:'创建短链接'}).click();
   await expect.poll(()=>created).toBeTruthy();
   expect(created.routing_rules).toEqual([{dimension:'country',value:'CN',destination:'https://cn.example/landing'}]);
-  expect(created.ab_destinations.map(item=>item.weight)).toEqual([50,50]);
+  expect(created.ab_destinations).toEqual([
+    {id:'variant-1',destination:'https://a.example/landing',weight:50},
+    {id:'variant-2',destination:'https://b.example/landing',weight:50}
+  ]);
 });
 
-test('customer billing renders invoice lifecycle and requests a plan purchase',async({page})=>{
+test('customer billing renders invoice lifecycle and requests a plan upgrade',async({page})=>{
   let requested;
   await seedUser(page);
   await page.route('**/api/**',route=>{
@@ -134,8 +149,9 @@ test('customer billing renders invoice lifecycle and requests a plan purchase',a
   await page.getByRole('button',{name:'套餐与账单'}).click();
   await expect(page.getByRole('heading',{name:'专业版'})).toBeVisible();
   await expect(page.getByText('GJ-20260812-ABCDEF012345')).toBeVisible();
-  await page.getByRole('button',{name:'申请变更套餐'}).click();
-  await expect.poll(()=>requested).toEqual({plan_code:'pro',type:'purchase'});
+  await page.getByRole('button',{name:'选择套餐'}).click();
+  await page.getByRole('button',{name:'生成账单'}).click();
+  await expect.poll(()=>requested).toEqual({plan_code:'pro',type:'upgrade'});
 });
 
 test('administrator console loads every canonical management module',async({page})=>{
