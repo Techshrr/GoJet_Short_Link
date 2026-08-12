@@ -41,7 +41,12 @@ for legacy in 'function settingInput(' 'async function renderSettings(' 'async f
   fi
 done
 cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
-find "$TARGET/public" -type f -name '*.html' -exec sed -E -i "s#((src|href)=['\"][^'\"?#]+\.(css|js))(\?[^'\"]*)?(['\"])#\1?v=$SAFE_VERSION\5#g" {} \;
+# Public asset URLs are stable paths. Cache invalidation is handled by HTTP
+# cache policy/deployment, never by version query strings in source or release.
+if grep -R -I -n -F '?v=' "$TARGET/public"; then
+  echo 'version query string leaked into production public assets' >&2
+  exit 1
+fi
 cp "$ROOT/deploy/compose.production.yaml" "$TARGET/deploy/compose.production.yaml"
 cp "$ROOT/deploy/compose.host-nginx.yaml" "$TARGET/deploy/compose.host-nginx.yaml"
 cp "$ROOT/deploy/.env.production.example" "$TARGET/deploy/.env.production.example"
