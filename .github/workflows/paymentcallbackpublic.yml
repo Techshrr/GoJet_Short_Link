@@ -13,6 +13,7 @@ on:
       - 'frontend/adminconsole/billingadmin.js'
       - 'frontend/adminconsole/index.html'
       - 'services/platformapi/cmd/server/**'
+      - 'scripts/runmigrations.sh'
       - 'tests/integration/paymentcallbackpublic.sh'
       - '.github/workflows/paymentcallbackpublic.yml'
   push:
@@ -28,6 +29,7 @@ on:
       - 'frontend/adminconsole/billingadmin.js'
       - 'frontend/adminconsole/index.html'
       - 'services/platformapi/cmd/server/**'
+      - 'scripts/runmigrations.sh'
       - 'tests/integration/paymentcallbackpublic.sh'
       - '.github/workflows/paymentcallbackpublic.yml'
 
@@ -75,6 +77,7 @@ jobs:
           set -euo pipefail
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
+          bash -n scripts/runmigrations.sh
           node --check frontend/adminconsole/paymentcallbacks.js
           bash -n tests/integration/paymentcallbackpublic.sh
           go test ./...
@@ -86,17 +89,18 @@ jobs:
             grep -Fq 'add_header Cache-Control "no-store" always;' "$config"
           done
 
-      - name: Apply all migrations to fresh payment database
+      - name: Apply migration catalog to fresh payment database
         env:
-          MYSQL_PWD: root
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_payment_public
         run: |
           set -euo pipefail
-          for migration in database/migrations/*.sql; do
-            echo "Applying $(basename "$migration")"
-            mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public < "$migration"
-          done
+          bash scripts/runmigrations.sh
           test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
-          mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public -N -B -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_payment_public' AND TABLE_NAME='payment_callback_events';" | grep -Fxq 1
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public -N -B -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_payment_public' AND TABLE_NAME='payment_callback_events';" | grep -Fxq 1
 
       - name: Build and start exact platform callback runtime
         run: |
