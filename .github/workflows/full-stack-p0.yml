@@ -1,0 +1,185 @@
+name: GoJet Full-stack P0 gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - 'rebuild/v4-rc12-real-install-fixes'
+
+concurrency:
+  group: gojet-full-stack-p0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install integration dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client nginx zbar-tools
+      - name: Validate canonical release namespaces
+        run: bash tests/integration/release-storage-namespaces.sh
+      - name: Apply fresh MySQL schema and verify P0 contracts
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            mysql -h127.0.0.1 -P3306 -uroot gojet_test < "$f"
+          done
+          mysql -h127.0.0.1 -P3306 -uroot gojet_test -N -B <<'SQL' >/tmp/gojet-schema-check
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='file_shares' AND COLUMN_NAME='password_hash';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='payment_transactions';
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='fx_rate_cache';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='billing_invoices' AND COLUMN_NAME='fx_rate';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='mail_messages' AND COLUMN_NAME='dedupe_key';
+          SELECT COUNT(*) FROM mail_templates WHERE template_key IN ('verification','account_welcome','password_reset','invoice_created','invoice_due_soon','invoice_overdue','invoice_paid','payment_started','payment_failed','subscription_changed','subscription_renewed','subscription_expiring','subscription_cancelled');
+          SQL
+          mapfile -t schema < /tmp/gojet-schema-check
+          test "${schema[0]}" = 1
+          test "${schema[1]}" = 1
+          test "${schema[2]}" = 1
+          test "${schema[3]}" = 1
+          test "${schema[4]}" = 1
+          test "${schema[5]}" -ge 13
+      - name: Build P0 runtime services
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet/uploads /tmp/gojet/files /tmp/gojet/brand /tmp/gojet/generated/qr
+          go build -o /tmp/gojet/platform-api ./services/platform-api/cmd/server
+          go build -o /tmp/gojet/redirect-engine ./services/redirect-engine/cmd/server
+          go build -o /tmp/gojet/analytics-worker ./services/analytics-worker/cmd/worker
+      - name: Start platform, redirect and analytics services
+        run: |
+          set -euo pipefail
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          cat > /tmp/gojet/test-env <<EOF2
+          SETTINGS_ENCRYPTION_KEY=$SETTINGS_KEY
+          EOF2
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_test?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
+            ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY='full-stack-acceptance-qr-key-2026' \
+            PUBLIC_BASE_URL='http://127.0.0.1:18080' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
+            UPLOAD_STORAGE_PATH='/tmp/gojet/uploads' \
+            BRAND_ASSET_PATH='/tmp/gojet/brand' \
+            GENERATED_QR_STORAGE_PATH='/tmp/gojet/generated/qr' \
+            FILE_STORAGE_PATH='/tmp/gojet/files' \
+            /tmp/gojet/platform-api >/tmp/gojet/platform-api.log 2>&1 &
+          echo $! >/tmp/gojet/platform-api.pid
+          env \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            HTTP_ADDRESS='127.0.0.1:18080' \
+            VISITOR_HASH_KEY='full-stack-visitor-hash-key-2026' \
+            QR_TRACKING_KEY='full-stack-acceptance-qr-key-2026' \
+            /tmp/gojet/redirect-engine >/tmp/gojet/redirect-engine.log 2>&1 &
+          echo $! >/tmp/gojet/redirect-engine.pid
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_test?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            ANALYTICS_GROUP='gojet-mysql' \
+            ANALYTICS_CONSUMER='full-stack-p0' \
+            /tmp/gojet/analytics-worker >/tmp/gojet/analytics-worker.log 2>&1 &
+          echo $! >/tmp/gojet/analytics-worker.pid
+          for port in 18090 18080; do
+            for i in $(seq 1 60); do
+              curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
+              sleep 1
+              test "$i" -lt 60
+            done
+          done
+      - name: Core product and administrator API acceptance
+        env: &integration-env
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          GOJET_PUBLIC_BASE: http://127.0.0.1:18080
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_test
+          REDIS_ADDRESS: 127.0.0.1:6379
+          UPLOAD_STORAGE_PATH: /tmp/gojet/uploads
+          BRAND_ASSET_PATH: /tmp/gojet/brand
+          GENERATED_QR_STORAGE_PATH: /tmp/gojet/generated/qr
+        run: bash tests/integration/product-rebuild-api.sh
+      - name: Administrator permission boundary
+        env: *integration-env
+        run: bash tests/integration/admin-permission-boundary.sh
+      - name: Administrator link lifecycle
+        env: *integration-env
+        run: bash tests/integration/admin-link-lifecycle.sh
+      - name: Settings, payment, mail and Turnstile round-trip
+        env: *integration-env
+        run: bash tests/integration/settings-roundtrip.sh
+      - name: Real QR decode, redirect and attribution
+        env: *integration-env
+        run: bash tests/integration/qr-real-e2e.sh
+      - name: Protected file share lifecycle
+        env: *integration-env
+        run: bash tests/integration/file-share-lifecycle.sh
+      - name: Brand asset upload, public readback, persistence and deletion
+        env: *integration-env
+        run: bash tests/integration/brand-logo-lifecycle.sh
+      - name: SMTP readback, branded mail and lifecycle coverage
+        env: *integration-env
+        run: bash tests/integration/mail-lifecycle-smtp.sh
+      - name: Billing external-payment conflict protection
+        env: *integration-env
+        run: bash tests/integration/billing-payment-conflict.sh
+      - name: Billing currency conversion and frozen FX snapshot
+        env: *integration-env
+        run: bash tests/integration/billing-fx-freeze.sh
+      - name: Public-resource Nginx acceptance
+        env: *integration-env
+        run: bash tests/integration/nginx-host.sh
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== platform-api ====='; cat /tmp/gojet/platform-api.log 2>/dev/null || true
+          echo '===== redirect-engine ====='; cat /tmp/gojet/redirect-engine.log 2>/dev/null || true
+          echo '===== analytics-worker ====='; cat /tmp/gojet/analytics-worker.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
+      - name: Stop acceptance services
+        if: always()
+        run: |
+          for name in platform-api redirect-engine analytics-worker; do
+            if [ -f "/tmp/gojet/$name.pid" ]; then kill "$(cat "/tmp/gojet/$name.pid")" 2>/dev/null || true; fi
+          done
