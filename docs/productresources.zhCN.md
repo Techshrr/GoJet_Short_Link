@@ -1,6 +1,6 @@
 # 产品资源服务
 
-GoJet 的文本分享、个人主页和二维码使用真实数据库记录，不向仪表盘注入演示数据。执行 `database/migrations/009_product_resources.sql` 后，平台 API 提供以下能力：
+GoJet 的文本分享、个人主页和二维码使用真实数据库记录，不向仪表盘注入演示数据。执行 `database/migrations/009productresources.sql` 后，平台 API 提供以下能力：
 
 - 文本分享支持纯文本、Markdown 与代码，支持 bcrypt 密码、有效期和原子化一次性读取。
 - 个人主页将主题和内容区块保存为 JSON，只有 `published` 状态可通过公开 API 读取。

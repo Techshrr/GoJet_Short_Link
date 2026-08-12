@@ -22,11 +22,11 @@ for path in INSTALL.md VERSION FRESH_INSTALL_ONLY MANIFEST.sha256 install.sh ins
   deploy/docker/service.Dockerfile deploy/docker/platform.Dockerfile \
   deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf \
   deploy/native/gojet.env.example deploy/native/gojet@.service deploy/native/gojetinstaller.service deploy/native/gojetinstaller.path \
-  database/migrations/003_identity_and_workspaces.sql database/migrations/015_admin_identity.sql database/migrations/025_mail_templates.sql \
-  database/migrations/028_file_share_password.sql database/migrations/029_payment_transactions.sql \
-  database/migrations/030_fx_and_mail_lifecycle.sql database/migrations/031_account_workspace_mail_events.sql \
-  database/migrations/032_support_tickets_and_turnstile.sql database/migrations/033_abuse_report_public_url.sql database/migrations/034_mail_brand_fragments.sql database/migrations/035_link_contracts.sql \
-  database/migrations/037_brand_asset_consolidation.sql resources/fonts/NotoSansSCRegular.ttf resources/fonts/OFL.txt; do
+  database/migrations/003identityandworkspaces.sql database/migrations/015adminidentity.sql database/migrations/025mailtemplates.sql \
+  database/migrations/027filesharepassword.sql database/migrations/028paymenttransactions.sql \
+  database/migrations/029fxandmaillifecycle.sql database/migrations/030accountworkspacemailevents.sql \
+  database/migrations/031supportticketsandturnstile.sql database/migrations/032abusereportpublicurl.sql database/migrations/033mailbrandfragments.sql database/migrations/034linkcontracts.sql \
+  database/migrations/036brandassetconsolidation.sql resources/fonts/NotoSansSCRegular.ttf resources/fonts/OFL.txt; do
   [ -e "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
 
@@ -66,21 +66,21 @@ if grep -R -n -E 'installer\.token|MYSQL_ADMIN_PASSWORD' "$ROOT/install.sh" "$RO
 fi
 
 grep -Fq 'FRESH_INSTALL_ONLY=1' "$ROOT/FRESH_INSTALL_ONLY" || { echo 'fresh install marker is invalid' >&2; exit 1; }
-grep -Fq 'CREATE TABLE administrator_permissions' "$ROOT/database/migrations/015_admin_identity.sql" || { echo 'administrator permission schema is missing' >&2; exit 1; }
-grep -Fq "status ENUM('active','suspended','deleted')" "$ROOT/database/migrations/003_identity_and_workspaces.sql" || { echo 'user lifecycle schema is missing' >&2; exit 1; }
-grep -Fq '{{verification_url}}' "$ROOT/database/migrations/025_mail_templates.sql" || { echo 'verification mail link is missing' >&2; exit 1; }
-grep -Fq 'password_hash' "$ROOT/database/migrations/028_file_share_password.sql" || { echo 'protected fileshare migration is missing' >&2; exit 1; }
-grep -Fq 'CREATE TABLE payment_transactions' "$ROOT/database/migrations/029_payment_transactions.sql" || { echo 'payment transaction migration is missing' >&2; exit 1; }
-grep -Fq 'fx_rate_cache' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'FX cache migration is missing' >&2; exit 1; }
-grep -Fq 'invoice_paid' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'billing lifecycle mail templates are missing' >&2; exit 1; }
-grep -Fq 'account_welcome' "$ROOT/database/migrations/030_fx_and_mail_lifecycle.sql" || { echo 'account lifecycle mail templates are missing' >&2; exit 1; }
-grep -Fq 'user_email_change_audit' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'account email-change audit trigger is missing' >&2; exit 1; }
-grep -Fq 'workspace_role_changed' "$ROOT/database/migrations/031_account_workspace_mail_events.sql" || { echo 'workspace role-change mail update is missing' >&2; exit 1; }
-grep -Fq 'CREATE TABLE support_tickets' "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support ticket schema is missing' >&2; exit 1; }
-grep -Fq "'turnstile.ticket_create'" "$ROOT/database/migrations/032_support_tickets_and_turnstile.sql" || { echo 'support Turnstile policy is missing' >&2; exit 1; }
-grep -Fq 'ADD COLUMN reported_url' "$ROOT/database/migrations/033_abuse_report_public_url.sql" || { echo 'public abuse URL schema is missing' >&2; exit 1; }
-grep -Fq "'support_ticket_reply'" "$ROOT/database/migrations/034_mail_brand_fragments.sql" || { echo 'support mail fragment is missing' >&2; exit 1; }
-grep -Fq "'links.default_click_limit','0'" "$ROOT/database/migrations/035_link_contracts.sql" || { echo 'blank link visit limit contract is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE administrator_permissions' "$ROOT/database/migrations/015adminidentity.sql" || { echo 'administrator permission schema is missing' >&2; exit 1; }
+grep -Fq "status ENUM('active','suspended','deleted')" "$ROOT/database/migrations/003identityandworkspaces.sql" || { echo 'user lifecycle schema is missing' >&2; exit 1; }
+grep -Fq '{{verification_url}}' "$ROOT/database/migrations/025mailtemplates.sql" || { echo 'verification mail link is missing' >&2; exit 1; }
+grep -Fq 'password_hash' "$ROOT/database/migrations/027filesharepassword.sql" || { echo 'protected fileshare migration is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE payment_transactions' "$ROOT/database/migrations/028paymenttransactions.sql" || { echo 'payment transaction migration is missing' >&2; exit 1; }
+grep -Fq 'fx_rate_cache' "$ROOT/database/migrations/029fxandmaillifecycle.sql" || { echo 'FX cache migration is missing' >&2; exit 1; }
+grep -Fq 'invoice_paid' "$ROOT/database/migrations/029fxandmaillifecycle.sql" || { echo 'billing lifecycle mail templates are missing' >&2; exit 1; }
+grep -Fq 'account_welcome' "$ROOT/database/migrations/029fxandmaillifecycle.sql" || { echo 'account lifecycle mail templates are missing' >&2; exit 1; }
+grep -Fq 'user_email_change_audit' "$ROOT/database/migrations/030accountworkspacemailevents.sql" || { echo 'account email-change audit trigger is missing' >&2; exit 1; }
+grep -Fq 'workspace_role_changed' "$ROOT/database/migrations/030accountworkspacemailevents.sql" || { echo 'workspace role-change mail update is missing' >&2; exit 1; }
+grep -Fq 'CREATE TABLE support_tickets' "$ROOT/database/migrations/031supportticketsandturnstile.sql" || { echo 'support ticket schema is missing' >&2; exit 1; }
+grep -Fq "'turnstile.ticket_create'" "$ROOT/database/migrations/031supportticketsandturnstile.sql" || { echo 'support Turnstile policy is missing' >&2; exit 1; }
+grep -Fq 'ADD COLUMN reported_url' "$ROOT/database/migrations/032abusereportpublicurl.sql" || { echo 'public abuse URL schema is missing' >&2; exit 1; }
+grep -Fq "'support_ticket_reply'" "$ROOT/database/migrations/033mailbrandfragments.sql" || { echo 'support mail fragment is missing' >&2; exit 1; }
+grep -Fq "'links.default_click_limit','0'" "$ROOT/database/migrations/034linkcontracts.sql" || { echo 'blank link visit limit contract is missing' >&2; exit 1; }
 
 grep -Fq 'data-auth-page="login"' "$ROOT/public/login.html" || { echo 'dedicated login page is invalid' >&2; exit 1; }
 grep -Fq '/api/auth/forgotpassword' "$ROOT/public/assets/auth.js" || { echo 'password recovery frontend is not connected' >&2; exit 1; }

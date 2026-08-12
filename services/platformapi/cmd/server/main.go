@@ -155,8 +155,8 @@ func main() {
 
 	mux.HandleFunc("GET /api/admin/announcements", s.admin("content.manage", s.adminAnnouncements))
 	mux.HandleFunc("POST /api/admin/announcements", s.admin("content.manage", s.adminCreateAnnouncement))
-	mux.HandleFunc("PATCH /api/admin/announcements/{id}", s.admin("content.manage", s.adminUpdateAnnouncement))
-	mux.HandleFunc("DELETE /api/admin/announcements/{id}", s.admin("content.manage", s.adminDeleteAnnouncement))
+	mux.HandleFunc("PATCH /api/admin/announcements{id}", s.admin("content.manage", s.adminUpdateAnnouncement))
+	mux.HandleFunc("DELETE /api/admin/announcements{id}", s.admin("content.manage", s.adminDeleteAnnouncement))
 
 	mux.HandleFunc("GET /api/admin/diagnostics", s.admin("operations.manage", s.adminDiagnostics))
 	mux.HandleFunc("POST /api/admin/diagnostics/reconcile", s.admin("operations.manage", s.adminRunReconciliationSimple))

@@ -19,7 +19,7 @@ module.exports=defineConfig({
     }
   ],
   webServer:{
-    command:'python3 tests/e2e/browser_fixture_server.py',
+    command:'python3 tests/e2e/browserfixtureserver.py',
     url:'http://127.0.0.1:4173/',
     reuseExistingServer:true,
     timeout:15000,

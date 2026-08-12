@@ -78,7 +78,7 @@ test('register public route is complete',async({page})=>{
 
 test('Markdown announcement center safely renders published content',async({page})=>{
   await page.route('**/api/public/announcements',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({data:[{id:1,title:'计划维护通知',body_markdown:'# 维护安排\n\n**影响范围**\n\n- 管理控制台\n- 账单中心\n\n[查看状态](https://status.example.test)\n\n<script>window.__announcement_xss=1</script>',published_at:'2026-08-10T10:00:00Z'}]})}));
-  await page.goto('/announcements/');
+  await page.goto('/announcements');
   await expect(page.getByRole('heading',{name:'平台公告'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'计划维护通知'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'维护安排'})).toBeVisible();
@@ -93,7 +93,7 @@ test('Markdown announcement center safely renders published content',async({page
 
 test('status page renders real component response',async({page})=>{
   await page.route('**/api/public/status',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({status:'degraded',checked_at:'2026-08-02T12:00:00Z',components:{database:{status:'operational'},redirect_analytics:{status:'operational',stream_events:12},mail:{status:'degraded',failed:2,queued:3}}})}));
-  await page.goto('/status/');
+  await page.goto('/status');
   await expect(page.getByText('MySQL 数据库')).toBeVisible();
   await expect(page.getByText('性能下降').first()).toBeVisible();
   await expect(page.getByText('失败 2 · 队列 3')).toBeVisible();

@@ -45,7 +45,7 @@ cleanup(){ kill "$smtp_pid" 2>/dev/null || true; [[ -z "${worker_pid:-}" ]] || k
 trap cleanup EXIT
 for _ in $(seq 1 30); do (echo >/dev/tcp/127.0.0.1/$SMTP_PORT) >/dev/null 2>&1 && break; sleep .2; done
 
-source /tmp/gojet/test-env
+source /tmp/gojet/testenv
 start_worker(){
   [[ -z "${worker_pid:-}" ]] || { kill "$worker_pid" 2>/dev/null || true; wait "$worker_pid" 2>/dev/null || true; }
   env MYSQL_DSN="root:root@tcp(127.0.0.1:3306)/$MYSQL_DATABASE?parseTime=true&multiStatements=true" SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" PUBLIC_BASE_URL="${GOJET_PUBLIC_BASE:-http://127.0.0.1:18080}" /tmp/gojet/mailworker >/tmp/gojet/mailworker.log 2>&1 & worker_pid=$!

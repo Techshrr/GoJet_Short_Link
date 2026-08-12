@@ -3,8 +3,8 @@
 -- widths, backgrounds or nested HTML documents.
 --
 -- Keep every placeholder aligned with the durable variable contract emitted
--- by account_lifecycle.go, lifecycle.go, security_workspace_lifecycle.go and
--- support_tickets.go. renderTemplate intentionally fails closed when any
+-- by accountlifecycle.go, lifecycle.go, securityworkspacelifecycle.go and
+-- supporttickets.go. renderTemplate intentionally fails closed when any
 -- placeholder is left unresolved.
 INSERT INTO mail_templates(template_key,name,subject_template,html_template,status) VALUES
 ('verification','邮箱验证','验证你的 {{site_name}} 邮箱','<h1>验证邮箱</h1><p>你好，{{display_name}}。</p><p>请完成邮箱验证后继续使用 {{site_name}}。</p><p><a class="button" href="{{verification_url}}">验证邮箱</a></p><p class="muted">验证链接：{{verification_url}}</p>','active'),

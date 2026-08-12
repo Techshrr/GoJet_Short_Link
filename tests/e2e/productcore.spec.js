@@ -55,18 +55,18 @@ test('marketing homepage and legal pages use the canonical customer-facing shell
   }
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
   await expect(page.getByRole('link',{name:'套餐价格'})).toBeVisible();
-  await expect(page.getByRole('link',{name:'隐私政策'}).last()).toHaveAttribute('href','/privacy/');
-  await expect(page.getByRole('link',{name:'服务条款'}).last()).toHaveAttribute('href','/terms/');
+  await expect(page.getByRole('link',{name:'隐私政策'}).last()).toHaveAttribute('href','/privacy');
+  await expect(page.getByRole('link',{name:'服务条款'}).last()).toHaveAttribute('href','/terms');
   const homeText=await page.locator('body').innerText();
   for(const forbidden of ['Fresh Install','Worker','Redis','MySQL','V4 产品重构基线','真实后端闭环'])expect(homeText).not.toContain(forbidden);
 
-  await page.goto(base+'/privacy/');
+  await page.goto(base+'/privacy');
   await expect(page.getByRole('heading',{name:'隐私政策'})).toBeVisible();
   await expect(page.getByRole('heading',{name:/我们处理的信息/})).toBeVisible();
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
   await expect(page.getByRole('link',{name:'服务条款'}).last()).toBeVisible();
 
-  await page.goto(base+'/terms/');
+  await page.goto(base+'/terms');
   await expect(page.getByRole('heading',{name:'服务条款'})).toBeVisible();
   await expect(page.getByRole('heading',{name:/禁止行为/})).toBeVisible();
   await expect(page.locator('header.siteHeader .logo')).toBeVisible();
