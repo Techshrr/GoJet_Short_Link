@@ -130,6 +130,7 @@ func (s *server) bulkLinkTags(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, http.StatusOK, map[string]int64{"affected": affected})
 }
+
 func (s *server) createLink(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")
 	if err != nil {
@@ -211,9 +212,18 @@ func (s *server) linkCreatePolicy(r *http.Request) links.CreatePolicy {
 			return nil
 		}
 	}
-	clickLimit := intValue("links.default_click_limit")
-	return links.CreatePolicy{DefaultDomain: stringValue("links.default_domain"), AllowedCharacters: stringValue("links.allowed_characters"), DefaultRedirectStatus: intValue("links.default_redirect_status"), CodeLength: intValue("links.code_length"), DefaultExpiryDays: intValue("links.default_expiry_days"), DefaultClickLimit: int64(clickLimit), ReservedCodes: listValue("links.reserved_codes"), BlockedKeywords: listValue("links.blocked_keywords"), ForceHTTPS: get("links.force_https") == true}
+	return links.CreatePolicy{
+		DefaultDomain:         stringValue("links.default_domain"),
+		AllowedCharacters:     stringValue("links.allowed_characters"),
+		DefaultRedirectStatus: intValue("links.default_redirect_status"),
+		CodeLength:            intValue("links.code_length"),
+		DefaultExpiryDays:     intValue("links.default_expiry_days"),
+		ReservedCodes:         listValue("links.reserved_codes"),
+		BlockedKeywords:       listValue("links.blocked_keywords"),
+		ForceHTTPS:            get("links.force_https") == true,
+	}
 }
+
 func (s *server) getLink(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	id, e2 := pathID(r, "link")
@@ -228,6 +238,7 @@ func (s *server) getLink(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, item)
 }
+
 func (s *server) updateLink(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	id, e2 := pathID(r, "link")
@@ -249,6 +260,7 @@ func (s *server) updateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, item)
 }
+
 func (s *server) linkVersions(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	id, e2 := pathID(r, "link")
@@ -263,6 +275,7 @@ func (s *server) linkVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, map[string]any{"data": items})
 }
+
 func (s *server) restoreLinkVersion(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	id, e2 := pathID(r, "link")
@@ -284,6 +297,7 @@ func (s *server) restoreLinkVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, item)
 }
+
 func (s *server) bulkLinkStatus(w http.ResponseWriter, r *http.Request) {
 	wid, err := pathID(r, "id")
 	if err != nil {
@@ -308,6 +322,7 @@ func (s *server) bulkLinkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, map[string]int64{"affected": affected})
 }
+
 func (s *server) linkAnalytics(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	lid, e2 := pathID(r, "link")
@@ -331,7 +346,7 @@ func (s *server) linkAnalytics(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 422, map[string]string{"error": "to 必须为 YYYY-MM-DD"})
 		return
 	}
-	data, err := s.links.Analytics(r.Context(), currentUser(r).ID, wid, lid, from, to)
+	data, err := s.links.AnalyticsSafe(r.Context(), currentUser(r).ID, wid, lid, from, to)
 	if err != nil {
 		jsonResponse(w, 403, map[string]string{"error": "无法读取分析数据"})
 		return
