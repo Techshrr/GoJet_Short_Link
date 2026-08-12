@@ -1,0 +1,67 @@
+name: GoJet Database Schema Naming Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'database/**'
+      - 'scripts/checkschema.py'
+      - 'scripts/checknames.py'
+      - 'tests/integration/schemanaming.sh'
+      - '.github/workflows/schemanaming.yml'
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - 'database/**'
+      - 'scripts/checkschema.py'
+      - 'scripts/checknames.py'
+      - 'tests/integration/schemanaming.sh'
+      - '.github/workflows/schemanaming.yml'
+
+concurrency:
+  group: gojetschemanaming${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_schema
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce repository and migration naming
+        run: |
+          set -euo pipefail
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
+
+      - name: Apply all migrations to a fresh database
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            echo "Applying $(basename "$migration")"
+            mysql -h127.0.0.1 -P3306 -uroot gojet_schema < "$migration"
+          done
+
+      - name: Verify live schema naming
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_schema
+        run: bash tests/integration/schemanaming.sh
