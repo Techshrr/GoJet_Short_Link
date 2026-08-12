@@ -2,13 +2,15 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 VERSION=${1:-$(git -C "$ROOT" describe --always)}
-SAFE_VERSION=$(printf '%s' "$VERSION" | tr -c 'A-Za-z0-9._' '_')
-NAME="GoJet_${SAFE_VERSION}_LinuxProduction"
+SAFE_VERSION=$(printf '%s' "$VERSION" | tr -c 'A-Za-z0-9.' '.')
+NAME="GoJet${SAFE_VERSION}LinuxProduction"
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT INT TERM
 TARGET="$STAGE/$NAME"
 PUBLIC_BUILD="$STAGE/publicbuild"
 for tool in go zip sha256sum sed python3 curl git; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+python3 "$ROOT/scripts/checknames.py"
+python3 "$ROOT/scripts/checkschema.py"
 "$ROOT/scripts/preparepdffonts.sh"
 python3 "$ROOT/scripts/buildpublicsite.py" --output "$PUBLIC_BUILD"
 mkdir -p "$TARGET/bin" "$TARGET/installer" "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/deploy/docker" "$TARGET/scripts" "$TARGET/docs" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/public/assets/images" "$TARGET/public/generated/qr" "$TARGET/storage/installer" "$TARGET/resources/fonts"
@@ -58,7 +60,7 @@ cp "$ROOT/docs/deployment.zhCN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/obje
 cp "$ROOT/install.sh" "$ROOT/installhostnginx.sh" "$ROOT/installnativelemp.sh" "$ROOT/launchwebinstaller.sh" "$ROOT/LICENSE" "$TARGET/"
 cp "$ROOT/deploy/INSTALL.zhCN.md" "$TARGET/INSTALL.md"
 printf '%s\n' "$VERSION" > "$TARGET/VERSION"
-printf '%s\n' 'FRESH_INSTALL_ONLY=1' > "$TARGET/FRESH_INSTALL_ONLY"
+printf '%s\n' 'FRESHINSTALLONLY=1' > "$TARGET/FRESHINSTALLONLY"
 chmod 0755 "$TARGET/install.sh" "$TARGET/installhostnginx.sh" "$TARGET/installnativelemp.sh" "$TARGET/launchwebinstaller.sh" "$TARGET/scripts/verifyrelease.sh" "$TARGET/scripts/verifypublishedrelease.sh" "$TARGET/scripts/nativeinstallerrun.sh" "$TARGET/scripts/nativeinstallerapply.sh" "$TARGET/scripts/installdocker.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'testresults' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +
@@ -66,9 +68,9 @@ test -s "$TARGET/resources/fonts/NotoSansSCRegular.ttf" || { echo 'PDF Unicode R
 test -s "$TARGET/resources/fonts/OFL.txt" || { echo 'PDF font license missing from production package' >&2; exit 1; }
 for forbidden in app frontend services go.mod go.sum Dockerfile tests .github; do [ ! -e "$TARGET/$forbidden" ] || { echo "development artifact must not ship: $forbidden" >&2; exit 1; }; done
 if find "$TARGET" -iname '*hardening*' -o -iname '*rc12*' | grep -q .; then echo 'engineering-stage filename leaked into production package' >&2; exit 1; fi
-if find "$TARGET" -mindepth 1 -printf '%f\n' | grep -F -- '-' | grep -q .; then
-  echo 'hyphenated file or directory name leaked into production package' >&2
-  find "$TARGET" -mindepth 1 -printf '%P\n' | grep -F -- '-' >&2 || true
+if find "$TARGET" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then
+  echo 'connector-bearing file or directory name leaked into production package' >&2
+  find "$TARGET" -mindepth 1 -printf '%P\n' | grep -E '[-_]' >&2 || true
   exit 1
 fi
 if find "$TARGET/public" -mindepth 2 -type f -name index.html ! -path "$TARGET/public/app/index.html" ! -path "$TARGET/public/admin/index.html" | grep -q .; then
