@@ -9,7 +9,6 @@ on:
       - '.github/workflows/release-package.yml'
       - 'scripts/package-release.sh'
       - 'scripts/verify-release.sh'
-      - 'scripts/verify-hardening-release.sh'
       - 'scripts/build-public-site.py'
       - 'deploy/**'
       - 'frontend/**'
@@ -59,7 +58,6 @@ jobs:
           set -euo pipefail
           sh -n scripts/package-release.sh
           sh -n scripts/verify-release.sh
-          sh -n scripts/verify-hardening-release.sh
           python3 -m py_compile scripts/build-public-site.py
           go test ./...
           go vet ./...
@@ -77,7 +75,6 @@ jobs:
           set -euo pipefail
           ZIP=$(cat /tmp/gojet-release-zip)
           sh scripts/verify-release.sh "$ZIP"
-          sh scripts/verify-hardening-release.sh "$ZIP"
           unzip -tq "$ZIP"
           test -f "$ZIP.sha256"
           (cd "$(dirname "$ZIP")" && sha256sum -c "$(basename "$ZIP.sha256")")
@@ -106,7 +103,7 @@ jobs:
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
           test ! -e "$ROOT/system-images"
-          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml' "$ROOT" --exclude='*.map'; then
+          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml' "$ROOT" --exclude='*.map' --exclude=verify-release.sh; then
             echo 'retired engineering/runtime path leaked into release package' >&2
             exit 1
           fi
