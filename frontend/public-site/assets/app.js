@@ -16,6 +16,13 @@ function installShell(){
   document.addEventListener('click',()=>{mega?.classList.remove('open');trigger?.setAttribute('aria-expanded','false')});
 }
 
+function darker(hex,factor=.82){
+  if(!/^#[0-9a-f]{6}$/i.test(hex||''))return hex;
+  const value=parseInt(hex.slice(1),16);
+  const channel=shift=>Math.max(0,Math.min(255,Math.round(((value>>shift)&255)*factor)));
+  return `#${[channel(16),channel(8),channel(0)].map(v=>v.toString(16).padStart(2,'0')).join('')}`;
+}
+
 function applyPublicSettings(settings){
   if(!settings)return;
   const name=settings['site.name']||'GoJet';
@@ -33,7 +40,12 @@ function applyPublicSettings(settings){
       logo.innerHTML=`${escapeHTML(name)}<i>.</i>`;
     }
   });
-  if(settings['brand.primary_color'])document.documentElement.style.setProperty('--blue',settings['brand.primary_color']);
+  const primary=settings['brand.primary_color'];
+  if(primary){
+    document.documentElement.style.setProperty('--brand',primary);
+    document.documentElement.style.setProperty('--brand-hover',darker(primary));
+    document.documentElement.style.setProperty('--blue',primary);
+  }
   const description=settings['seo.meta_description'];
   if(description){let meta=document.querySelector('meta[name=description]');if(!meta){meta=document.createElement('meta');meta.name='description';document.head.append(meta)}meta.content=description}
   if(settings['brand.favicon_url']){let icon=document.querySelector('link[rel=icon]');if(!icon){icon=document.createElement('link');icon.rel='icon';document.head.append(icon)}icon.href=settings['brand.favicon_url']}
