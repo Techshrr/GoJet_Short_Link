@@ -11,10 +11,12 @@ on:
       - 'scripts/verify-release.sh'
       - 'scripts/build-public-site.py'
       - 'deploy/**'
+      - 'docs/**'
       - 'frontend/**'
       - 'services/**'
       - 'app/**'
       - 'database/**'
+      - 'tests/integration/**'
       - 'go.mod'
       - 'go.sum'
 
@@ -103,8 +105,8 @@ jobs:
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
           test ! -e "$ROOT/system-images"
-          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml' "$ROOT" --exclude='*.map' --exclude=verify-release.sh; then
-            echo 'retired engineering/runtime path leaked into release package' >&2
+          if grep -R -n -E 'frontend/marketing-site|system-images|compose\.release\.yaml|\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release' "$ROOT" --exclude='*.map' --exclude=verify-release.sh; then
+            echo 'retired engineering/runtime terminology leaked into release package' >&2
             exit 1
           fi
 
