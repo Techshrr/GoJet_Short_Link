@@ -105,11 +105,16 @@ jobs:
           go test ./...
           go vet ./...
 
-      - name: Apply fresh schema and build runtime services
-        env: {MYSQL_PWD: root}
+      - name: Apply migration catalog and build runtime services
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_surface
         run: |
           set -euo pipefail
-          for f in database/migrations/*.sql; do mysql -h127.0.0.1 -P3306 -uroot gojet_surface < "$f"; done
+          bash scripts/runmigrations.sh
           mkdir -p /tmp/gojetsurface/{uploads,files,brand,generated/qr,bin}
           go build -o /tmp/gojetsurface/bin/platformapi ./services/platformapi/cmd/server
           go build -o /tmp/gojetsurface/bin/redirectengine ./services/redirectengine/cmd/server
