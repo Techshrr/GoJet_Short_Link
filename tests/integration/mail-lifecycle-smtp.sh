@@ -55,10 +55,14 @@ wait_type(){ local email=$1 type=$2; local count=0; for _ in $(seq 1 30); do cou
 
 admin_body=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" admin-login)
 admin=$(printf '%s' "$admin_body"|field "['token']")
-mail_payload='{"host":"127.0.0.1","port":2525,"username":"","password":"","encryption":"none","ehlo":"gojet.test","from_email":"noreply@gojet.test","from_name":"GoJet","reply_to":"support@gojet.test"}'
+# Give this test its own explicit secret. Blank password means "preserve the
+# currently stored secret" by design, so relying on a blank value would make
+# this lifecycle test depend on whatever a previous settings test happened to
+# save in the shared P0 database.
+mail_payload='{"host":"127.0.0.1","port":2525,"username":"","password":"SMTPAcceptanceSecret!2026","encryption":"none","ehlo":"gojet.test","from_email":"noreply@gojet.test","from_name":"GoJet","reply_to":"support@gojet.test"}'
 expect 200 "$(req PUT /api/admin/settings/mail "$mail_payload" "$admin")" save-smtp >/dev/null
 settings=$(expect 200 "$(req GET /api/admin/settings '' "$admin")" settings-readback)
-printf '%s' "$settings" | python3 -c 'import json,sys; m=json.load(sys.stdin)["mail"]; assert m["host"]=="127.0.0.1"; assert int(m["port"])==2525; assert m["encryption"]=="none"; assert m["from_email"]=="noreply@gojet.test"; assert m["from_name"]=="GoJet"; assert m["reply_to"]=="support@gojet.test"; assert m["password_configured"] is False'
+printf '%s' "$settings" | python3 -c 'import json,sys; m=json.load(sys.stdin)["mail"]; assert m["host"]=="127.0.0.1"; assert int(m["port"])==2525; assert m["encryption"]=="none"; assert m["from_email"]=="noreply@gojet.test"; assert m["from_name"]=="GoJet"; assert m["reply_to"]=="support@gojet.test"; assert m["password_configured"] is True; assert "password" not in m'
 expect 200 "$(req POST /api/admin/mail/test '{"recipient":"smtp-acceptance@example.test"}' "$admin")" test-mail >/dev/null
 for _ in $(seq 1 30); do grep -q 'smtp-acceptance@example.test' "$MAIL_LOG" && break; sleep .2; done
 grep -q 'GoJet 邮件服务测试成功' "$MAIL_LOG"
