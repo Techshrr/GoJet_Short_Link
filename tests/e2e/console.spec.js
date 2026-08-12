@@ -100,7 +100,7 @@ test('organization, text, bio and QR product surfaces use live API data',async({
   await expect(page.getByText(/发布说明/)).toBeVisible();
   await expect(page.locator('.content script')).toHaveCount(0);
   await page.getByRole('button',{name:'个人主页'}).click();
-  await expect(page.getByText('GoJet 创作者')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'GoJet 创作者'})).toBeVisible();
   await expect(page.getByText(/88 次浏览/)).toBeVisible();
   await page.getByRole('button',{name:'二维码'}).click();
   await expect(page.getByText('线下展会')).toBeVisible();
