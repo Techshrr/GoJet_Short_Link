@@ -1,0 +1,20 @@
+CREATE TABLE payment_callback_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    provider VARCHAR(32) NOT NULL,
+    request_id VARCHAR(64) NOT NULL DEFAULT '',
+    merchant_order_no VARCHAR(64) NOT NULL DEFAULT '',
+    provider_reference VARCHAR(128) NOT NULL DEFAULT '',
+    transaction_id BIGINT UNSIGNED NULL,
+    invoice_id BIGINT UNSIGNED NULL,
+    payload_sha256 CHAR(64) NOT NULL,
+    outcome ENUM('accepted','rejected') NOT NULL,
+    response_status SMALLINT UNSIGNED NOT NULL,
+    remote_ip VARCHAR(64) NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(transaction_id) REFERENCES payment_transactions(id) ON DELETE SET NULL,
+    FOREIGN KEY(invoice_id) REFERENCES billing_invoices(id) ON DELETE SET NULL,
+    KEY payment_callback_provider_created_idx(provider,created_at),
+    KEY payment_callback_merchant_created_idx(merchant_order_no,created_at),
+    KEY payment_callback_request_created_idx(request_id,created_at),
+    KEY payment_callback_payload_created_idx(payload_sha256,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
