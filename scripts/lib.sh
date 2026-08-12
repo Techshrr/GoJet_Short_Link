@@ -86,7 +86,10 @@ apply_migrations() {
     [ -n "$old" ] || continue
     ordinal=$(printf '%s' "$old" | cut -c1-3)
     case "$ordinal" in *[!0-9]*|'') die "invalid legacy migration record: $old";; esac
-    semantic=$(sed -n "$((10#$ordinal))p" "$catalog")
+    ordinal_number=$(printf '%s' "$ordinal" | sed 's/^0*//')
+    [ -n "$ordinal_number" ] || ordinal_number=0
+    [ "$ordinal_number" -gt 0 ] || die "invalid legacy migration ordinal: $old"
+    semantic=$(sed -n "${ordinal_number}p" "$catalog")
     [ -n "$semantic" ] || die "legacy migration ordinal out of catalog: $old"
     compose exec -T mysql mysql -ugojet -p"$MYSQL_PASSWORD" gojet -e "INSERT IGNORE INTO schema_migrations(name) VALUES('$semantic'); DELETE FROM schema_migrations WHERE name='$old';"
   done
