@@ -18,6 +18,9 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/support/tickets/{ticket}/replies", s.admin("tickets.manage", s.adminReplySupportTicket))
 	mux.HandleFunc("PATCH /api/admin/support/tickets/{ticket}", s.admin("tickets.manage", s.adminUpdateSupportTicket))
 
+	mux.HandleFunc("POST /api/admin/plans", s.admin("billing.manage", s.adminCreatePlan))
+	mux.HandleFunc("DELETE /api/admin/plans/{id}", s.admin("billing.manage", s.adminArchivePlan))
+
 	mux.HandleFunc("GET /api/admin/bot-protection", s.admin("settings.manage", s.getBotProtectionSettings))
 	mux.HandleFunc("PUT /api/admin/bot-protection", s.admin("settings.manage", s.saveBotProtectionSettings))
 }
