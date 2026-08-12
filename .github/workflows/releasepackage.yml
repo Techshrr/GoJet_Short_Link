@@ -2,6 +2,7 @@ name: GoJet Release Package Gate
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - rebuild/v4-rc12-real-install-fixes
@@ -10,7 +11,6 @@ on:
       - 'scripts/**'
       - 'installer/**'
       - 'public/install/**'
-      - 'resources/fonts/**'
       - 'install.sh'
       - 'installhostnginx.sh'
       - 'installnativelemp.sh'
@@ -34,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOJET_RELEASE_VERSION: 4.0.0-${{ github.sha }}
+  GOJET_RELEASE_VERSION: 4.0.0_${{ github.sha }}
 
 jobs:
   package:
@@ -77,8 +77,8 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/packagerelease.sh "$GOJET_RELEASE_VERSION"
-          ZIP=$(find dist -maxdepth 1 -type f -name "*${GOJET_RELEASE_VERSION}*linux-production.zip" | head -1)
-          test -n "$ZIP"
+          ZIP="dist/GoJet_${GOJET_RELEASE_VERSION}_LinuxProduction.zip"
+          test -f "$ZIP"
           printf '%s\n' "$ZIP" | tee /tmp/gojetreleasezip
 
       - name: Verify archive independently
@@ -107,13 +107,24 @@ jobs:
           done
           test "$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l)" -eq 8
           test -f "$ROOT/public/index.html"
+          test -f "$ROOT/public/privacy.html"
+          test -f "$ROOT/public/terms.html"
+          test -f "$ROOT/public/forgotpassword.html"
+          test -f "$ROOT/public/reportabuse.html"
+          test -f "$ROOT/public/products/urlshortener.html"
           test -f "$ROOT/public/app/index.html"
           test -f "$ROOT/public/admin/index.html"
           test -d "$ROOT/public/assets/images"
           test -d "$ROOT/public/generated/qr"
+          test -z "$(find "$ROOT/public" -mindepth 2 -type f -name index.html ! -path "$ROOT/public/app/index.html" ! -path "$ROOT/public/admin/index.html" -print -quit)"
           test ! -e "$ROOT/tests"
           test ! -e "$ROOT/frontend"
           test ! -e "$ROOT/systemimages"
+          if find "$ROOT" -mindepth 1 -printf '%f\n' | grep -F -- '-' | grep -q .; then
+            echo 'hyphenated filename leaked into release payload' >&2
+            find "$ROOT" -mindepth 1 -printf '%P\n' | grep -F -- '-' >&2 || true
+            exit 1
+          fi
           if grep -R -I -n -E 'frontend/marketingsite|systemimages|compose\.release\.yaml|\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release' "$ROOT" --exclude='*.map' --exclude=verifyrelease.sh; then
             echo 'retired engineering or runtime terminology leaked into release package' >&2
             exit 1
@@ -136,8 +147,8 @@ jobs:
         with:
           name: gojetreleasepackage${{ github.sha }}
           path: |
-            dist/*${{ env.GOJET_RELEASE_VERSION }}*linux-production.zip
-            dist/*${{ env.GOJET_RELEASE_VERSION }}*linux-production.zip.sha256
+            dist/GoJet_${{ env.GOJET_RELEASE_VERSION }}_LinuxProduction.zip
+            dist/GoJet_${{ env.GOJET_RELEASE_VERSION }}_LinuxProduction.zip.sha256
             dist/RELEASEEVIDENCE.txt
           if-no-files-found: error
           retention-days: 14
@@ -185,9 +196,9 @@ jobs:
           set -euo pipefail
           ART=/tmp/gojetpackageartifact
           EVIDENCE="$ART/RELEASEEVIDENCE.txt"
-          ZIP=$(find "$ART" -maxdepth 1 -type f -name "*${GOJET_RELEASE_VERSION}*linux-production.zip" | head -1)
+          ZIP="$ART/GoJet_${GOJET_RELEASE_VERSION}_LinuxProduction.zip"
           test -f "$EVIDENCE"
-          test -n "$ZIP" -a -f "$ZIP" -a -f "$ZIP.sha256"
+          test -f "$ZIP" -a -f "$ZIP.sha256"
           grep -Fxq "tested_sha=$GITHUB_SHA" "$EVIDENCE"
           grep -Fxq "version=$GOJET_RELEASE_VERSION" "$EVIDENCE"
           grep -Fxq "archive=$(basename "$ZIP")" "$EVIDENCE"
@@ -206,6 +217,8 @@ jobs:
             test -x "$ROOT/bin/$binary"
           done
           test -f "$ROOT/public/index.html"
+          test -f "$ROOT/public/privacy.html"
+          test -f "$ROOT/public/terms.html"
           test -f "$ROOT/public/app/index.html"
           test -f "$ROOT/public/admin/index.html"
           test -d "$ROOT/public/assets/images"
@@ -261,6 +274,7 @@ jobs:
             BRAND_ASSET_PATH='/tmp/gojetcandidate/brand' \
             GENERATED_QR_STORAGE_PATH='/tmp/gojetcandidate/generated/qr' \
             FILE_STORAGE_PATH='/tmp/gojetcandidate/files' \
+            PDF_FONT_PATH="$ROOT/resources/fonts/NotoSansSCRegular.ttf" \
             "$ROOT/bin/platformapi" >/tmp/gojetcandidateplatformapi.log 2>&1 &
           echo $! >/tmp/gojetcandidateplatformapi.pid
           env \
