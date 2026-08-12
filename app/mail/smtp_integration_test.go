@@ -133,7 +133,11 @@ func TestSMTPProtocolHealthAndChineseDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(decodedBody) != wantHTML {
+	gotHTML := strings.TrimSuffix(string(decodedBody), "\r\n")
+	if gotHTML != wantHTML {
 		t.Fatalf("HTML round trip mismatch: %q", decodedBody)
+	}
+	if strings.Contains(gotHTML, "�") {
+		t.Fatalf("HTML contains Unicode replacement character: %q", gotHTML)
 	}
 }
