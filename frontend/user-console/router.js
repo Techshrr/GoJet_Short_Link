@@ -14,8 +14,7 @@ const viewToRoute={
 const styleModules=['/assets/gojet-design-system.css','/app/shell.css','/app/links.css','/app/bio.css','/app/domains.css','/app/analytics.css','/app/files.css','/app/team.css','/app/organization.css','/app/billing.css'];
 const scriptModules=['/app/dialogs.js','/app/links.js','/app/bio.js','/app/domains.js','/app/analytics.js','/app/files.js','/app/team.js','/app/organization.js','/app/billing.js','/app/support.js'];
 let navigationToken=0;
-let routerStarted=false;
-const legacyOverview=typeof window.renderOverview==='function'?window.renderOverview:null;
+const overviewPage=typeof window.renderOverview==='function'?window.renderOverview:null;
 
 function loadStyle(path){
   return new Promise(resolve=>{
@@ -63,9 +62,9 @@ async function show(view,push=false){
     if(token!==navigationToken)return;
     const page=registeredPage(view);
     if(page)return await page();
-    if(view==='overview')return legacyOverview?await legacyOverview():undefined;
+    if(view==='overview')return overviewPage?await overviewPage():undefined;
     if(view==='settings')return await renderAccountSettings();
-    if(legacyOverview)return await legacyOverview();
+    if(overviewPage)return await overviewPage();
   }catch(err){
     console.error(err);
     const content=document.querySelector('.content');
@@ -73,20 +72,11 @@ async function show(view,push=false){
   }
 }
 
-// app.js performs authentication and workspace bootstrap. The router owns page
-// selection so a late overview render can never replace a requested deep link.
-if(legacyOverview){
-  window.renderOverview=async(...args)=>{
-    if(routerStarted&&currentView()!=='overview')return show(currentView(),false);
-    return legacyOverview(...args);
-  };
-}
 window.GoJetRouter={
   show:(view,push=false)=>show(view,push),
   currentView,
   showCurrent:()=>show(currentView(),false)
 };
-routerStarted=true;
 
 document.addEventListener('click',event=>{
   const create=event.target.closest('#createButton');
