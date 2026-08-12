@@ -196,7 +196,7 @@ $siteData = $_SESSION['site'] ?? ['public_url' => $defaultUrl, 'admin_email' => 
 const poll=async()=>{try{const r=await fetch('/install/?status=1',{cache:'no-store'});const s=await r.json();document.getElementById('bar').style.width=(s.progress||0)+'%';document.getElementById('install-message').textContent=s.message||'正在安装';document.getElementById('phase').textContent='阶段：'+(s.phase||'waiting');if(s.result==='success'){document.getElementById('phase').textContent='安装成功。正在进入管理后台…';setTimeout(()=>location.href='/admin/',1800);return}if(s.result==='failed'){document.getElementById('phase').textContent='安装失败。请根据上方错误处理后重新进入 /install/。';return}}catch(e){}setTimeout(poll,1200)};poll();
 </script>
 <?php else: ?>
-<h1>GoJet V4 标准安装向导</h1><p>宝塔 Native 安装模式。无需 MySQL root 密码，不使用临时 token，也不开放 18088 安装端口。</p>
+<h1>GoJet 标准安装向导</h1><p>宝塔 Native 安装模式。无需 MySQL root 密码，不使用临时 token，也不开放 18088 安装端口。</p>
 <div class="steps"><?php foreach ([1=>'环境检查',2=>'数据库与 Redis',3=>'站点与管理员',4=>'确认安装'] as $n=>$label): ?><div class="step <?= $n===$step?'on':($n<$step?'done':'') ?>"><?=h($label)?></div><?php endforeach ?></div>
 <?php if ($errors): ?><ul class="errors"><?php foreach ($errors as $error): ?><li><?=h($error)?></li><?php endforeach ?></ul><?php endif ?>
 <?php if ($step === 1): ?>
