@@ -55,6 +55,82 @@ rm -f "$STATE/request.ready" "$STATE/request.processing"
 printf '%s\n' "root=$ROOT" "web_user=$WEB_USER" "web_group=$WEB_GROUP" "nginx=$NGINX" "php=$PHP" "mysql=$MYSQL" "redis_cli=$REDIS_CLI" > "$ROOT/deploy/native/bootstrap.env"
 chmod 0600 "$ROOT/deploy/native/bootstrap.env"
 
+prepare_aapanel_installer_route(){
+  local vhost_dir=/www/server/panel/vhost/nginx
+  local rewrite_dir=/www/server/panel/vhost/rewrite
+  local site_hint vhost='' rewrite='' candidate
+  local matches=0
+  local backup tmp
+  local need_redirect=0 need_php=0
+
+  [[ -d "$vhost_dir" ]] || return 0
+  site_hint=$(basename "$ROOT")
+
+  if [[ -f "$vhost_dir/$site_hint.conf" ]] && grep -Fq "root $ROOT/public;" "$vhost_dir/$site_hint.conf"; then
+    vhost="$vhost_dir/$site_hint.conf"
+  else
+    shopt -s nullglob
+    for candidate in "$vhost_dir"/*.conf; do
+      grep -Fq "root $ROOT/public;" "$candidate" || continue
+      vhost="$candidate"
+      ((matches+=1))
+    done
+    shopt -u nullglob
+    (( matches <= 1 )) || die "检测到多个宝塔站点使用 $ROOT/public，无法安全确定安装入口所属站点"
+  fi
+
+  [[ -n "$vhost" ]] || return 0
+  rewrite=$(sed -n 's|^[[:space:]]*include[[:space:]]\+\(/www/server/panel/vhost/rewrite/[^;]*\.conf\);.*|\1|p' "$vhost" | head -n1)
+  [[ -n "$rewrite" ]] || die "宝塔站点未包含标准 rewrite 文件，无法安全开放 /install/"
+  [[ "$rewrite" == "$rewrite_dir/"*.conf ]] || die "宝塔 rewrite 路径异常：$rewrite"
+
+  install -d -m 0755 "$rewrite_dir"
+  touch "$rewrite"
+
+  if ! grep -Fq 'location = /install { return 302 /install/; }' "$rewrite"; then
+    if grep -Eq 'location[[:space:]]*=[[:space:]]*/install[[:space:]]*\{' "$rewrite"; then
+      die "宝塔 rewrite 已存在非标准 /install 路由，请先检查 $rewrite"
+    fi
+    need_redirect=1
+  fi
+  if ! grep -Fq 'location = /install/ { rewrite ^ /install/index.php last; }' "$rewrite"; then
+    if grep -Eq 'location[[:space:]]*=[[:space:]]*/install/[[:space:]]*\{' "$rewrite"; then
+      die "宝塔 rewrite 已存在非标准 /install/ 路由，请先检查 $rewrite"
+    fi
+    need_php=1
+  fi
+
+  (( need_redirect == 1 || need_php == 1 )) || return 0
+
+  backup="$STATE/aapanel-rewrite.bootstrap.bak"
+  tmp="$rewrite.gojet-bootstrap.$$"
+  cp -a "$rewrite" "$backup"
+  {
+    printf '# GoJet installer bootstrap route. Runtime install will replace the complete GoJet rewrite.\n'
+    if (( need_redirect == 1 )); then
+      printf 'location = /install { return 302 /install/; }\n'
+    fi
+    if (( need_php == 1 )); then
+      printf 'location = /install/ { rewrite ^ /install/index.php last; }\n'
+    fi
+    cat "$rewrite"
+  } > "$tmp"
+  cat "$tmp" > "$rewrite"
+  rm -f "$tmp"
+
+  if ! "$NGINX" -t; then
+    cp -a "$backup" "$rewrite"
+    "$NGINX" -t >/dev/null 2>&1 || true
+    die "为安装页保留 PHP-FPM 路由后 Nginx 校验失败，已恢复原 rewrite"
+  fi
+  "$NGINX" -s reload
+  sleep 1
+  rm -f "$backup"
+  printf '✅ 已为宝塔站点预留 /install/ PHP-FPM 安装路由\n'
+}
+
+prepare_aapanel_installer_route
+
 sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojetinstaller.service" > /etc/systemd/system/gojetinstaller.service
 sed "s|__GOJET_ROOT__|$ROOT|g" "$ROOT/deploy/native/gojetinstaller.path" > /etc/systemd/system/gojetinstaller.path
 systemctl daemon-reload
