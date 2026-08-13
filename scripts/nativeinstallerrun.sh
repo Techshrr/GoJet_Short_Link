@@ -7,6 +7,7 @@ STATE="$ROOT/storage/installer"
 REQUEST="$STATE/request.ready"
 LOCK="$ROOT/deploy/native/installed.lock"
 SERVICES=(logreceiver redirectengine platformapi analyticsworker analyticsreconciler mailworker fileworker operationsmonitor)
+LEGACY_SERVICES=(log-receiver redirect-engine platform-api analytics-worker analytics-reconciler mail-worker file-worker operations-monitor)
 
 [[ $(id -u) -eq 0 ]] || { echo 'root required' >&2; exit 1; }
 [[ -f "$BOOT" ]] || { echo 'bootstrap.env missing' >&2; exit 1; }
@@ -26,12 +27,32 @@ write_failure(){
 stop_existing_services(){
   local service
   for service in "${SERVICES[@]}"; do
-    systemctl stop "gojet@$service.service" >/dev/null 2>&1 || true
+    systemctl disable --now "gojet@$service.service" >/dev/null 2>&1 || true
+  done
+  for service in "${LEGACY_SERVICES[@]}"; do
+    systemctl disable --now "gojet@$service.service" >/dev/null 2>&1 || true
   done
 }
 
 reenable_installer_path(){
   systemctl enable --now gojetinstaller.path >/dev/null 2>&1 || true
+}
+
+preflight_reserved_ports(){
+  command -v ss >/dev/null 2>&1 || {
+    write_failure '安装前端口检查失败：系统缺少 ss 命令（iproute2）'
+    return 1
+  }
+
+  local port line owner
+  for port in 18080 18090 18092; do
+    line=$(ss -H -lntp 2>/dev/null | awk -v suffix=":$port" '$4 ~ (suffix "$" ) {print; exit}')
+    if [[ -n "$line" ]]; then
+      owner=$(printf '%s' "$line" | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
+      write_failure "GoJet 保留端口 $port 已被占用：$owner。请停止冲突进程或服务后重试。"
+      return 1
+    fi
+  done
 }
 
 preflight_empty_database(){
@@ -138,6 +159,11 @@ if ! preflight_empty_database; then
 fi
 
 stop_existing_services
+
+if ! preflight_reserved_ports; then
+  reenable_installer_path
+  exit 1
+fi
 
 set +e
 "$ROOT/scripts/nativeinstallerapply.sh"
