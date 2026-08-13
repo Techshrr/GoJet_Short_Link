@@ -43,15 +43,24 @@ func (s *server) observePaymentCallback(provider string, next http.HandlerFunc) 
 			jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "支付通知格式无效"})
 			return
 		}
-		merchantOrder, providerReference := paymentCallbackMetadata(body)
-		hash := sha256.Sum256(body)
-		payloadHash := hex.EncodeToString(hash[:])
-
 		if len(body) > maxObservedPayload {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			s.recordPaymentCallbackEvent(r, provider, merchantOrder, providerReference, payloadHash, "rejected", http.StatusRequestEntityTooLarge)
+			hash := sha256.Sum256(body)
+			merchantOrder, providerReference := paymentCallbackMetadata(body)
+			s.recordPaymentCallbackEvent(r, provider, merchantOrder, providerReference, hex.EncodeToString(hash[:]), "rejected", http.StatusRequestEntityTooLarge)
 			return
 		}
+
+		// GET-based Epay-compatible callbacks carry their signed payload entirely
+		// in the query string. Observe the same canonical bytes that identify the
+		// payment instead of hashing an empty request body.
+		observedPayload := body
+		if len(observedPayload) == 0 && strings.TrimSpace(r.URL.RawQuery) != "" {
+			observedPayload = []byte(r.URL.RawQuery)
+		}
+		merchantOrder, providerReference := paymentCallbackMetadata(observedPayload)
+		hash := sha256.Sum256(observedPayload)
+		payloadHash := hex.EncodeToString(hash[:])
 
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		captured := &paymentCallbackResponse{ResponseWriter: w}
