@@ -42,10 +42,15 @@ func (s *Service) Config(ctx context.Context) (SMTPConfig, error) {
 func (s *Service) Test(ctx context.Context, recipient string, send bool) error {
 	config, err := s.Config(ctx)
 	if err == nil {
-		err = config.Test(ctx)
-	}
-	if err == nil && send {
-		err = config.Send(ctx, Message{To: recipient, Subject: "GoJet 邮件服务测试成功", HTML: s.brandWrap(ctx, "<h1>邮件服务可用</h1><p>连接、认证和邮件投递测试均已完成。</p>"), MessageID: fmt.Sprintf("gojet-test-%d@%s", time.Now().UnixNano(), config.Host)})
+		if send {
+			// Sending already proves DNS, connection, TLS, authentication, MAIL/RCPT
+			// and final DATA acceptance. Do not open a second SMTP session first: on
+			// slower relays that doubled the request time and could make nginx return
+			// 502 even though the test message had actually been accepted.
+			err = config.Send(ctx, Message{To: recipient, Subject: "GoJet 邮件服务测试成功", HTML: s.brandWrap(ctx, "<h1>邮件服务已连接</h1><p>这封邮件表示 SMTP 配置可以正常完成认证和投递。</p>"), MessageID: fmt.Sprintf("gojet-test-%d@%s", time.Now().UnixNano(), config.Host)})
+		} else {
+			err = config.Test(ctx)
+		}
 	}
 	status := "connected"
 	if err != nil {
@@ -157,38 +162,38 @@ func (s *Service) brandWrap(ctx context.Context, body string) string {
 		copyright = fmt.Sprintf("© %d %s", time.Now().Year(), company)
 	}
 
-	brand := `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.4px;color:#111827">` + html.EscapeString(site) + `<span style="color:` + primary + `">.</span></div>`
+	brand := `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.4px;color:#142019">` + html.EscapeString(site) + `<span style="color:` + primary + `">.</span></div>`
 	if logo != "" {
-		brand = `<img src="` + html.EscapeString(logo) + `" alt="` + html.EscapeString(site) + `" width="190" style="display:block;width:auto;max-width:190px;max-height:54px;border:0;outline:none;text-decoration:none">`
+		brand = `<img src="` + html.EscapeString(logo) + `" alt="` + html.EscapeString(site) + `" width="176" style="display:block;width:auto;max-width:176px;max-height:48px;border:0;outline:none;text-decoration:none">`
 	}
 
 	footerLinks := ""
 	if baseURL != "" {
-		footerLinks += `<a href="` + html.EscapeString(baseURL) + `" style="color:` + primary + `;text-decoration:none">` + html.EscapeString(baseURL) + `</a>`
+		footerLinks += `<a href="` + html.EscapeString(baseURL) + `" style="color:#66736c;text-decoration:none">访问网站</a>`
 	}
 	if support != "" {
 		if footerLinks != "" {
-			footerLinks += `<span style="color:#a0a7b0"> &nbsp;·&nbsp; </span>`
+			footerLinks += `<span style="color:#b2bab6"> &nbsp;·&nbsp; </span>`
 		}
-		footerLinks += `<a href="mailto:` + html.EscapeString(support) + `" style="color:` + primary + `;text-decoration:none">联系支持</a>`
+		footerLinks += `<a href="mailto:` + html.EscapeString(support) + `" style="color:#66736c;text-decoration:none">联系支持</a>`
 	}
 	if footerLinks != "" {
-		footerLinks = `<div style="margin-top:7px">` + footerLinks + `</div>`
+		footerLinks = `<div style="margin-top:6px">` + footerLinks + `</div>`
 	}
 
 	body = inlineMailFragment(body, primary)
 	font := `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;`
-	return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f3f5f6;color:#303846"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f3f5f6"><tr><td align="center" style="padding:32px 12px 36px"><table role="presentation" width="680" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:680px;border-collapse:collapse"><tr><td style="padding:0 8px 18px">` + brand + `</td></tr><tr><td><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:separate;background:#ffffff;border:1px solid #dfe4e8;border-radius:12px"><tr><td style="padding:34px 36px 38px;` + font + `font-size:15px;line-height:1.72;color:#3f4854">` + body + `</td></tr></table></td></tr><tr><td style="padding:18px 8px 0;` + font + `font-size:12px;line-height:1.65;color:#7b8490"><div>此邮件由 ` + html.EscapeString(site) + ` 自动发送，请勿直接回复。</div>` + footerLinks + `<div style="margin-top:7px;color:#929aa4">` + html.EscapeString(copyright) + `</div></td></tr></table></td></tr></table></body></html>`
+	return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f6f5;color:#303b35"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background:#f4f6f5"><tr><td align="center" style="padding:34px 12px 38px"><table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;border-collapse:collapse"><tr><td><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:separate;background:#ffffff;border:1px solid #dfe5e2;border-radius:14px;overflow:hidden"><tr><td style="padding:23px 30px;border-top:3px solid ` + primary + `;border-bottom:1px solid #edf1ef">` + brand + `</td></tr><tr><td style="padding:30px 32px 34px;` + font + `font-size:14px;line-height:1.75;color:#445149">` + body + `</td></tr></table></td></tr><tr><td style="padding:17px 10px 0;text-align:center;` + font + `font-size:11px;line-height:1.65;color:#89928d"><div>此邮件由 ` + html.EscapeString(site) + ` 自动发送。</div>` + footerLinks + `<div style="margin-top:6px;color:#a0a8a4">` + html.EscapeString(copyright) + `</div></td></tr></table></td></tr></table></body></html>`
 }
 
 func inlineMailFragment(body, primary string) string {
 	replacer := strings.NewReplacer(
-		`<h1>`, `<h1 style="margin:0 0 18px;font-size:24px;line-height:1.4;font-weight:750;letter-spacing:-0.2px;color:#111827">`,
-		`<h2>`, `<h2 style="margin:24px 0 12px;font-size:18px;line-height:1.5;font-weight:700;color:#111827">`,
-		`<p>`, `<p style="margin:12px 0;font-size:15px;line-height:1.75;color:#3f4854">`,
-		`<p class="muted">`, `<p style="margin:14px 0 0;font-size:12px;line-height:1.7;color:#7b8490;word-break:break-word">`,
-		`<a class="button"`, `<a style="display:inline-block;margin:9px 0;padding:12px 18px;border-radius:6px;background:`+primary+`;color:#ffffff!important;text-decoration:none;font-weight:700;line-height:1.2"`,
-		`<strong>`, `<strong style="font-weight:750;color:#111827">`,
+		`<h1>`, `<h1 style="margin:0 0 16px;font-size:22px;line-height:1.42;font-weight:760;letter-spacing:-0.2px;color:#152019">`,
+		`<h2>`, `<h2 style="margin:22px 0 11px;font-size:17px;line-height:1.5;font-weight:720;color:#152019">`,
+		`<p>`, `<p style="margin:11px 0;font-size:14px;line-height:1.8;color:#445149">`,
+		`<p class="muted">`, `<p style="margin:13px 0 0;font-size:12px;line-height:1.7;color:#7d8882;word-break:break-word">`,
+		`<a class="button"`, `<a style="display:inline-block;margin:10px 0;padding:12px 18px;border-radius:9px;background:`+primary+`;color:#ffffff!important;text-decoration:none;font-weight:720;line-height:1.2"`,
+		`<strong>`, `<strong style="font-weight:750;color:#152019">`,
 	)
 	return replacer.Replace(body)
 }
