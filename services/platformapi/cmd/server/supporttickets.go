@@ -29,14 +29,15 @@ type supportTicketSummary struct {
 }
 
 type supportTicketMessage struct {
-	ID                    int64     `json:"id"`
-	AuthorType            string    `json:"author_type"`
-	AuthorUserID           *int64    `json:"author_user_id,omitempty"`
-	AuthorAdministratorID  *int64    `json:"author_administrator_id,omitempty"`
-	AuthorName             string    `json:"author_name"`
-	Body                   string    `json:"body"`
-	Internal               bool      `json:"internal"`
-	CreatedAt              time.Time `json:"created_at"`
+	ID                   int64     `json:"id"`
+	AuthorType           string    `json:"author_type"`
+	AuthorUserID          *int64    `json:"author_user_id,omitempty"`
+	AuthorAdministratorID *int64    `json:"author_administrator_id,omitempty"`
+	AuthorName            string    `json:"author_name"`
+	Body                  string    `json:"body"`
+	Internal              bool      `json:"internal"`
+	IPAddress             string    `json:"ip_address,omitempty"`
+	CreatedAt             time.Time `json:"created_at"`
 }
 
 func supportTicketNumber() (string, error) {
@@ -148,7 +149,7 @@ func (s *server) createSupportTicket(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "工单编号生成失败，请重试"})
 		return
 	}
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO support_ticket_messages(ticket_id,author_type,author_user_id,body) VALUES(?,'customer',?,?)`, ticketID, u.ID, in.Message); err != nil {
+	if _, err = tx.ExecContext(r.Context(), `INSERT INTO support_ticket_messages(ticket_id,author_type,author_user_id,body,ip_address) VALUES(?,'customer',?,?,?)`, ticketID, u.ID, in.Message, clientIP(r)); err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "工单内容保存失败"})
 		return
 	}
@@ -251,7 +252,7 @@ func (s *server) replySupportTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO support_ticket_messages(ticket_id,author_type,author_user_id,body) VALUES(?,'customer',?,?)`, id, u.ID, in.Message); err != nil {
+	if _, err = tx.ExecContext(r.Context(), `INSERT INTO support_ticket_messages(ticket_id,author_type,author_user_id,body,ip_address) VALUES(?,'customer',?,?,?)`, id, u.ID, in.Message, clientIP(r)); err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "回复保存失败"})
 		return
 	}
@@ -495,7 +496,7 @@ func (s *server) loadSupportTicket(r *http.Request, id int64, ownerID *int64, ad
 		value := closed.Time
 		item.ClosedAt = &value
 	}
-	query = `SELECT m.id,m.author_type,m.author_user_id,m.author_administrator_id,COALESCE(u.display_name,a.display_name,'GoJet Support'),m.body,m.is_internal,m.created_at FROM support_ticket_messages m LEFT JOIN users u ON u.id=m.author_user_id LEFT JOIN administrators a ON a.id=m.author_administrator_id WHERE m.ticket_id=?`
+	query = `SELECT m.id,m.author_type,m.author_user_id,m.author_administrator_id,COALESCE(u.display_name,a.display_name,'GoJet Support'),m.body,m.is_internal,COALESCE(m.ip_address,''),m.created_at FROM support_ticket_messages m LEFT JOIN users u ON u.id=m.author_user_id LEFT JOIN administrators a ON a.id=m.author_administrator_id WHERE m.ticket_id=?`
 	if !adminView {
 		query += ` AND m.is_internal=FALSE`
 	}
@@ -509,7 +510,7 @@ func (s *server) loadSupportTicket(r *http.Request, id int64, ownerID *int64, ad
 	for rows.Next() {
 		var message supportTicketMessage
 		var userID, adminID sql.NullInt64
-		if err = rows.Scan(&message.ID, &message.AuthorType, &userID, &adminID, &message.AuthorName, &message.Body, &message.Internal, &message.CreatedAt); err != nil {
+		if err = rows.Scan(&message.ID, &message.AuthorType, &userID, &adminID, &message.AuthorName, &message.Body, &message.Internal, &message.IPAddress, &message.CreatedAt); err != nil {
 			return item, nil, err
 		}
 		if userID.Valid {
@@ -519,6 +520,9 @@ func (s *server) loadSupportTicket(r *http.Request, id int64, ownerID *int64, ad
 		if adminID.Valid {
 			value := adminID.Int64
 			message.AuthorAdministratorID = &value
+		}
+		if !adminView {
+			message.IPAddress = ""
 		}
 		messages = append(messages, message)
 	}
