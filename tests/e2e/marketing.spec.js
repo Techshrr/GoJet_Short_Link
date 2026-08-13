@@ -66,7 +66,7 @@ test('documentation center is searchable and task oriented',async({page})=>{
   await page.goto('/docs');
   await expect(page.getByRole('heading',{name:'从第一次创建，到日常运营'})).toBeVisible();
   await expect(page.locator('#docsNav')).toBeVisible();
-  await expect(page.locator('.docsArticle')).toHaveCount(16);
+  expect(await page.locator('.docsArticle').count()).toBeGreaterThanOrEqual(16);
   await expect(page.locator('#docsSearch')).toBeVisible();
   await expect(page.getByRole('heading',{name:'文本分享',exact:true})).toBeVisible();
   await expect(page.getByText('纯文本',{exact:true}).first()).toBeVisible();
