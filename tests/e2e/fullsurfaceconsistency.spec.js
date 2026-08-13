@@ -4,7 +4,7 @@ const engineering=/Fresh Install|GoJet V4|system-images|SYSTEM_IMAGE_PATH|produc
 const publicRoutes=['/','/about','/contact','/resources','/docs','/developers','/blog','/browserextension','/apps','/changelog','/solutions/marketing','/solutions/creators','/solutions/teams','/pricing','/announcements','/privacy','/terms','/reportabuse','/status','/products/urlshortener','/products/qrcode','/products/analytics','/products/biopages','/products/textsharing','/products/filesharing','/products/customdomains','/products/smartlinks','/products/abtesting','/products/qrcampaigns'];
 const authRoutes=['/login','/register','/forgotpassword','/resetpassword?token=surface-test','/verifyemail?token=surface-test'];
 const consoleRoutes=['/app/dashboard','/app/links','/app/team','/app/campaigns','/app/domains','/app/bio','/app/text','/app/files','/app/qr','/app/billing','/app/analytics','/app/support','/app/account'];
-const adminViews=['overview','users','administrators','links','workspaces','announcements','mail','billing','files','abuse','domains','security','diagnostics','settings','audit'];
+const adminViews=['overview','users','administrators','links','workspaces','announcements','billing','files','abuse','domains','security','diagnostics','settings','audit'];
 async function json(request,method,path,body,token){const options={method,headers:{'Content-Type':'application/json'}};if(token)options.headers.Authorization=`Bearer ${token}`;if(body!==undefined)options.data=body;const r=await request.fetch(base+path,options);const data=await r.json().catch(()=>({}));if(!r.ok())throw new Error(`${method} ${path}: ${r.status()} ${JSON.stringify(data)}`);return data;}
 async function user(request){const stamp=Date.now();const reg=await json(request,'POST','/api/auth/register',{email:`crawl-${stamp}@example.test`,display_name:'GoJet Surface',password:'SurfaceUser!2026'});return reg.token;}
 async function setSession(page,token){await page.addInitScript(t=>localStorage.setItem('gojet_token',t),token);}
@@ -25,6 +25,13 @@ async function branded(locator){
  }
 }
 
+async function validateAdminSurface(page,label){
+ await expect.poll(async()=>((await page.locator('#content').innerText()).trim().length),{message:label,timeout:10000}).toBeGreaterThan(0);
+ await noEngineering(page);
+ await noBrokenImages(page);
+ await noOverflow(page);
+}
+
 test.describe.serial('whole product visual and route consistency',()=>{
  test('every public product route uses a stable GoJet shell',async({page})=>{
   for(const route of publicRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('body')).toBeVisible();await branded(page.locator('body > header[data-gojet-shell]'));await branded(page.locator('body > footer[data-gojet-shell]'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
@@ -36,8 +43,19 @@ test.describe.serial('whole product visual and route consistency',()=>{
   const token=await user(request);await setSession(page,token);
   for(const route of consoleRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('#shell')).toBeVisible();await expect(page.locator('.content h1').first(),route).toBeVisible({timeout:10000});await branded(page.locator('aside'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
  });
- test('every administrator primary module renders inside the same branded shell',async({page})=>{
+ test('every administrator primary module and nested settings pane renders inside the same branded shell',async({page})=>{
   await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();await branded(page.locator('.sidebar'));
-  for(const view of adminViews){const button=page.locator(`#nav [data-view="${view}"]`);await expect(button,view).toBeVisible();await button.click();await expect.poll(async()=>((await page.locator('#content').innerText()).trim().length),{message:view,timeout:10000}).toBeGreaterThan(0);await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
+  await expect(page.locator('#nav [data-view="mail"]')).toHaveCount(0);
+  await expect(page.locator('#nav [data-view="botprotection"]')).toHaveCount(0);
+  for(const view of adminViews){const button=page.locator(`#nav [data-view="${view}"]`);await expect(button,view).toBeVisible();await button.click();await validateAdminSurface(page,view);}
+  const settings=page.locator('#nav [data-view="settings"]');
+  await settings.click();
+  for(const [label,heading] of [['邮件服务','邮件服务'],['人机验证','人机验证']]){
+   const tab=page.getByRole('button',{name:new RegExp(`^${label}`)});
+   await expect(tab,label).toBeVisible();
+   await tab.click();
+   await expect(page.locator('#content').getByRole('heading',{name:heading,exact:true}).first()).toBeVisible({timeout:10000});
+   await validateAdminSurface(page,label);
+  }
  });
 });
