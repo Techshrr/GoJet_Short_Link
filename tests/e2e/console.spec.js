@@ -164,7 +164,12 @@ test('administrator console loads every canonical management module',async({page
   const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname));
   for(const resource of ['/admin/app.js','/admin/mailstatus.js','/admin/mailtemplates.js','/admin/productactions.js','/admin/billingadmin.js','/admin/settings.js','/admin/billingfxsettings.js','/admin/supportsecurity.js'])expect(resources).toContain(resource);
   await expect(page.getByRole('button',{name:'客户工单'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'人机验证'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'系统设置',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'邮件服务',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'人机验证',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'系统设置',exact:true}).click();
+  await expect(page.getByRole('button',{name:/邮件服务/})).toBeVisible();
+  await expect(page.getByRole('button',{name:/人机验证/})).toBeVisible();
 });
 
 test('administrator TOTP login uses the current login form and fails closed',async({page})=>{
@@ -233,7 +238,7 @@ test('administrator diagnostics exposes live dependencies and direct audited act
   let reconciled=false;
   await seedAdmin(page);
   await page.route('**/api/admin/**',route=>{
-    const request=route.request(),path=new URL(route.request().url()).pathname,method=request.method();
+    const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
     if(path==='/api/admin/diagnostics'&&method==='GET')return json(route,{database:{status:'operational',latency_ms:3,open_connections:5},redis:{status:'operational',latency_ms:1,stream_events:82,consumer_pending:4},maintenance_mode:false,alerts:[]});
     if(path==='/api/admin/diagnostics/reconcile'&&method==='POST'){reconciled=true;return json(route,{status:'success'})}
     return json(route,commonAdmin(path));
