@@ -95,13 +95,12 @@ grep -Eiq '^Cache-Control:[[:space:]]*no-store' "$invalid_headers"
 [[ "$(mysqlq "SELECT status FROM payment_transactions WHERE id=$transaction_id;")" == pending ]]
 [[ "$(mysqlq "SELECT status FROM billing_invoices WHERE id=$invoice_id;")" == pending ]]
 
-echo '[3/8] valid signed callback settles through public Nginx'
+echo '[3/8] valid signed GET callback settles through public Nginx'
 valid_headers=$(mktemp)
 valid_body=$(mktemp)
-valid_status=$(curl -sS -D "$valid_headers" -o "$valid_body" -w '%{http_code}' -X POST \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
+valid_status=$(curl -sS -D "$valid_headers" -o "$valid_body" -w '%{http_code}' -G \
   -H 'X-Request-ID: stage5validcallback0001' \
-  --data "$valid_form" "$BASE/api/payments/epay/notify")
+  "$BASE/api/payments/epay/notify?$valid_form")
 [[ "$valid_status" == 200 ]] || { cat "$valid_body" >&2; exit 1; }
 grep -Fxq success "$valid_body"
 grep -Eiq '^X-Request-ID:[[:space:]]*stage5validcallback0001' "$valid_headers"
@@ -129,7 +128,7 @@ echo '[5/8] callback facts are persisted without raw payloads'
 [[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='epay' AND merchant_order_no='$order';")" == 3 ]]
 [[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='epay' AND merchant_order_no='$order' AND outcome='accepted' AND response_status=200;")" == 2 ]]
 [[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE provider='epay' AND merchant_order_no='$order' AND outcome='rejected' AND response_status=400;")" == 1 ]]
-[[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE merchant_order_no='$order' AND transaction_id=$transaction_id AND invoice_id=$invoice_id;")" == 3 ]]
+[[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE merchant_order_no='$order' AND provider_reference='$trade' AND transaction_id=$transaction_id AND invoice_id=$invoice_id;")" == 3 ]]
 [[ "$(mysqlq "SELECT COUNT(DISTINCT payload_sha256) FROM payment_callback_events WHERE merchant_order_no='$order';")" == 2 ]]
 [[ "$(mysqlq "SELECT COUNT(*) FROM payment_callback_events WHERE merchant_order_no='$order' AND request_id IN ('stage5invalidcallback0001','stage5validcallback0001','stage5replaycallback0001');")" == 3 ]]
 
@@ -139,9 +138,9 @@ admin_token=$(printf '%s' "$admin"|field "['token']")
 callbacks=$(expect 200 "$(req GET '/api/admin/payment-callbacks?limit=100' '' "$admin_token")" callbacks)
 callbacks_file=$(mktemp)
 printf '%s' "$callbacks" > "$callbacks_file"
-python3 - "$callbacks_file" "$order" "$transaction_id" "$invoice_id" <<'PY'
+python3 - "$callbacks_file" "$order" "$transaction_id" "$invoice_id" "$trade" <<'PY'
 import json,sys
-path,order,transaction,invoice=sys.argv[1:]
+path,order,transaction,invoice,trade=sys.argv[1:]
 with open(path,encoding='utf-8') as handle:
     data=json.load(handle)['data']
 rows=[row for row in data if row.get('merchant_order_no')==order]
@@ -150,6 +149,7 @@ assert sorted(row['outcome'] for row in rows)==['accepted','accepted','rejected'
 assert {int(row['response_status']) for row in rows}=={200,400}
 assert all(int(row['transaction_id'])==int(transaction) for row in rows)
 assert all(int(row['invoice_id'])==int(invoice) for row in rows)
+assert all(row['provider_reference']==trade for row in rows)
 assert {row['request_id'] for row in rows}=={'stage5invalidcallback0001','stage5validcallback0001','stage5replaycallback0001'}
 assert all(len(row['payload_sha256'])==64 for row in rows)
 assert all('payload' not in row and 'raw' not in row for row in rows)
@@ -167,4 +167,4 @@ echo '[8/8] no duplicate settlement after callback replay'
 [[ "$(mysqlq "SELECT COUNT(*) FROM subscription_events WHERE invoice_id=$invoice_id AND event_type='invoice.paid';")" == 1 ]]
 [[ "$(mysqlq "SELECT COUNT(*) FROM payment_transactions WHERE merchant_order_no='$order';")" == 1 ]]
 
-printf 'GoJet public Epay callback ingress + observability acceptance: PASS (%s -> transaction %s -> invoice %s)\n' "$order" "$transaction_id" "$invoice_id"
+printf 'GoJet public Epay GET callback ingress + observability acceptance: PASS (%s -> transaction %s -> invoice %s)\n' "$order" "$transaction_id" "$invoice_id"
