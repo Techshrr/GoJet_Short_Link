@@ -1,6 +1,6 @@
 const{test,expect}=require('@playwright/test');
 const products=['urlshortener','biopages','textsharing','filesharing','analytics','qrcode','abtesting','customdomains','smartlinks','qrcampaigns'];
-const genericRoutes=['about','contact','resources','docs','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browserextension','apps','changelog'];
+const genericRoutes=['about','contact','resources','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browserextension','apps','changelog'];
 const authRoutes=['login','register','forgotpassword','resetpassword?token=acceptancetoken','verifyemail?token=acceptancetoken'];
 test.beforeEach(async({page})=>page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'})));
 
@@ -62,6 +62,21 @@ for(const route of genericRoutes)test(`${route} public route is complete`,async(
   await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
 
+test('documentation center is searchable and task oriented',async({page})=>{
+  await page.goto('/docs/');
+  await expect(page.getByRole('heading',{name:'从第一次创建，到日常运营'})).toBeVisible();
+  await expect(page.locator('#docsNav')).toBeVisible();
+  await expect(page.locator('.docsArticle')).toHaveCount(16);
+  await expect(page.locator('#docsSearch')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'文本分享',exact:true})).toBeVisible();
+  await expect(page.getByText('纯文本',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('Markdown',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('代码',{exact:true}).first()).toBeVisible();
+  await page.locator('#docsSearch').fill('自定义域名');
+  await expect(page.locator('#docsSearchResults')).toContainText('自定义域名');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+});
+
 test('pricing public route is complete',async({page})=>{
   await page.goto('/pricing');
   await expect(page.getByRole('heading',{name:'从个人使用，到团队协作'})).toBeVisible();
@@ -77,7 +92,8 @@ test('register public route is complete',async({page})=>{
 });
 
 test('Markdown announcement center safely renders published content',async({page})=>{
-  await page.route('**/api/public/announcements',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({data:[{id:1,title:'计划维护通知',body_markdown:'# 维护安排\n\n**影响范围**\n\n- 管理控制台\n- 账单中心\n\n[查看状态](https://status.example.test)\n\n<script>window.__announcement_xss=1</script>',published_at:'2026-08-10T10:00:00Z'}]})}));
+  const unsafe='<scr'+'ipt>window.__announcement_xss=1</scr'+'ipt>';
+  await page.route('**/api/public/announcements',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({data:[{id:1,title:'计划维护通知',body_markdown:'# 维护安排\n\n**影响范围**\n\n- 管理控制台\n- 账单中心\n\n[查看状态](https://status.example.test)\n\n'+unsafe,published_at:'2026-08-10T10:00:00Z'}]})}));
   await page.goto('/announcements');
   await expect(page.getByRole('heading',{name:'平台公告'})).toBeVisible();
   await expect(page.getByRole('heading',{name:'计划维护通知'})).toBeVisible();
@@ -87,7 +103,7 @@ test('Markdown announcement center safely renders published content',async({page
   await expect(page.getByRole('link',{name:'查看状态'})).toHaveAttribute('href','https://status.example.test');
   expect(await page.evaluate(()=>window.__announcement_xss)).toBeUndefined();
   await expect(page.locator('.announcement-body script')).toHaveCount(0);
-  await expect(page.locator('.announcement-body')).toContainText('<script>window.__announcement_xss=1</script>');
+  await expect(page.locator('.announcement-body')).toContainText(unsafe);
   await expect(page.locator('body')).not.toContainText('ANNOUNCEMENTS');
 });
 
