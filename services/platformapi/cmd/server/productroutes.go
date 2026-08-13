@@ -10,7 +10,7 @@ import (
 	"github.com/Techshrr/GoJet_Short_Link/app/payments"
 )
 
-func (s *server) registerProductHardeningRoutes(mux *http.ServeMux) {
+func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces/{id}", s.user(s.workspaceDetail))
 	mux.HandleFunc("PATCH /api/workspaces/{id}", s.user(s.renameWorkspace))
 	mux.HandleFunc("DELETE /api/workspaces/{id}", s.user(s.deleteWorkspace))
@@ -25,6 +25,7 @@ func (s *server) registerProductHardeningRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payment-methods", s.user(s.paymentMethods))
 	mux.HandleFunc("GET /api/admin/payment-callbacks", s.admin("billing.manage", s.adminPaymentCallbacks))
+	mux.HandleFunc("GET /api/admin/analytics/overview", s.admin("platform.read", s.adminAnalyticsOverview))
 	mux.HandleFunc("POST /api/workspaces/{id}/billing/invoices/{invoice}/pay", s.user(s.startInvoicePayment))
 	mux.HandleFunc("POST /api/payments/alipay/notify", s.observePaymentCallback("alipay", s.alipayNotify))
 	mux.HandleFunc("POST /api/payments/wechat/notify", s.observePaymentCallback("wechat", s.wechatNotify))

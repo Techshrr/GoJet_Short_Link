@@ -114,15 +114,15 @@ func (s *server) workspaceOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, 200, map[string]any{
-		"today_clicks":     today,
-		"month_clicks":     month,
+		"today_clicks":    today,
+		"month_clicks":    month,
 		"unique_visitors": uniques,
-		"active_links":     activeLinks,
-		"usage":            usage,
-		"trend":            trend,
-		"recent":           recent,
-		"anomalies":        anomalies,
-		"generated_at":     now.Format(time.RFC3339),
-		"source":           "redis-realtime+mysql-history",
+		"active_links":    activeLinks,
+		"usage":           usage,
+		"trend":           trend,
+		"recent":          recent,
+		"anomalies":       anomalies,
+		"generated_at":    now.Format(time.RFC3339),
+		"source":          "redis-realtime+mysql-history",
 	})
 }

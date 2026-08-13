@@ -85,7 +85,7 @@ func main() {
 	}
 	s := &server{db: db, settings: store, mail: appmail.NewService(db, store), identity: identity.New(db), workspace: workspaceService, links: links.New(db, rdb, workspaceService, billingService), domains: domains.New(db, workspaceService), redis: rdb, resources: appresources.New(db, workspaceService, getenv("UPLOAD_STORAGE_PATH", "/data/uploads"), getenv("FILE_STORAGE_PATH", "/data/files"), getenv("PUBLIC_BASE_URL", "http://localhost:8080"), required("QR_TRACKING_KEY")).WithBilling(billingService).WithFileStore(fileStore), organizer: organization.New(db, rdb, workspaceService), billing: billingService, adminAuth: adminAuth, analyticsGroup: getenv("ANALYTICS_GROUP", "gojet-mysql")}
 	mux := http.NewServeMux()
-	s.registerProductHardeningRoutes(mux)
+	s.registerProductRoutes(mux)
 	s.registerBillingPresentationRoutes(mux)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/public/settings", s.publicSettings)
