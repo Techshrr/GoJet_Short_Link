@@ -11,8 +11,9 @@ bot='frontend/adminconsole/supportsecurity.js'
 browser_config='playwright.config.js'
 console_spec='tests/e2e/console.spec.js'
 product_spec='tests/e2e/productcore.spec.js'
+surface_spec='tests/e2e/fullsurfaceconsistency.spec.js'
 
-for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$browser_config" "$console_spec" "$product_spec"; do
+for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$browser_config" "$console_spec" "$product_spec" "$surface_spec"; do
   test -f "$file"
 done
 
@@ -67,15 +68,25 @@ done
 # into this suite.
 grep -Fq "'**/analyticsdashboard.spec.js'" "$browser_config"
 
-# Browser acceptance must exercise the final IA: top-level System Settings first,
-# then embedded mail/Turnstile panes. This prevents tests from forcing retired
-# top-level navigation back into the product.
+# Lightweight browser acceptance must exercise the final IA: top-level System
+# Settings first, then embedded mail/Turnstile panes.
 grep -Fq "getByRole('button',{name:'系统设置',exact:true}).click()" "$console_spec"
 grep -Fq "getByRole('button',{name:/邮件服务/})" "$console_spec"
 grep -Fq "getByRole('button',{name:/人机验证/})" "$console_spec"
 grep -Fq "getByRole('button',{name:'系统设置',exact:true}).click()" "$product_spec"
 grep -Fq "getByRole('button',{name:/^邮件服务/}).click()" "$product_spec"
 grep -Fq "getByRole('button',{name:/^人机验证/}).click()" "$product_spec"
+
+# The real Nginx browser surface gate must follow the same information
+# architecture. Mail and Turnstile are deliberately absent from adminViews and
+# are instead validated as nested System Settings panes.
+if grep -E '^const adminViews=.*(mail|botprotection)' "$surface_spec"; then
+  echo 'real browser surface contract still treats mail/bot protection as top-level views' >&2
+  exit 1
+fi
+grep -Fq "page.locator('#nav [data-view=\"mail\"]')).toHaveCount(0)" "$surface_spec"
+grep -Fq "page.locator('#nav [data-view=\"botprotection\"]')).toHaveCount(0)" "$surface_spec"
+grep -Fq "[['邮件服务','邮件服务'],['人机验证','人机验证']]" "$surface_spec"
 
 app_line=$(grep -n '<script src="/admin/app.js"></script>' "$index" | cut -d: -f1)
 mail_line=$(grep -n '<script src="/admin/mailstatus.js"></script>' "$index" | cut -d: -f1)
