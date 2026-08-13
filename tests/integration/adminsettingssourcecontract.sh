@@ -50,10 +50,14 @@ for legacy in \
   'async function renderSettings(' \
   'async function saveSettingForm(' \
   'async function saveBrand(' \
-  'async function deleteBrand('
+  'async function deleteBrand(' \
+  'async function renderMailSettings(' \
+  'function mailTest(' \
+  'function templateModal(' \
+  'renderMail()'
 do
   if grep -Fq "$legacy" "$core"; then
-    echo "administrator settings implementation leaked back into app.js: $legacy" >&2
+    echo "retired administrator implementation leaked back into app.js: $legacy" >&2
     exit 1
   fi
 done
@@ -82,4 +86,4 @@ test "$app_line" -lt "$mail_line"
 test "$mail_line" -lt "$settings_line"
 test "$settings_line" -lt "$bot_line"
 
-printf 'administrator settings IA and browser source contract: PASS\n'
+printf 'administrator settings IA, unique ownership and browser source contract: PASS\n'
