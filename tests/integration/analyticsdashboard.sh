@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+mkdir -p test-results
+exec > >(tee test-results/analyticsdashboard.log) 2>&1
 
 BASE=${GOJET_TEST_BASE:-http://127.0.0.1:18090}
 MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
