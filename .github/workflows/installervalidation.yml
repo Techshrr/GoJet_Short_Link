@@ -57,8 +57,8 @@ jobs:
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
           test -f database/migrations/migrationcatalog.txt
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
-          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 37
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 38
+          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 38
           test -z "$(find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -E '^[0-9]' || true)"
           MIGRATION_GLOB='database/migrations/'
           MIGRATION_GLOB+='*.sql'
@@ -77,6 +77,8 @@ jobs:
           node --check frontend/publicsite/assets/fileshare.js
           node --check frontend/adminconsole/app.js
           node --check frontend/adminconsole/settings.js
+          node --check frontend/adminconsole/paymentux.js
+          node --check frontend/adminconsole/supportsecurity.js
           for file in frontend/userconsole/*.js; do node --check "$file"; done
           python3 scripts/buildpublicsite.py --output /tmp/gojetinstallerpublic
           for file in index.html privacy.html terms.html forgotpassword.html reportabuse.html products/urlshortener.html; do test -f "/tmp/gojetinstallerpublic/$file"; done
