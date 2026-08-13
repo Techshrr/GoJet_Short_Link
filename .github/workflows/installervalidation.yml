@@ -130,7 +130,7 @@ jobs:
           for spec in \
             'redirectengine ./services/redirectengine/cmd/server' \
             'analyticsworker ./services/analyticsworker/cmd/worker' \
-            'analyticsreconciler ./services/analyticsworker/cmd/reconciler' \
+            'analyticsreconciler ./services/analyticsreconciler/cmd/reconciler' \
             'platformapi ./services/platformapi/cmd/server' \
             'mailworker ./services/platformapi/cmd/mailworker' \
             'fileworker ./services/platformapi/cmd/fileworker' \
