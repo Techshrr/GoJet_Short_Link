@@ -1,0 +1,49 @@
+name: GoJet administrator information architecture normalization
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/adminianormalize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gojetadminianormalize
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+      - name: Normalize administrator settings IA
+        run: |
+          set -euo pipefail
+          python3 scripts/adminianormalize.py
+          for file in frontend/adminconsole/app.js frontend/adminconsole/mailstatus.js frontend/adminconsole/mailtemplates.js frontend/adminconsole/settings.js frontend/adminconsole/supportsecurity.js; do node --check "$file"; done
+          python3 scripts/checknames.py
+          test -z "$(grep -F 'data-view="mail"' frontend/adminconsole/index.html || true)"
+          test -z "$(grep -F 'data-view="botprotection"' frontend/adminconsole/index.html frontend/adminconsole/supportsecurity.js || true)"
+          grep -Fq "tab('mail','邮件服务'" frontend/adminconsole/settings.js
+          grep -Fq "tab('botprotection','人机验证'" frontend/adminconsole/settings.js
+          grep -Fq 'renderMailSettings' frontend/adminconsole/app.js
+          grep -Fq 'renderBotProtectionSettings' frontend/adminconsole/supportsecurity.js
+          ! grep -Fq "if(view==='mail')" frontend/adminconsole/app.js
+      - name: Commit validated administrator IA
+        run: |
+          set -euo pipefail
+          git restore -- .github/workflows
+          git config user.name 'GoJet Administrator IA'
+          git config user.email 'actions@users.noreply.github.com'
+          git add frontend/adminconsole/index.html frontend/adminconsole/app.js frontend/adminconsole/mailstatus.js frontend/adminconsole/settings.js frontend/adminconsole/supportsecurity.js
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Move mail and bot protection into system settings'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
