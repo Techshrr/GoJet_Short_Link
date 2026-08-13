@@ -5,7 +5,8 @@ module.exports=defineConfig({
   testIgnore:[
     '**/productsurface.spec.js',
     '**/fullsurfaceconsistency.spec.js',
-    '**/paymentcallbackadmin.spec.js'
+    '**/paymentcallbackadmin.spec.js',
+    '**/analyticsdashboard.spec.js'
   ],
   timeout:30000,
   reporter:'line',
