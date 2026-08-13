@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,33 +37,35 @@ func (s *server) workspaceOverview(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 503, map[string]string{"error": "总览暂时不可用"})
 		return
 	}
-	ids := []string{}
+	ids := []int64{}
 	for rows.Next() {
 		var id int64
 		if rows.Scan(&id) == nil {
-			ids = append(ids, strconv.FormatInt(id, 10))
+			ids = append(ids, id)
 		}
 	}
 	rows.Close()
+
 	now := time.Now().UTC()
-	today, month, uniques := int64(0), int64(0), int64(0)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	today := s.workspaceRealtimeToday(r.Context(), wid, ids, todayStart)
+	month, uniques := int64(0), int64(0)
 	uniqueKeys := make([]string, 0, len(ids))
 	for _, id := range ids {
-		n, _ := s.redis.Get(r.Context(), "gojet:daily:"+id+":"+now.Format("2006-01-02")).Int64()
-		today += n
-		uniqueKeys = append(uniqueKeys, "gojet:visitors-month:"+id+":"+now.Format("2006-01"))
+		uniqueKeys = append(uniqueKeys, fmt.Sprintf("gojet:visitors-month:%d:%s", id, now.Format("2006-01")))
 	}
 	if len(uniqueKeys) > 0 {
 		uniques, _ = s.redis.PFCount(r.Context(), uniqueKeys...).Result()
 	}
-	_ = s.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(a.clicks),0) FROM analytics_daily a JOIN short_links l ON CAST(l.id AS CHAR)=a.link_id WHERE l.workspace_id=? AND a.metric_date>=DATE_FORMAT(UTC_DATE(),'%Y-%m-01') AND a.metric_date<UTC_DATE()`, wid).Scan(&month)
+	_ = s.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(a.clicks),0) FROM analytics_daily a JOIN short_links l ON CAST(l.id AS CHAR)=a.link_id WHERE l.workspace_id=? AND l.deleted_at IS NULL AND a.metric_date>=DATE_FORMAT(UTC_DATE(),'%Y-%m-01') AND a.metric_date<UTC_DATE()`, wid).Scan(&month)
 	month += today
+
 	trend := make([]overviewPoint, 30)
-	start := now.Truncate(24*time.Hour).AddDate(0, 0, -29)
+	start := todayStart.AddDate(0, 0, -29)
 	for i := range trend {
 		trend[i].Date = start.AddDate(0, 0, i).Format("2006-01-02")
 	}
-	tr, err := s.db.QueryContext(r.Context(), `SELECT a.metric_date,SUM(a.clicks) FROM analytics_daily a JOIN short_links l ON CAST(l.id AS CHAR)=a.link_id WHERE l.workspace_id=? AND a.metric_date>=? AND a.metric_date<UTC_DATE() GROUP BY a.metric_date`, wid, start.Format("2006-01-02"))
+	tr, err := s.db.QueryContext(r.Context(), `SELECT a.metric_date,SUM(a.clicks) FROM analytics_daily a JOIN short_links l ON CAST(l.id AS CHAR)=a.link_id WHERE l.workspace_id=? AND l.deleted_at IS NULL AND a.metric_date>=? AND a.metric_date<UTC_DATE() GROUP BY a.metric_date`, wid, start.Format("2006-01-02"))
 	if err == nil {
 		for tr.Next() {
 			var d string
@@ -79,18 +82,25 @@ func (s *server) workspaceOverview(w http.ResponseWriter, r *http.Request) {
 		tr.Close()
 	}
 	trend[len(trend)-1].Clicks = today
+
 	recent := []map[string]any{}
-	rr, err := s.db.QueryContext(r.Context(), `SELECT id,code,title,destination,status,created_at FROM short_links WHERE workspace_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5`, wid)
+	rr, err := s.db.QueryContext(r.Context(), `SELECT l.id,l.code,l.title,l.destination,l.status,l.created_at,(SELECT COUNT(*) FROM analytics_events e WHERE e.link_id=CAST(l.id AS CHAR)) persisted_clicks FROM short_links l WHERE l.workspace_id=? AND l.deleted_at IS NULL ORDER BY l.created_at DESC LIMIT 5`, wid)
 	if err == nil {
 		for rr.Next() {
-			var id int64
+			var id, persistedClicks int64
 			var code, title, destination, status, created string
-			if rr.Scan(&id, &code, &title, &destination, &status, &created) == nil {
-				recent = append(recent, map[string]any{"id": id, "code": code, "title": title, "destination": destination, "status": status, "created_at": created})
+			if rr.Scan(&id, &code, &title, &destination, &status, &created, &persistedClicks) == nil {
+				realtimeClicks, redisErr := s.redis.Get(r.Context(), fmt.Sprintf("gojet:clicks:%d", id)).Int64()
+				if redisErr != nil {
+					realtimeClicks = 0
+				}
+				clicks := maxInt64(realtimeClicks, persistedClicks)
+				recent = append(recent, map[string]any{"id": id, "code": code, "title": title, "destination": destination, "status": status, "created_at": created, "clicks": clicks})
 			}
 		}
 		rr.Close()
 	}
+
 	anomalies := []map[string]string{}
 	ar, err := s.db.QueryContext(r.Context(), `SELECT kind,message FROM (SELECT 'domain' kind,CONCAT(hostname,'：',COALESCE(last_error,'验证异常')) message,updated_at happened FROM custom_domains WHERE workspace_id=? AND status='error' UNION ALL SELECT 'file',CONCAT(original_name,'：',COALESCE(scan_result,'扫描异常')),updated_at FROM file_shares WHERE workspace_id=? AND scan_status IN ('infected','error')) x ORDER BY happened DESC LIMIT 5`, wid, wid)
 	if err == nil {
@@ -102,5 +112,17 @@ func (s *server) workspaceOverview(w http.ResponseWriter, r *http.Request) {
 		}
 		ar.Close()
 	}
-	jsonResponse(w, 200, map[string]any{"today_clicks": today, "month_clicks": month, "unique_visitors": uniques, "active_links": activeLinks, "usage": usage, "trend": trend, "recent": recent, "anomalies": anomalies, "generated_at": now.Format(time.RFC3339), "source": "redis-realtime+mysql-history"})
+
+	jsonResponse(w, 200, map[string]any{
+		"today_clicks":     today,
+		"month_clicks":     month,
+		"unique_visitors": uniques,
+		"active_links":     activeLinks,
+		"usage":            usage,
+		"trend":            trend,
+		"recent":           recent,
+		"anomalies":        anomalies,
+		"generated_at":     now.Format(time.RFC3339),
+		"source":           "redis-realtime+mysql-history",
+	})
 }
