@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="GoJet 帮助文档：从创建短链接，到二维码、文本、文件、自定义域名、团队、账单与安全设置。">
+<title>帮助文档 · GoJet</title>
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="stylesheet" href="/assets/docs.css">
+</head>
+<body class="docsBody">
+<header class="siteHeader"><div class="container nav"><a class="logo" href="/">GoJet<i>.</i></a></div></header>
+<main class="docsShell">
+  <aside class="docsSidebar">
+    <div class="docsSidebarTop"><a class="docsHome" href="/docs/">GoJet 文档</a><button type="button" id="docsMenuClose" aria-label="关闭目录">×</button></div>
+    <nav id="docsNav" aria-label="文档目录">
+      <section><b>开始使用</b><a href="#overview">产品概览</a><a href="#account">账户与工作区</a><a href="#firstlink">创建第一条短链接</a></section>
+      <section><b>链接与分享</b><a href="#links">短链接</a><a href="#qrcode">二维码</a><a href="#text">文本分享</a><a href="#files">文件分享</a><a href="#bio">个人主页</a></section>
+      <section><b>域名与分析</b><a href="#officialdomains">官方短链域名</a><a href="#customdomains">自定义域名</a><a href="#analytics">访问分析</a><a href="#smartlinks">智能路由与 A/B</a></section>
+      <section><b>账户与服务</b><a href="#team">团队协作</a><a href="#billing">套餐与账单</a><a href="#security">账户安全</a><a href="#support">支持工单</a></section>
+      <section><b>开发者</b><a href="#api">API 与自动化</a><a href="#webhooks">支付回调与事件</a></section>
+    </nav>
+  </aside>
+
+  <section class="docsMain">
+    <header class="docsTopbar">
+      <button id="docsMenu" class="docsMenu" type="button">目录</button>
+      <label class="docsSearch"><span>⌕</span><input id="docsSearch" type="search" placeholder="搜索文档，例如：自定义域名、Markdown、二维码" autocomplete="off"><kbd>/</kbd></label>
+      <a href="/app/support">提交工单</a>
+    </header>
+
+    <div id="docsSearchResults" class="docsSearchResults" hidden></div>
+    <article class="docsContent" id="docsContent">
+      <section class="docsIntro" data-doc="产品概览 GoJet 开始使用 功能">
+        <span class="docsKicker">GOJET DOCUMENTATION</span>
+        <h1>从第一次创建，到日常运营</h1>
+        <p>这里不是功能名词列表，而是一套按实际操作顺序整理的使用手册。你可以直接搜索问题，也可以沿左侧目录逐步查看。</p>
+        <div class="docsQuickGrid">
+          <a href="#firstlink"><b>3 分钟上手</b><span>创建第一条短链接并开始分享</span></a>
+          <a href="#customdomains"><b>使用自己的域名</b><span>添加、验证并用于品牌短链</span></a>
+          <a href="#text"><b>分享文本与代码</b><span>纯文本、Markdown、代码三种格式</span></a>
+          <a href="#support"><b>遇到问题</b><span>通过工单持续跟进处理进度</span></a>
+        </div>
+      </section>
+
+      <section id="overview" class="docsArticle" data-doc="产品概览 短链接 二维码 文本 文件 个人主页 分析">
+        <span class="docsSectionTag">开始使用</span><h2>产品概览</h2>
+        <p>GoJet 把常用的链接与内容分享能力放在同一个工作区中。短链接是核心入口，二维码、访问分析、智能路由等能力可以围绕同一条链接继续扩展。</p>
+        <div class="docsFeatureGrid"><div><b>短链接</b><span>创建易于传播的短网址，并持续维护目标地址。</span></div><div><b>二维码</b><span>二维码跟随短链接，不需要因为目标网址变化反复更换。</span></div><div><b>文本与文件</b><span>对临时文字、代码片段和文件提供独立分享入口。</span></div><div><b>访问分析</b><span>查看访问次数、访客、来源、地区、设备与浏览器。</span></div></div>
+      </section>
+
+      <section id="account" class="docsArticle" data-doc="账户 工作区 注册 登录 团队">
+        <span class="docsSectionTag">开始使用</span><h2>账户与工作区</h2>
+        <p>注册后系统会为你准备个人工作区。链接、二维码、分享资源、账单和团队成员都归属于工作区，因此切换工作区时看到的内容也会随之变化。</p>
+        <ol><li>注册并登录 GoJet。</li><li>进入控制台，确认顶部当前工作区。</li><li>个人使用可以直接保留默认工作区；团队使用可以建立独立工作区并邀请成员。</li></ol>
+        <div class="docsNote"><b>建议</b><p>不同品牌、客户或项目如果需要独立成员与账单，最好使用不同工作区，而不是全部堆在同一个工作区里。</p></div>
+      </section>
+
+      <section id="firstlink" class="docsArticle" data-doc="创建第一条短链接 目标网址 短码 域名 302">
+        <span class="docsSectionTag">快速开始</span><h2>创建第一条短链接</h2>
+        <ol><li>在控制台打开「链接管理」，点击「创建短链接」。</li><li>粘贴完整的目标网址，例如 <code>https://example.com/product</code>。</li><li>选择短链域名。可以使用管理员提供的官方域名，也可以使用自己已经验证的域名。</li><li>短码可以留空自动生成，也可以填写容易记忆的自定义短码。</li><li>一般场景使用 302 临时跳转即可；确实需要永久跳转时再选择 301 或 308。</li></ol>
+        <div class="docsFlow"><span>目标网址</span><i>→</i><span>选择域名</span><i>→</i><span>生成短码</span><i>→</i><span>复制分享</span></div>
+      </section>
+
+      <section id="links" class="docsArticle" data-doc="短链接 编辑 密码 有效期 访问上限 一次性 智能路由 A/B">
+        <span class="docsSectionTag">链接与分享</span><h2>短链接</h2>
+        <p>创建后可以继续修改目标网址、链接名称、跳转方式、访问密码、有效期和访问次数限制。为了避免已经公开的地址失效，编辑时不会直接更换原短码和域名。</p>
+        <h3>常用访问规则</h3><ul><li><b>访问密码：</b>适合只希望特定人员查看的链接。</li><li><b>有效期：</b>到期后停止继续跳转。</li><li><b>访问次数上限：</b>达到上限后停止继续访问。</li><li><b>一次性访问：</b>适合临时、单次交付场景。</li></ul>
+      </section>
+
+      <section id="qrcode" class="docsArticle" data-doc="二维码 QR 颜色 尺寸 下载 短链接">
+        <span class="docsSectionTag">链接与分享</span><h2>二维码</h2>
+        <p>二维码基于现有短链接生成。创建时选择链接、名称、尺寸和颜色，生成后可以直接下载图片。</p>
+        <div class="docsNote"><b>为什么先创建短链接？</b><p>二维码里保存的是短链接地址。以后你只需要修改短链接目标，已经印刷或发布的二维码仍然可以继续使用。</p></div>
+      </section>
+
+      <section id="text" class="docsArticle" data-doc="文本分享 纯文本 Markdown 代码 日志 密码 一次性">
+        <span class="docsSectionTag">链接与分享</span><h2>文本分享</h2>
+        <p>创建文本时可以自行选择三种展示方式，内容不会因为选择格式而执行脚本。</p>
+        <div class="docsCompare"><div><b>纯文本</b><span>保留换行与空格，适合普通说明和临时文字。</span></div><div><b>Markdown</b><span>支持标题、列表、引用、链接、粗体、行内代码和代码块等常用排版。</span></div><div><b>代码</b><span>使用等宽字体原样显示，适合代码片段、配置和日志。</span></div></div>
+        <p>文本分享还可以设置访问密码、有效期，以及「读取一次后自动失效」。</p>
+      </section>
+
+      <section id="files" class="docsArticle" data-doc="文件分享 上传 安全扫描 ClamAV 密码 下载 次数">
+        <span class="docsSectionTag">链接与分享</span><h2>文件分享</h2>
+        <p>文件上传后先进入安全检查流程，通过检查后才会成为可下载资源。你可以继续设置访问密码、有效期和下载次数限制。</p>
+        <div class="docsFlow"><span>上传</span><i>→</i><span>安全检查</span><i>→</i><span>可分享</span><i>→</i><span>下载统计</span></div>
+      </section>
+
+      <section id="bio" class="docsArticle" data-doc="个人主页 Bio Page 主题 社交 链接">
+        <span class="docsSectionTag">链接与分享</span><h2>个人主页</h2>
+        <p>个人主页适合把多个长期入口汇总到一个页面。可以维护标题、简介、头像、主题和多个外部链接，并保持公开地址长期不变。</p>
+      </section>
+
+      <section id="officialdomains" class="docsArticle" data-doc="官方短链域名 管理员 多域名 默认域名">
+        <span class="docsSectionTag">域名与分析</span><h2>官方短链域名</h2>
+        <p>站点管理员可以维护多个官方短链域名，并指定一个默认域名。客户创建短链接时会看到当前可用的官方域名列表，不需要每个客户重复做域名验证。</p>
+        <p>管理员停用某个域名后，它不会再出现在新建链接的选择列表中；已经存在的链接不会因为「停用」动作被自动删除。</p>
+      </section>
+
+      <section id="customdomains" class="docsArticle" data-doc="自定义域名 DNS TXT CNAME HTTPS 验证 品牌域名">
+        <span class="docsSectionTag">域名与分析</span><h2>自定义域名</h2>
+        <ol><li>在工作区打开「自定义域名」，添加需要使用的域名。</li><li>按照控制台给出的验证信息配置 DNS。</li><li>回到控制台执行验证，等待域名状态与 HTTPS 状态均正常。</li><li>创建短链接时即可从域名下拉列表中选择该域名。</li></ol>
+        <div class="docsWarning"><b>注意</b><p>只有已经完成所有权验证且 HTTPS 可用的域名才会进入短链接选择列表。</p></div>
+      </section>
+
+      <section id="analytics" class="docsArticle" data-doc="访问分析 点击 独立访客 来源 国家 地区 设备 浏览器">
+        <span class="docsSectionTag">域名与分析</span><h2>访问分析</h2>
+        <p>每条短链接都可以查看访问表现，包括点击、独立访客、访问来源、国家/地区、设备、浏览器以及最近访问记录。二维码访问也会单独记录，方便区分线上与线下入口。</p>
+      </section>
+
+      <section id="smartlinks" class="docsArticle" data-doc="智能路由 AB 分流 国家 设备 语言 来源 权重">
+        <span class="docsSectionTag">域名与分析</span><h2>智能路由与 A/B 分流</h2>
+        <p>高级设置默认收起，普通链接无需配置。需要精细分流时，可以按国家/地区、设备、浏览器语言或访问来源把流量送到不同目标；A/B 分流则按权重把未命中规则的访问分配到多个目标。</p>
+      </section>
+
+      <section id="team" class="docsArticle" data-doc="团队 工作区 成员 邀请 角色 权限">
+        <span class="docsSectionTag">账户与服务</span><h2>团队协作</h2>
+        <p>工作区可以邀请成员，并根据角色控制可执行的操作。成员变更、邀请状态和主要资源都集中在同一工作区管理。</p>
+      </section>
+
+      <section id="billing" class="docsArticle" data-doc="套餐 账单 发票 支付 订阅 配额">
+        <span class="docsSectionTag">账户与服务</span><h2>套餐与账单</h2>
+        <p>套餐决定工作区可使用的资源配额。账单页面显示当前订阅、发票与可用支付方式；具体价格、币种与支付渠道以当前站点配置为准。</p>
+      </section>
+
+      <section id="security" class="docsArticle" data-doc="账户安全 Turnstile 密码 验证码 会话 邮箱验证">
+        <span class="docsSectionTag">账户与服务</span><h2>账户安全</h2>
+        <p>GoJet 可以在注册、登录、找回密码、工单和滥用举报等场景启用 Turnstile 人机验证。管理员还可以管理用户会话和登录安全策略。</p>
+      </section>
+
+      <section id="support" class="docsArticle" data-doc="支持 工单 客服 回复 状态 优先级">
+        <span class="docsSectionTag">账户与服务</span><h2>支持工单</h2>
+        <p>需要持续跟进的问题建议使用工单。工单会保留主题、部门、优先级、处理状态以及双方回复记录，比一次性的联系表单更适合排查问题。</p>
+        <a class="docsAction" href="/app/support">进入支持工单 →</a>
+      </section>
+
+      <section id="api" class="docsArticle" data-doc="API 开发者 自动化 接口 鉴权">
+        <span class="docsSectionTag">开发者</span><h2>API 与自动化</h2>
+        <p>需要把链接管理接入自己的业务流程时，可以使用 GoJet 的接口能力。接口遵循账户和工作区权限边界，建议为自动化操作使用专门的账户与最小权限。</p>
+      </section>
+
+      <section id="webhooks" class="docsArticle" data-doc="支付 回调 Webhook 支付渠道 签名">
+        <span class="docsSectionTag">开发者</span><h2>支付回调与事件</h2>
+        <p>支付渠道的异步回调由服务端接收并校验。正式接入时应使用支付服务商提供的签名验证方式，并以服务端确认结果作为最终支付状态依据。</p>
+      </section>
+
+      <section class="docsEnd"><h2>没有找到答案？</h2><p>把问题、出现页面和操作步骤写进工单，客服可以沿同一条会话继续排查。</p><a href="/app/support">提交支持工单</a></section>
+    </article>
+  </section>
+</main>
+<footer><div class="container"><a class="logo" href="/">GoJet<i>.</i></a></div></footer>
+<script src="/assets/app.js"></script>
+<script src="/assets/docs.js"></script>
+</body>
+</html>
