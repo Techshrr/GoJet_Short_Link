@@ -37,3 +37,4 @@ brandassetconsolidation.sql
 paymentcallbackevents.sql
 supportticketmessageip.sql
 officialshortdomains.sql
+emailauthcodes.sql
