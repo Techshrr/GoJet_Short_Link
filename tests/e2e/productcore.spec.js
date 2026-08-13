@@ -127,7 +127,8 @@ test('operations page has direct actions without mandatory reason fields',async(
 
 test('mail templates and SMTP save are ordinary admin operations',async({page})=>{
   await adminLogin(page);
-  await page.getByRole('button',{name:'邮件服务',exact:true}).click();
+  await page.getByRole('button',{name:'系统设置',exact:true}).click();
+  await page.getByRole('button',{name:/^邮件服务/}).click();
   await page.getByLabel('SMTP Host').fill('smtp.example.test');
   await page.getByLabel('发件邮箱').fill('noreply@example.test');
   await page.getByRole('button',{name:'保存 SMTP'}).click();
@@ -137,7 +138,8 @@ test('mail templates and SMTP save are ordinary admin operations',async({page})=
 
 test('SMTP test send shows pending, prevents duplicate submit and reports success/failure',async({page})=>{
   await adminLogin(page);
-  await page.getByRole('button',{name:'邮件服务',exact:true}).click();
+  await page.getByRole('button',{name:'系统设置',exact:true}).click();
+  await page.getByRole('button',{name:/^邮件服务/}).click();
   await page.getByRole('button',{name:'发送测试',exact:true}).click();
   const modal=page.locator('#modal');
   await modal.getByLabel('测试收件人').fill('ok@example.test');
@@ -160,7 +162,7 @@ test('SMTP test send shows pending, prevents duplicate submit and reports succes
 test('system settings expose the current editable policy surface',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'系统设置',exact:true}).click();
-  for(const text of ['站点信息','搜索与分享','注册与账户','短链接','支付方式','品牌与视觉']){
+  for(const text of ['站点信息','搜索与分享','注册与账户','短链接','支付方式','邮件服务','人机验证','品牌与视觉']){
     await expect(page.getByRole('button',{name:new RegExp(text)})).toBeVisible();
   }
   await page.getByRole('button',{name:/搜索与分享/}).click();
@@ -184,7 +186,8 @@ test('admin support queue provides WHMCS-style conversation and internal notes',
 
 test('Turnstile control center masks secret and exposes per-surface switches',async({page})=>{
   await adminLogin(page);
-  await page.getByRole('button',{name:'人机验证',exact:true}).click();
+  await page.getByRole('button',{name:'系统设置',exact:true}).click();
+  await page.getByRole('button',{name:/^人机验证/}).click();
   const form=page.locator('#botProtectionForm');
   await expect(page.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
   await expect(form.getByLabel('Secret Key')).toHaveValue('');
