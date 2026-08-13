@@ -29,7 +29,10 @@ func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/workspaces/{id}/billing/invoices/{invoice}/pay", s.user(s.startInvoicePayment))
 	mux.HandleFunc("POST /api/payments/alipay/notify", s.observePaymentCallback("alipay", s.alipayNotify))
 	mux.HandleFunc("POST /api/payments/wechat/notify", s.observePaymentCallback("wechat", s.wechatNotify))
-	mux.HandleFunc("POST /api/payments/epay/notify", s.observePaymentCallback("epay", s.epayNotify))
+	// Epay-compatible V1 implementations commonly send asynchronous callbacks
+	// with GET while others use POST. Accept both on the same signed endpoint.
+	mux.HandleFunc("/api/payments/epay/notify", s.observePaymentCallback("epay", s.epayNotify))
+	mux.HandleFunc("GET /api/payments/epay/return", s.observePaymentCallback("epay", s.epayReturn))
 	mux.HandleFunc("POST /api/payments/paypal/webhook", s.observePaymentCallback("paypal", s.paypalWebhook))
 	mux.HandleFunc("GET /api/payments/paypal/return", s.paypalReturn)
 	mux.HandleFunc("POST /api/payments/stripe/webhook", s.observePaymentCallback("stripe", s.stripeWebhook))
@@ -225,7 +228,9 @@ func paymentForm(w http.ResponseWriter, r *http.Request) (url.Values, bool) {
 		jsonResponse(w, 400, map[string]string{"error": "支付通知格式无效"})
 		return nil, false
 	}
-	return r.PostForm, true
+	// r.Form merges the query string and urlencoded POST body, which is required
+	// for Epay-compatible providers that choose either transport.
+	return r.Form, true
 }
 func (s *server) alipayNotify(w http.ResponseWriter, r *http.Request) {
 	form, ok := paymentForm(w, r)
@@ -252,6 +257,22 @@ func (s *server) epayNotify(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte("success"))
+}
+func (s *server) epayReturn(w http.ResponseWriter, r *http.Request) {
+	form, ok := paymentForm(w, r)
+	if !ok {
+		http.Redirect(w, r, "/app/billing?payment=failed", http.StatusSeeOther)
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(form.Get("trade_status")), "TRADE_SUCCESS") {
+		http.Redirect(w, r, "/app/billing?payment=cancelled", http.StatusSeeOther)
+		return
+	}
+	if err := s.paymentService().HandleEPayNotification(r.Context(), form); err != nil {
+		http.Redirect(w, r, "/app/billing?payment=failed", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/app/billing?payment=success", http.StatusSeeOther)
 }
 func (s *server) wechatNotify(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
