@@ -6,6 +6,7 @@ const BQA=s=>[...document.querySelectorAll(s)];
 const BE=v=>escapeHTML(v??'');
 let billingData=null;
 let paymentPoll=null;
+let returnPoll=null;
 
 const statusName={active:'使用中',past_due:'待处理',cancelled:'已取消',pending:'待支付',paid:'已支付',void:'已作废',overdue:'已逾期'};
 const typeName={purchase:'购买套餐',upgrade:'变更套餐',renewal:'续费'};
@@ -31,11 +32,13 @@ function modal(title,body){
 }
 
 async function render(){
-  clearInterval(paymentPoll);
+  clearInterval(paymentPoll);paymentPoll=null;
+  clearInterval(returnPoll);returnPoll=null;
   const content=BQ('.content');
-  content.innerHTML=`<div class="productPageHead"><div><h1>套餐与账单</h1><p>查看当前套餐、用量和账单；在线支付成功后会自动更新套餐状态。</p></div><button id="billingRefresh">刷新</button></div><div id="billingWorkspace" class="productLoading">正在加载账单…</div>`;
+  content.innerHTML=`<div class="productPageHead"><div><h1>套餐与账单</h1><p>查看当前套餐和账单记录；在线支付确认后套餐会自动生效。</p></div><button id="billingRefresh">刷新</button></div><div id="billingWorkspace" class="productLoading">正在加载账单…</div>`;
   BQ('#billingRefresh').onclick=render;
   await load();
+  beginReturnReconcile();
 }
 
 async function load(){
@@ -53,20 +56,38 @@ async function load(){
         ${subscription.plan_code&&subscription.plan_code!=='starter'?`<button id="billingCancellation">${subscription.cancel_at_period_end?'继续订阅':'到期后取消'}</button>`:''}
       </section>
       ${subscription.cancel_at_period_end?'<div class="notice">当前套餐将在本周期结束后停止续订。你可以在到期前恢复续订。</div>':''}
-      <section class="billingSection"><div class="billingSectionHead"><div><h2>选择套餐</h2><p>选择套餐后会直接进入支付步骤，付款确认后自动生效。</p></div></div><div class="planGrid billingPlans">${plans.map(plan=>planCard(plan,subscription)).join('')}</div></section>
-      <section class="billingSection"><div class="billingSectionHead"><div><h2>账单记录</h2><p>账单状态以支付渠道通知和系统记录为准。</p></div></div>${invoices.length?`<div class="billingInvoiceList">${invoices.map(invoiceCard).join('')}</div>`:'<div class="billingEmpty">还没有账单。</div>'}</section>`;
+      <section class="billingSection"><div class="billingSectionHead"><div><h2>选择套餐</h2><p>按需要升级或续费；付款确认后无需再次操作。</p></div></div><div class="planGrid billingPlans">${plans.map(plan=>planCard(plan,subscription)).join('')}</div></section>
+      <section class="billingSection"><div class="billingSectionHead"><div><h2>账单记录</h2><p>支付状态、支付时间和套餐生效结果均以系统确认记录为准。</p></div></div>${invoices.length?`<div class="billingInvoiceList">${invoices.map(invoiceCard).join('')}</div>`:'<div class="billingEmpty">还没有账单。</div>'}</section>`;
     wire(subscription);
   }catch(error){
     host.innerHTML=`<div class="productError">${BE(error.message)}</div>`;
   }
 }
 
+function paymentResult(){return new URLSearchParams(location.search).get('payment')||''}
 function paymentNotice(){
-  const result=new URLSearchParams(location.search).get('payment');
-  if(result==='success'||result==='return')return '<div class="productSuccess billingNotice">付款页面已经返回，系统正在等待支付渠道确认。账单确认后套餐会自动生效。</div>';
-  if(result==='cancelled')return '<div class="notice billingNotice">本次付款已取消，账单仍然保留，可以稍后重新支付。</div>';
-  if(result==='failed')return '<div class="productError billingNotice">付款结果未能确认。请不要重复付款，先刷新账单状态；如已扣款但状态未更新，请提交工单。</div>';
+  const result=paymentResult();
+  if(result==='success')return '<div class="productSuccess billingNotice"><b>支付已经确认。</b> 账单和套餐状态已由系统更新。</div>';
+  if(result==='return')return '<div class="notice billingNotice"><b>已从付款页面返回。</b> 正在自动核对支付渠道结果，请勿重复付款。</div>';
+  if(result==='cancelled')return '<div class="notice billingNotice">本次付款未完成，账单仍然保留，可以稍后继续支付。</div>';
+  if(result==='failed')return '<div class="productError billingNotice">付款结果未能确认。请不要重复付款；如已扣款但状态未更新，请提交工单并附上账单号。</div>';
   return'';
+}
+
+function beginReturnReconcile(){
+  if(paymentResult()!=='return'||returnPoll)return;
+  let attempts=0;
+  returnPoll=setInterval(async()=>{
+    if(++attempts>20){clearInterval(returnPoll);returnPoll=null;return}
+    try{
+      const fresh=await api(`/api/workspaces/${state.workspace}/billing`);
+      if((fresh.invoices||[]).some(item=>item.status==='paid')){
+        clearInterval(returnPoll);returnPoll=null;
+        const url=new URL(location.href);url.searchParams.set('payment','success');history.replaceState(null,'',url);
+        await load();
+      }
+    }catch{}
+  },2000);
 }
 
 function planCard(plan,subscription){
@@ -85,7 +106,7 @@ function planCard(plan,subscription){
 function invoiceCard(invoice){
   const payable=['pending','overdue'].includes(invoice.status)&&Number(invoice.amount_cents)>0;
   return `<article class="invoiceCard">
-    <div class="invoiceMain"><div class="invoiceTitle"><b>${BE(invoice.invoice_number)}</b><span class="productStatus">${BE(statusName[invoice.status]||invoice.status)}</span></div><div class="invoiceMeta"><span>${BE(invoice.plan_name)}</span><span>${BE(typeName[invoice.invoice_type]||invoice.invoice_type)}</span><span>开具于 ${fmtDate(invoice.created_at)}</span>${invoice.due_at?`<span>支付期限 ${fmtDate(invoice.due_at)}</span>`:''}</div></div>
+    <div class="invoiceMain"><div class="invoiceTitle"><b>${BE(invoice.invoice_number)}</b><span class="productStatus">${BE(statusName[invoice.status]||invoice.status)}</span></div><div class="invoiceMeta"><span>${BE(invoice.plan_name)}</span><span>${BE(typeName[invoice.invoice_type]||invoice.invoice_type)}</span><span>开具 ${fmtDate(invoice.created_at)}</span>${invoice.status==='paid'&&invoice.paid_at?`<span>支付 ${fmtDate(invoice.paid_at)}</span>`:invoice.due_at?`<span>支付期限 ${fmtDate(invoice.due_at)}</span>`:''}</div></div>
     <strong class="invoiceAmount">${money(invoice.amount_cents,invoice.currency)}</strong>
     <div class="invoiceActions">${payable?`<button class="primary" data-pay-invoice="${Number(invoice.id)}">立即支付</button>`:''}<button data-download-invoice="${Number(invoice.id)}" data-invoice-number="${BE(invoice.invoice_number)}">下载账单</button></div>
   </article>`;
@@ -100,7 +121,7 @@ function wire(subscription){
 
 async function requestInvoice(planCode,type){
   const title=type==='renewal'?'确认续费':'确认选择套餐';
-  const dialog=modal(title,`<form id="invoiceRequestForm"><p>下一步将创建账单并直接选择支付方式。付款确认后套餐自动生效，不需要再次返回账单页操作。</p><div data-error></div><div class="productModalFoot"><button type="button" data-cancel>取消</button><button class="primary">继续支付</button></div></form>`);
+  const dialog=modal(title,`<form id="invoiceRequestForm"><p>下一步将创建账单并选择支付方式。付款确认后套餐自动生效，不需要再次返回账单页操作。</p><div data-error></div><div class="productModalFoot"><button type="button" data-cancel>取消</button><button class="primary">继续支付</button></div></form>`);
   dialog.layer.querySelector('[data-cancel]').onclick=dialog.close;
   dialog.layer.querySelector('form').onsubmit=async event=>{
     event.preventDefault();
@@ -110,10 +131,7 @@ async function requestInvoice(planCode,type){
     try{
       const invoice=await api(`/api/workspaces/${state.workspace}/billing/invoices`,{method:'POST',body:JSON.stringify({plan_code:planCode,type})});
       dialog.close();
-      if(Number(invoice.amount_cents||0)<=0){
-        await load();
-        return;
-      }
+      if(Number(invoice.amount_cents||0)<=0){await load();return}
       await choosePayment(Number(invoice.id));
     }catch(error){
       submit.disabled=false;
@@ -135,9 +153,7 @@ async function choosePayment(invoiceID){
       ?`<div class="paymentMethodList">${methods.map(method=>`<button data-provider="${BE(method.code)}"><span class="paymentMark">${paymentMark(method.code)}</span><span><b>${BE(method.name||providerName[method.code])}</b><small>${method.mode==='qr'?'扫码完成付款':'进入付款页面完成支付'}</small></span><i>›</i></button>`).join('')}</div>`
       :'<div class="billingEmpty"><b>当前没有可用的在线支付方式。</b><p>账单已经保留，可以稍后从账单记录继续支付，或提交工单联系管理员。</p></div>';
     host.querySelectorAll('[data-provider]').forEach(button=>button.onclick=()=>startPayment(invoiceID,button.dataset.provider,dialog));
-  }catch(error){
-    dialog.layer.querySelector('#paymentMethods').innerHTML=`<div class="productError">${BE(error.message)}</div>`;
-  }
+  }catch(error){dialog.layer.querySelector('#paymentMethods').innerHTML=`<div class="productError">${BE(error.message)}</div>`}
 }
 
 function paymentMark(code){return({alipay:'支',wechat:'微',epay:'易',paypal:'P',stripe:'S'})[code]||'付'}
@@ -151,14 +167,9 @@ async function startPayment(invoiceID,provider,dialog){
       host.innerHTML=`<div class="qrPayment"><h3>${BE(checkout.provider_name||providerName[provider])}</h3><p>请使用对应应用扫描二维码完成付款。</p><div class="paymentQR"><span>正在生成二维码…</span></div><b>等待支付确认</b><small>付款完成后本页会自动更新账单和套餐状态。</small></div>`;
       await loadPaymentQR(checkout.transaction_id,host.querySelector('.paymentQR'));
       beginPaymentPoll(invoiceID,dialog);
-    }else if(checkout.redirect_url){
-      location.assign(checkout.redirect_url);
-    }else{
-      throw new Error('支付渠道没有返回可用的付款入口');
-    }
-  }catch(error){
-    host.innerHTML=`<div class="productError">${BE(error.message)}</div>`;
-  }
+    }else if(checkout.redirect_url){location.assign(checkout.redirect_url)}
+    else throw new Error('支付渠道没有返回可用的付款入口');
+  }catch(error){host.innerHTML=`<div class="productError">${BE(error.message)}</div>`}
 }
 
 async function loadPaymentQR(transactionID,host){
@@ -166,12 +177,7 @@ async function loadPaymentQR(transactionID,host){
   if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||'无法加载支付二维码');
   const blob=await response.blob();
   const objectURL=URL.createObjectURL(blob);
-  const image=new Image();
-  image.alt='支付二维码';
-  image.onload=()=>URL.revokeObjectURL(objectURL);
-  image.src=objectURL;
-  host.innerHTML='';
-  host.appendChild(image);
+  const image=new Image();image.alt='支付二维码';image.onload=()=>URL.revokeObjectURL(objectURL);image.src=objectURL;host.innerHTML='';host.appendChild(image);
 }
 
 function beginPaymentPoll(invoiceID,dialog){
@@ -183,52 +189,38 @@ function beginPaymentPoll(invoiceID,dialog){
       const fresh=await api(`/api/workspaces/${state.workspace}/billing`);
       const invoice=(fresh.invoices||[]).find(item=>Number(item.id)===Number(invoiceID));
       if(invoice?.status==='paid'){
-        clearInterval(paymentPoll);
-        paymentPoll=null;
-        dialog.close();
-        await load();
+        clearInterval(paymentPoll);paymentPoll=null;dialog.close();await load();
       }
     }catch{}
   },3000);
 }
 
-function downloadPDF(invoiceID,number){
-  const dialog=modal('正在准备账单','<div id="invoiceDownloadState" class="productLoading">正在生成 PDF…</div>');
-  const xhr=new XMLHttpRequest();
-  xhr.open('GET',`/api/workspaces/${state.workspace}/billing/invoices/${invoiceID}/pdf`);
-  xhr.responseType='blob';
-  xhr.timeout=30000;
-  xhr.setRequestHeader('Authorization',`Bearer ${state.token}`);
-  xhr.setRequestHeader('Cache-Control','no-cache');
-  xhr.onload=()=>{
-    if(xhr.status<200||xhr.status>=300){
-      readBlobError(xhr.response).then(message=>showDownloadError(dialog,message||`账单下载失败（HTTP ${xhr.status}）`));
-      return;
+async function downloadPDF(invoiceID,number){
+  const dialog=modal('正在准备账单','<div id="invoiceDownloadState" class="productLoading">正在生成 PDF，请稍候…</div>');
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),90000);
+  try{
+    const response=await fetch(`/api/workspaces/${state.workspace}/billing/invoices/${invoiceID}/pdf`,{
+      headers:{Authorization:`Bearer ${state.token}`,'Cache-Control':'no-cache'},cache:'no-store',signal:controller.signal
+    });
+    if(!response.ok){
+      let message='';try{message=(await response.json()).error||''}catch{}
+      throw new Error(message||`账单下载失败（HTTP ${response.status}）`);
     }
-    const contentType=String(xhr.getResponseHeader('Content-Type')||'').toLowerCase();
-    if(!contentType.includes('application/pdf')){
-      showDownloadError(dialog,'服务器返回的不是 PDF 文件，请刷新后重试。');
-      return;
-    }
-    const objectURL=URL.createObjectURL(xhr.response);
+    const contentType=String(response.headers.get('Content-Type')||'').toLowerCase();
+    if(!contentType.includes('application/pdf'))throw new Error('服务器返回的不是 PDF 文件，请刷新后重试。');
+    const blob=await response.blob();
+    if(blob.size<1000)throw new Error('生成的账单文件不完整，请稍后重试。');
+    const objectURL=URL.createObjectURL(blob);
     const anchor=document.createElement('a');
-    const safeNumber=String(number||'Document').replace(/[-_]/g,'');
-    anchor.href=objectURL;
-    anchor.download=`GoJetInvoice${safeNumber}.pdf`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(()=>URL.revokeObjectURL(objectURL),3000);
-    dialog.close();
-  };
-  xhr.onerror=()=>showDownloadError(dialog,'账单下载连接中断。请刷新页面后重试；如果仍然失败，请提交工单并附上账单号。');
-  xhr.ontimeout=()=>showDownloadError(dialog,'账单生成超时。请稍后重试。');
-  xhr.send();
+    const safeNumber=String(number||'Document').replace(/[^a-z0-9]/gi,'');
+    anchor.href=objectURL;anchor.download=`GoJetInvoice${safeNumber}.pdf`;document.body.appendChild(anchor);anchor.click();anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(objectURL),5000);dialog.close();
+  }catch(error){
+    showDownloadError(dialog,error?.name==='AbortError'?'账单生成超过 90 秒，请稍后重试。':error?.message||'账单下载连接中断，请稍后重试。');
+  }finally{clearTimeout(timeout)}
 }
 
-async function readBlobError(blob){
-  try{const text=await blob.text();const data=JSON.parse(text);return data.error||''}catch{return''}
-}
 function showDownloadError(dialog,message){
   const host=dialog.layer.querySelector('#invoiceDownloadState');
   host.className='productError';
@@ -242,11 +234,8 @@ async function toggleCancellation(cancel){
     event.preventDefault();
     try{
       await api(`/api/workspaces/${state.workspace}/billing/cancellation`,{method:'PATCH',body:JSON.stringify({cancel})});
-      dialog.close();
-      await load();
-    }catch(error){
-      dialog.layer.querySelector('[data-error]').innerHTML=`<div class="productError">${BE(error.message)}</div>`;
-    }
+      dialog.close();await load();
+    }catch(error){dialog.layer.querySelector('[data-error]').innerHTML=`<div class="productError">${BE(error.message)}</div>`}
   };
 }
 
