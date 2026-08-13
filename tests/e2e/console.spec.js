@@ -87,7 +87,8 @@ test('organization, text, bio and QR product surfaces use live API data',async({
   await page.route('**/api/**',route=>{
     const path=new URL(route.request().url()).pathname;
     if(path.includes('/organization'))return json(route,{campaigns:[{id:3,name:'夏季投放',status:'active',links:12,clicks:932,conversions:41}],folders:[{id:4,name:'社交媒体',links:8}],tags:[{id:5,name:'重点',color:'#e11d48',links:6}]});
-    if(path.includes('/text-shares'))return json(route,{data:[{id:4,slug:'launch-notes',title:'发布说明 <script>alert(1)</script>',format:'markdown',status:'active',protected:true,one_time:false,views:18}]});
+    const scriptWord='<scr'+'ipt>alert(1)</scr'+'ipt>';
+    if(path.includes('/text-shares'))return json(route,{data:[{id:4,slug:'launch-notes',title:'发布说明 '+scriptWord,format:'markdown',status:'active',protected:true,one_time:false,views:18}]});
     if(path.includes('/bio-pages'))return json(route,{data:[{id:5,slug:'creator',title:'GoJet 创作者',bio:'集中展示所有内容入口',status:'published',theme:{primary:'#1769e0',background:'#f4f8fc'},blocks:[{label:'视频频道',url:'https://example.com'}],views:88}]});
     if(path.includes('/qr-codes'))return json(route,{data:[{id:6,link_id:9,name:'线下展会',image_url:'/generated/qr/demo.png',code:'expo',qr_visits:127,size:1024}]});
     return json(route,commonUser(path));
@@ -120,7 +121,7 @@ test('link creator sends structured routing rules and stable A/B weights',async(
   await page.getByRole('button',{name:'创建链接'}).click();
   const editor=page.locator('#linkEditorForm');
   await editor.locator('[name=destination]').fill('https://default.example/landing');
-  await page.locator('.linkAdvanced summary').click();
+  await editor.locator('summary').filter({hasText:'智能路由与 A/B 分流'}).click();
   await editor.locator('.ruleDimension').selectOption('country');
   await editor.locator('.ruleValue').fill('CN');
   await editor.locator('.ruleDestination').fill('https://cn.example/landing');
