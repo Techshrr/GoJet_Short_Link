@@ -8,13 +8,13 @@ index='frontend/adminconsole/index.html'
 mail='frontend/adminconsole/mailstatus.js'
 mail_templates='frontend/adminconsole/mailtemplates.js'
 bot='frontend/adminconsole/supportsecurity.js'
+browser_config='playwright.config.js'
+console_spec='tests/e2e/console.spec.js'
+product_spec='tests/e2e/productcore.spec.js'
 
-test -f "$canonical"
-test -f "$core"
-test -f "$index"
-test -f "$mail"
-test -f "$mail_templates"
-test -f "$bot"
+for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$browser_config" "$console_spec" "$product_spec"; do
+  test -f "$file"
+done
 
 grep -Fq 'renderSettings=async function(){' "$canonical"
 grep -Fq 'async function saveUnifiedSection(' "$canonical"
@@ -58,6 +58,21 @@ do
   fi
 done
 
+# The lightweight browser fixture owns 127.0.0.1:4173 only. Analytics Dashboard
+# has a dedicated real-runtime/Nginx gate on 127.0.0.1:4180 and must not leak
+# into this suite.
+grep -Fq "'**/analyticsdashboard.spec.js'" "$browser_config"
+
+# Browser acceptance must exercise the final IA: top-level System Settings first,
+# then embedded mail/Turnstile panes. This prevents tests from forcing retired
+# top-level navigation back into the product.
+grep -Fq "getByRole('button',{name:'系统设置',exact:true}).click()" "$console_spec"
+grep -Fq "getByRole('button',{name:/邮件服务/})" "$console_spec"
+grep -Fq "getByRole('button',{name:/人机验证/})" "$console_spec"
+grep -Fq "getByRole('button',{name:'系统设置',exact:true}).click()" "$product_spec"
+grep -Fq "getByRole('button',{name:/^邮件服务/}).click()" "$product_spec"
+grep -Fq "getByRole('button',{name:/^人机验证/}).click()" "$product_spec"
+
 app_line=$(grep -n '<script src="/admin/app.js"></script>' "$index" | cut -d: -f1)
 mail_line=$(grep -n '<script src="/admin/mailstatus.js"></script>' "$index" | cut -d: -f1)
 settings_line=$(grep -n '<script src="/admin/settings.js"></script>' "$index" | cut -d: -f1)
@@ -67,4 +82,4 @@ test "$app_line" -lt "$mail_line"
 test "$mail_line" -lt "$settings_line"
 test "$settings_line" -lt "$bot_line"
 
-printf 'administrator settings IA and single-owner source contract: PASS\n'
+printf 'administrator settings IA and browser source contract: PASS\n'
