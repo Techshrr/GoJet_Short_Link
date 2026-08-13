@@ -18,6 +18,12 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/support/tickets/{ticket}/replies", s.admin("tickets.manage", s.adminReplySupportTicket))
 	mux.HandleFunc("PATCH /api/admin/support/tickets/{ticket}", s.admin("tickets.manage", s.adminUpdateSupportTicket))
 
+	mux.HandleFunc("GET /api/workspaces/{id}/link-domains", s.user(s.workspaceLinkDomains))
+	mux.HandleFunc("GET /api/admin/official-domains", s.admin("domains.manage", s.adminOfficialShortDomains))
+	mux.HandleFunc("POST /api/admin/official-domains", s.admin("domains.manage", s.adminCreateOfficialShortDomain))
+	mux.HandleFunc("PATCH /api/admin/official-domains/{domain}", s.admin("domains.manage", s.adminUpdateOfficialShortDomain))
+	mux.HandleFunc("DELETE /api/admin/official-domains/{domain}", s.admin("domains.manage", s.adminDeleteOfficialShortDomain))
+
 	mux.HandleFunc("POST /api/admin/plans", s.admin("billing.manage", s.adminCreatePlan))
 	mux.HandleFunc("DELETE /api/admin/plans/{id}", s.admin("billing.manage", s.adminArchivePlan))
 
