@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+const (
+	smtpDialTimeout    = 8 * time.Second
+	smtpSessionTimeout = 20 * time.Second
+)
+
 type SMTPConfig struct {
 	Host                                                               string
 	Port                                                               int
@@ -45,13 +50,14 @@ func (c SMTPConfig) dial(ctx context.Context) (*smtp.Client, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
-	dialer := net.Dialer{Timeout: 8 * time.Second}
+	dialer := net.Dialer{Timeout: smtpDialTimeout}
 	var client *smtp.Client
 	if c.Encryption == "tls" {
 		conn, err := tls.DialWithDialer(&dialer, "tcp", c.address(), &tls.Config{ServerName: c.Host, MinVersion: tls.VersionTLS12})
 		if err != nil {
 			return nil, classify(err)
 		}
+		_ = conn.SetDeadline(time.Now().Add(smtpSessionTimeout))
 		client, err = smtp.NewClient(conn, c.Host)
 		if err != nil {
 			conn.Close()
@@ -62,6 +68,7 @@ func (c SMTPConfig) dial(ctx context.Context) (*smtp.Client, error) {
 		if err != nil {
 			return nil, classify(err)
 		}
+		_ = conn.SetDeadline(time.Now().Add(smtpSessionTimeout))
 		client, err = smtp.NewClient(conn, c.Host)
 		if err != nil {
 			conn.Close()
@@ -108,7 +115,10 @@ func (c SMTPConfig) Test(ctx context.Context) error {
 	if err = client.Noop(); err != nil {
 		return classify(err)
 	}
-	return client.Quit()
+	// NOOP has already proved the authenticated SMTP session is usable. QUIT is
+	// only a courtesy close and some relays/proxies do not reply promptly. A
+	// delayed QUIT must never turn a successful connectivity test into a 502.
+	return nil
 }
 
 func encodeHTMLBody(value string) (string, error) {
@@ -169,7 +179,11 @@ func (c SMTPConfig) Send(ctx context.Context, m Message) error {
 	if closeErr != nil {
 		return classify(closeErr)
 	}
-	return client.Quit()
+	// writer.Close waits for the SMTP server's final 250 response to DATA. At
+	// that point the message has been accepted for delivery. Do not downgrade
+	// that accepted delivery to a failure merely because a subsequent QUIT is
+	// slow, dropped, or filtered by a relay.
+	return nil
 }
 
 func sanitize(v string) string { return strings.NewReplacer("\r", " ", "\n", " ").Replace(v) }
