@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,16 @@ func maxInt64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func analyticsLinkFilter(linkIDs []int64) (string, []any) {
+	placeholders := make([]string, 0, len(linkIDs))
+	args := make([]any, 0, len(linkIDs))
+	for _, id := range linkIDs {
+		placeholders = append(placeholders, "?")
+		args = append(args, strconv.FormatInt(id, 10))
+	}
+	return strings.Join(placeholders, ","), args
 }
 
 func (s *server) realtimeClicksForKeys(ctx context.Context, keys []string) int64 {
@@ -47,14 +58,21 @@ func (s *server) realtimeClicksForKeys(ctx context.Context, keys []string) int64
 	return total
 }
 
-func (s *server) workspaceRealtimeToday(ctx context.Context, workspaceID int64, linkIDs []int64, day time.Time) int64 {
+func (s *server) workspaceRealtimeToday(ctx context.Context, linkIDs []int64, day time.Time) int64 {
 	keys := make([]string, 0, len(linkIDs))
 	for _, id := range linkIDs {
 		keys = append(keys, fmt.Sprintf("gojet:daily:%d:%s", id, day.UTC().Format("2006-01-02")))
 	}
 	realtime := s.realtimeClicksForKeys(ctx, keys)
+	if len(linkIDs) == 0 {
+		return realtime
+	}
+	placeholders, args := analyticsLinkFilter(linkIDs)
+	args = append(args, day.UTC().Format("2006-01-02"))
 	var persisted int64
-	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(d.clicks),0) FROM analytics_daily d JOIN short_links l ON CAST(l.id AS CHAR)=d.link_id WHERE l.workspace_id=? AND l.deleted_at IS NULL AND d.metric_date=?`, workspaceID, day.UTC().Format("2006-01-02")).Scan(&persisted)
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(clicks),0) FROM analytics_daily WHERE link_id IN (`+placeholders+`) AND metric_date=?`, args...).Scan(&persisted); err != nil {
+		return realtime
+	}
 	return maxInt64(realtime, persisted)
 }
 
@@ -150,17 +168,17 @@ func (s *server) adminAnalyticsOverview(w http.ResponseWriter, r *http.Request) 
 	}
 
 	jsonResponse(w, 200, map[string]any{
-		"today_clicks":        todayClicks,
-		"visits_30d":          visits30d,
+		"today_clicks":         todayClicks,
+		"visits_30d":           visits30d,
 		"unique_visitors_30d": unique30d,
-		"bot_visits_30d":      bots30d,
-		"trend":               trend,
-		"sources":             s.dashboardDimension(ctx, "source_type", start),
-		"countries":           s.dashboardDimension(ctx, "country", start),
-		"devices":             s.dashboardDimension(ctx, "device", start),
-		"browsers":            s.dashboardDimension(ctx, "browser", start),
-		"pipeline":            pipeline,
-		"generated_at":        now,
-		"metric_source":       "redis_realtime_mysql_history",
+		"bot_visits_30d":       bots30d,
+		"trend":                trend,
+		"sources":              s.dashboardDimension(ctx, "source_type", start),
+		"countries":            s.dashboardDimension(ctx, "country", start),
+		"devices":              s.dashboardDimension(ctx, "device", start),
+		"browsers":             s.dashboardDimension(ctx, "browser", start),
+		"pipeline":             pipeline,
+		"generated_at":         now,
+		"metric_source":        "redis_realtime_mysql_history",
 	})
 }
