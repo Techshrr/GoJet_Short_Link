@@ -39,7 +39,7 @@ for legacy in 'function settingInput(' 'async function renderSettings(' 'async f
     exit 1
   fi
 done
-cp "$ROOT/public/install/index.php" "$TARGET/public/install/index.php"
+cp -R "$ROOT/public/install/." "$TARGET/public/install/"
 VERSION_QUERY=$(printf '?%s' 'v=')
 if grep -R -I -n -F "$VERSION_QUERY" "$TARGET/public"; then
   echo 'version query string leaked into production public assets' >&2
