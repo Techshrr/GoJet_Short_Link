@@ -1,0 +1,54 @@
+name: GoJet Analytics Dashboard refactor
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/analyticsdashboardapply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gojetanalyticsdashboardrefactor
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Apply canonical Analytics Dashboard refactor
+        run: |
+          set -euo pipefail
+          python3 scripts/applyanalyticsdashboard.py
+          gofmt -w services/platformapi/cmd/server/main.go services/platformapi/cmd/server/productroutes.go services/platformapi/cmd/server/admin.go services/platformapi/cmd/server/adminanalytics.go services/platformapi/cmd/server/overview.go
+          node --check frontend/adminconsole/app.js
+          node --check frontend/userconsole/analytics.js
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
+          bash -n tests/integration/analyticsdashboard.sh
+          go test ./...
+          go vet ./...
+          ! grep -R -I -n -F 'registerProductHardeningRoutes' services/platformapi/cmd/server
+          ! grep -R -I -n -F 'window.analytics=' frontend/userconsole
+      - name: Commit validated Analytics Dashboard implementation
+        run: |
+          set -euo pipefail
+          git restore -- .github/workflows
+          git config user.name 'GoJet Analytics Dashboard'
+          git config user.email 'actions@users.noreply.github.com'
+          git add services/platformapi/cmd/server/main.go services/platformapi/cmd/server/productroutes.go services/platformapi/cmd/server/admin.go services/platformapi/cmd/server/adminanalytics.go services/platformapi/cmd/server/overview.go frontend/adminconsole/app.js frontend/adminconsole/styles.css frontend/userconsole/analytics.js tests/integration/analyticsdashboard.sh
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Unify Analytics Dashboard metrics and presentation'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
