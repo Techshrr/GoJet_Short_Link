@@ -104,6 +104,10 @@ jobs:
           grep -Fq 'FRESHINSTALLONLY=1' scripts/packagerelease.sh
           grep -Fq 'stop_existing_services' scripts/nativeinstallerrun.sh
           grep -Fq 'information_schema.tables' scripts/nativeinstallerrun.sh
+          grep -Fq 'LEGACY_SERVICES=(log-receiver redirect-engine platform-api analytics-worker analytics-reconciler mail-worker file-worker operations-monitor)' scripts/nativeinstallerrun.sh
+          grep -Fq 'preflight_reserved_ports' scripts/nativeinstallerrun.sh
+          grep -Fq 'for port in 18080 18090 18092' scripts/nativeinstallerrun.sh
+          grep -Fq 'systemctl disable --now "gojet@$service.service"' scripts/nativeinstallerrun.sh
           test -z "$(grep -F 'upgradenative.sh' scripts/packagerelease.sh || true)"
           test -z "$(grep -F 'upgrade.sh' scripts/packagerelease.sh || true)"
 
