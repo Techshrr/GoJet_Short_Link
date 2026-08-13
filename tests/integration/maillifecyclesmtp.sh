@@ -83,7 +83,7 @@ assert payload is not None, 'SMTP acceptance body did not decode'
 body = payload.decode(message.get_content_charset() or 'utf-8')
 assert subject == 'GoJet 邮件服务测试成功', f'unexpected decoded subject: {subject!r}'
 assert '\ufffd' not in subject and '\ufffd' not in body, 'decoded SMTP message contains replacement characters'
-for expected in ('#16A66A', 'border-radius:12px', 'padding:0 8px 18px', 'padding:18px 8px 0', '此邮件由 GoJet 自动发送'):
+for expected in ('#16A66A', 'max-width:640px', 'border:1px solid #dfe5e2', 'border-radius:14px', 'padding:30px 32px 34px', 'padding:17px 10px 0', '此邮件由 GoJet 自动发送'):
     if expected == '#16A66A':
         assert expected.lower() in body.lower(), f'branded SMTP body missing {expected!r}'
     else:
@@ -121,6 +121,8 @@ start_worker
 wait_type "$user_email" account_welcome
 wait_type "$user_email" password_reset
 wait_type "$user_email" invoice_created
+invoice_layout=$(mysqlq "SELECT CONCAT(LOCATE('padding:0 8px 18px',body_html)>0,':',LOCATE('padding:18px 8px 0',body_html)>0) FROM mail_messages WHERE recipient='$user_email' AND message_type='invoice_created' ORDER BY id DESC LIMIT 1;")
+[[ "$invoice_layout" == "1:1" ]] || { echo "invoice mail structure is incomplete: $invoice_layout" >&2; exit 1; }
 
 # Pending invoice approaching due date.
 mysqlq "UPDATE billing_invoices SET status='pending',due_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 6 HOUR) WHERE id=$invoice_id;"
