@@ -14,8 +14,8 @@ function setMailTestState(button,statusEl,state,message){
 
 // Keep the entry action concise and consistent with the modal submit action.
 // This wrapper runs after app.js and therefore survives every mail-page render.
-const originalRenderMail=renderMail;
-renderMail=async function(){
+const originalRenderMail=renderMailSettings;
+renderMailSettings=async function(){
   await originalRenderMail();
   const entry=document.querySelector('#testSmtp');
   if(entry)entry.textContent='发送测试';
