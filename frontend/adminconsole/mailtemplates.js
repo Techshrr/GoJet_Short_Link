@@ -13,7 +13,10 @@
       }
       try{
         await api(`/api/admin/mail/templates/${encodeURIComponent(t.key)}`,{method:'PUT',body:JSON.stringify(payload)});
-        closeModal();toast('邮件模板已保存');renderMail();
+        closeModal();
+        toast('邮件模板已保存');
+        if(typeof window.refreshMailSettings==='function')await window.refreshMailSettings();
+        else if(typeof window.renderMailSettings==='function')await window.renderMailSettings();
       }catch(err){const x=$('#templateError');x.textContent=err.message;x.classList.remove('hidden')}
     };
   };
