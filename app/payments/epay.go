@@ -26,7 +26,12 @@ func (s *Service) createEPay(ctx context.Context, payment invoicePayment) (creat
 	params.Set("type", paymentType)
 	params.Set("out_trade_no", payment.OrderNo)
 	params.Set("notify_url", s.baseURL+"/api/payments/epay/notify")
-	params.Set("return_url", s.baseURL+"/app/billing?payment=return")
+	// The browser return is sent to a signed server endpoint instead of directly
+	// to the SPA. Common Epay-compatible gateways use GET for both notify and
+	// return callbacks. The signed return gives GoJet a second idempotent chance
+	// to settle an already-paid order when the asynchronous notification was
+	// delayed or filtered.
+	params.Set("return_url", s.baseURL+"/api/payments/epay/return")
 	params.Set("name", "GoJet "+payment.Invoice.PlanName)
 	params.Set("money", moneyDecimal(payment.Invoice.AmountCents))
 	params.Set("sign_type", "MD5")
@@ -39,9 +44,9 @@ func (s *Service) createEPay(ctx context.Context, payment invoicePayment) (creat
 }
 
 func (s *Service) HandleEPayNotification(ctx context.Context, form url.Values) error {
-	pid := s.setting(ctx, "payments.epay.pid", "")
+	pid := strings.TrimSpace(s.setting(ctx, "payments.epay.pid", ""))
 	key := s.setting(ctx, "payments.epay.key", "")
-	if pid == "" || key == "" || form.Get("pid") != pid {
+	if pid == "" || key == "" || strings.TrimSpace(form.Get("pid")) != pid {
 		return errors.New("易支付商户编号不匹配")
 	}
 	provided := strings.ToLower(strings.TrimSpace(form.Get("sign")))
@@ -49,14 +54,20 @@ func (s *Service) HandleEPayNotification(ctx context.Context, form url.Values) e
 	if provided == "" || provided != expected {
 		return errors.New("易支付通知签名验证失败")
 	}
-	if form.Get("trade_status") != "TRADE_SUCCESS" {
+	if !strings.EqualFold(strings.TrimSpace(form.Get("trade_status")), "TRADE_SUCCESS") {
 		return nil
 	}
-	amount, err := decimalToCents(form.Get("money"))
+	amount, err := decimalToCents(strings.TrimSpace(form.Get("money")))
 	if err != nil {
 		return err
 	}
-	return s.Complete(ctx, Notification{Provider: "epay", MerchantOrder: form.Get("out_trade_no"), ProviderReference: form.Get("trade_no"), AmountCents: amount, Currency: "CNY"})
+	return s.Complete(ctx, Notification{
+		Provider:          "epay",
+		MerchantOrder:     strings.TrimSpace(form.Get("out_trade_no")),
+		ProviderReference: strings.TrimSpace(form.Get("trade_no")),
+		AmountCents:       amount,
+		Currency:          "CNY",
+	})
 }
 
 func epaySign(values url.Values, key string) string {
