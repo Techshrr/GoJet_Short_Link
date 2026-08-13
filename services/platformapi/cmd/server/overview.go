@@ -113,16 +113,22 @@ func (s *server) workspaceOverview(w http.ResponseWriter, r *http.Request) {
 	trend[len(trend)-1].Clicks = today
 
 	recent := []map[string]any{}
-	rr, err := s.db.QueryContext(r.Context(), `SELECT l.id,l.code,l.title,l.destination,l.status,l.created_at,(SELECT COUNT(*) FROM analytics_events e WHERE e.link_id=CAST(l.id AS CHAR)) persisted_clicks FROM short_links l WHERE l.workspace_id=? AND l.deleted_at IS NULL ORDER BY l.created_at DESC LIMIT 5`, wid)
+	rr, err := s.db.QueryContext(r.Context(), `SELECT id,code,title,destination,status,created_at FROM short_links WHERE workspace_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 5`, wid)
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "最近链接暂时不可用"})
 		return
 	}
 	for rr.Next() {
-		var id, persistedClicks int64
+		var id int64
 		var code, title, destination, status string
 		var created time.Time
-		if err = rr.Scan(&id, &code, &title, &destination, &status, &created, &persistedClicks); err != nil {
+		if err = rr.Scan(&id, &code, &title, &destination, &status, &created); err != nil {
+			rr.Close()
+			jsonResponse(w, 503, map[string]string{"error": "最近链接暂时不可用"})
+			return
+		}
+		var persistedClicks int64
+		if err = s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM analytics_events WHERE link_id=?`, strconv.FormatInt(id, 10)).Scan(&persistedClicks); err != nil {
 			rr.Close()
 			jsonResponse(w, 503, map[string]string{"error": "最近链接暂时不可用"})
 			return
