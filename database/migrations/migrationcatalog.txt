@@ -35,3 +35,4 @@ linkcontracts.sql
 mailbranding.sql
 brandassetconsolidation.sql
 paymentcallbackevents.sql
+supportticketmessageip.sql
