@@ -1,0 +1,53 @@
+name: One-shot legacy admin mail cleanup
+
+on:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - '.github/workflows/oneshot-cleanup-admin-mail.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: rebuild/v4-rc12-real-install-fixes
+          fetch-depth: 0
+
+      - name: Remove retired duplicate mail implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/adminconsole/app.js')
+          source = path.read_text()
+          start_marker = 'async function renderMailSettings(){'
+          end_marker = 'async function renderDiagnostics(){'
+          assert source.count(start_marker) == 1, 'expected exactly one retired renderMailSettings implementation'
+          assert source.count(end_marker) == 1, 'renderDiagnostics boundary is not unique'
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          retired = source[start:end]
+          for marker in ('function mailTest(){', 'function templateModal(t){', 'renderMail()'):
+              assert marker in retired, f'missing expected retired marker: {marker}'
+          cleaned = source[:start] + source[end:]
+          for marker in (start_marker, 'function mailTest(){', 'function templateModal(t){', 'renderMail()'):
+              assert marker not in cleaned, f'retired mail code remains: {marker}'
+          path.write_text(cleaned)
+          PY
+
+      - name: Commit surgical cleanup
+        run: |
+          git diff --check
+          git diff -- frontend/adminconsole/app.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/adminconsole/app.js
+          git commit -m 'Remove retired duplicate admin mail implementation'
+          git push origin HEAD:rebuild/v4-rc12-real-install-fixes
