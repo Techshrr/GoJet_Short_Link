@@ -57,8 +57,8 @@ jobs:
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
           test -f database/migrations/migrationcatalog.txt
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 38
-          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 38
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 39
+          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 39
           test -z "$(find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -E '^[0-9]' || true)"
           MIGRATION_GLOB='database/migrations/'
           MIGRATION_GLOB+='*.sql'
