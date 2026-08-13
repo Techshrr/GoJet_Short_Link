@@ -17,10 +17,8 @@ test.beforeEach(async({page})=>{
 test('public home uses Chinese taxonomy and readable navigation/footer',async({page})=>{
   await page.setViewportSize({width:1440,height:1000});
   await page.goto('/');
-  await expect(page.getByText('核心产品',{exact:true})).toBeVisible();
-  await expect(page.getByText('个人主页',{exact:true}).first()).toBeVisible();
-  await expect(page.getByText('套餐价格',{exact:true}).first()).toBeVisible();
-  await expect(page.getByText('常见问题',{exact:true}).first()).toBeVisible();
+  const sectionLabels=page.locator('.mk-section-head>span');
+  await expect(sectionLabels).toContainText(['核心产品','个人主页','套餐价格','常见问题']);
   await expect(page.locator('body')).not.toContainText(/GOJET PRODUCTS|ONE PROFILE, MANY DESTINATIONS|PRICING|FAQ/);
   const navFont=await page.locator('.navLinks>a').first().evaluate(node=>parseFloat(getComputedStyle(node).fontSize));
   expect(navFont).toBeGreaterThanOrEqual(14);
@@ -36,15 +34,15 @@ test('public home uses Chinese taxonomy and readable navigation/footer',async({p
 for(const route of ['privacy','terms'])test(`${route} is a readable responsive legal document`,async({page})=>{
   await page.setViewportSize({width:1440,height:1000});
   await page.goto('/'+route);
-  const document=page.locator('.legalDocument');
-  await expect(document).toBeVisible();
-  const desktop=await document.boundingBox();
+  const legalDocument=page.locator('.legalDocument');
+  await expect(legalDocument).toBeVisible();
+  const desktop=await legalDocument.boundingBox();
   expect(desktop.width).toBeGreaterThan(850);
-  expect(await document.locator('section').count()).toBeGreaterThanOrEqual(13);
+  expect(await legalDocument.locator('section').count()).toBeGreaterThanOrEqual(13);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
   const first=page.locator('.legalDocument section').first();
   const grid=await first.evaluate(node=>getComputedStyle(node).gridTemplateColumns);
-  expect(grid.split(' ').length).toBeLessThanOrEqual(1);
+  expect(grid.split(' ').length).toBe(1);
 });
