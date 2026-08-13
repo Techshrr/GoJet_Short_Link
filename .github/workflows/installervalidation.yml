@@ -86,6 +86,9 @@ jobs:
           grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetbtrewrite.conf
           grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojethost.conf
           grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetnative.conf
+          grep -Fq 'location = /install { return 302 /install/; }' deploy/nginx/gojetbtrewrite.conf
+          grep -Fq 'location = /install/ { rewrite ^ /install/index.php last; }' deploy/nginx/gojetbtrewrite.conf
+          test "$(grep -cF 'proxy_pass http://127.0.0.1:18080' deploy/nginx/gojetbtrewrite.conf)" -ge 1
 
       - name: Run browser fixture acceptance
         run: |
@@ -127,7 +130,7 @@ jobs:
           for spec in \
             'redirectengine ./services/redirectengine/cmd/server' \
             'analyticsworker ./services/analyticsworker/cmd/worker' \
-            'analyticsreconciler ./services/analyticsreconciler/cmd/reconciler' \
+            'analyticsreconciler ./services/analyticsworker/cmd/reconciler' \
             'platformapi ./services/platformapi/cmd/server' \
             'mailworker ./services/platformapi/cmd/mailworker' \
             'fileworker ./services/platformapi/cmd/fileworker' \
