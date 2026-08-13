@@ -81,7 +81,8 @@ function beginReturnReconcile(){
     if(++attempts>20){clearInterval(returnPoll);returnPoll=null;return}
     try{
       const fresh=await api(`/api/workspaces/${state.workspace}/billing`);
-      if((fresh.invoices||[]).some(item=>item.status==='paid')){
+      const latest=(fresh.invoices||[])[0];
+      if(latest?.status==='paid'){
         clearInterval(returnPoll);returnPoll=null;
         const url=new URL(location.href);url.searchParams.set('payment','success');history.replaceState(null,'',url);
         await load();
