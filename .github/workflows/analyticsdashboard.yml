@@ -1,0 +1,216 @@
+name: GoJet Analytics Dashboard Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/links/**'
+      - 'database/**'
+      - 'frontend/adminconsole/**'
+      - 'frontend/userconsole/**'
+      - 'services/analyticsworker/**'
+      - 'services/analyticsreconciler/**'
+      - 'services/platformapi/cmd/server/adminanalytics.go'
+      - 'services/platformapi/cmd/server/admin.go'
+      - 'services/platformapi/cmd/server/overview.go'
+      - 'services/platformapi/cmd/server/productroutes.go'
+      - 'scripts/runmigrations.sh'
+      - 'tests/integration/analyticsdashboard.sh'
+      - 'tests/e2e/analyticsdashboard.spec.js'
+      - '.github/workflows/analyticsdashboard.yml'
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - 'app/links/**'
+      - 'database/**'
+      - 'frontend/adminconsole/**'
+      - 'frontend/userconsole/**'
+      - 'services/analyticsworker/**'
+      - 'services/analyticsreconciler/**'
+      - 'services/platformapi/cmd/server/adminanalytics.go'
+      - 'services/platformapi/cmd/server/admin.go'
+      - 'services/platformapi/cmd/server/overview.go'
+      - 'services/platformapi/cmd/server/productroutes.go'
+      - 'scripts/runmigrations.sh'
+      - 'tests/integration/analyticsdashboard.sh'
+      - 'tests/e2e/analyticsdashboard.spec.js'
+      - '.github/workflows/analyticsdashboard.yml'
+
+concurrency:
+  group: gojetanalyticsdashboard${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_analytics_dashboard
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: packagelock.json
+
+      - name: Install Analytics Dashboard dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client redis-tools nginx
+          bash scripts/npmci.sh
+          npx playwright install --with-deps chromium
+
+      - name: Validate Analytics Dashboard sources
+        run: |
+          set -euo pipefail
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
+          bash -n scripts/runmigrations.sh
+          bash -n tests/integration/analyticsdashboard.sh
+          node --check frontend/adminconsole/app.js
+          node --check frontend/userconsole/analytics.js
+          node --check tests/e2e/analyticsdashboard.spec.js
+          ! grep -R -I -n -F 'registerProductHardeningRoutes' services/platformapi/cmd/server
+          ! grep -R -I -n -F 'window.analytics=' frontend/userconsole
+          go test ./...
+          go vet ./...
+
+      - name: Apply semantic migration catalog
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_analytics_dashboard
+        run: bash scripts/runmigrations.sh
+
+      - name: Build and start Analytics Dashboard backend
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojetanalyticsdashboard/{uploads,files,brand,generated/qr,bin}
+          go build -o /tmp/gojetanalyticsdashboard/bin/platformapi ./services/platformapi/cmd/server
+          SETTINGS_KEY=$(python3 - <<'PY'
+          import base64
+          print(base64.b64encode(bytes(range(32))).decode())
+          PY
+          )
+          QR_KEY='a738d46df49e970ff3d62ec5484547084317238283d43f03d33c11a54799b51d'
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_analytics_dashboard?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
+            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' \
+            ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
+            QR_TRACKING_KEY="$QR_KEY" \
+            PUBLIC_BASE_URL='http://127.0.0.1:4180' \
+            PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' \
+            UPLOAD_STORAGE_PATH='/tmp/gojetanalyticsdashboard/uploads' \
+            BRAND_ASSET_PATH='/tmp/gojetanalyticsdashboard/brand' \
+            GENERATED_QR_STORAGE_PATH='/tmp/gojetanalyticsdashboard/generated/qr' \
+            FILE_STORAGE_PATH='/tmp/gojetanalyticsdashboard/files' \
+            /tmp/gojetanalyticsdashboard/bin/platformapi >/tmp/gojetanalyticsdashboard/platformapi.log 2>&1 &
+          echo $! >/tmp/gojetanalyticsdashboard/platformapi.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:18090/health >/dev/null 2>&1 && break
+            sleep 1
+            test "$i" -lt 60
+          done
+
+      - name: Verify user and administrator metric consistency
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18090
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_analytics_dashboard
+          REDIS_ADDRESS: 127.0.0.1:6379
+        run: bash tests/integration/analyticsdashboard.sh
+
+      - name: Serve Analytics Dashboard through real Host Nginx
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/gojetanalyticsdashboardroot
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
+          python3 scripts/buildpublicsite.py --output "$ROOT/public"
+          mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
+          cp -a frontend/adminconsole/. "$ROOT/public/admin/"
+          cp -a frontend/userconsole/. "$ROOT/public/app/"
+          chmod -R a+rX "$ROOT"
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root=sys.argv[1]
+          text=Path('deploy/nginx/gojethost.conf').read_text(encoding='utf-8')
+          text=text.replace('__GOJET_ROOT__',root).replace('listen 80;','listen 4180;')
+          Path('/tmp/gojetanalyticsdashboardhost.conf').write_text(text,encoding='utf-8')
+          PY
+          sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
+          sudo cp /tmp/gojetanalyticsdashboardhost.conf /etc/nginx/conf.d/gojetanalyticsdashboard.conf
+          sudo nginx -t
+          sudo nginx
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:4180/admin/ >/dev/null 2>&1 && break
+            sleep 1
+            test "$i" -lt 30
+          done
+
+      - name: Run real administrator Analytics Dashboard browser acceptance
+        env:
+          GOJET_SURFACE_BASE: http://127.0.0.1:4180
+        run: npx playwright test analyticsdashboard.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
+
+      - name: Upload Analytics Dashboard browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojetanalyticsdashboardevidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Analytics Dashboard diagnostics
+        if: failure()
+        env:
+          MYSQL_PWD: root
+        run: |
+          echo '===== platformapi ====='
+          cat /tmp/gojetanalyticsdashboard/platformapi.log 2>/dev/null || true
+          echo '===== analytics events ====='
+          mysql -h127.0.0.1 -P3306 -uroot gojet_analytics_dashboard -e 'SELECT id,link_id,source_type,country,device,browser,is_bot,occurred_at FROM analytics_events ORDER BY id DESC LIMIT 20;' 2>/dev/null || true
+          echo '===== daily ====='
+          mysql -h127.0.0.1 -P3306 -uroot gojet_analytics_dashboard -e 'SELECT * FROM analytics_daily ORDER BY metric_date DESC LIMIT 20;' 2>/dev/null || true
+          echo '===== nginx ====='
+          sudo nginx -T 2>&1 || true
+
+      - name: Stop Analytics Dashboard runtime
+        if: always()
+        run: |
+          sudo nginx -s stop 2>/dev/null || true
+          if [ -f /tmp/gojetanalyticsdashboard/platformapi.pid ]; then
+            kill "$(cat /tmp/gojetanalyticsdashboard/platformapi.pid)" 2>/dev/null || true
+          fi
