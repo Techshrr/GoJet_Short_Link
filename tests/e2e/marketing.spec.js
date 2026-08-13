@@ -63,7 +63,7 @@ for(const route of genericRoutes)test(`${route} public route is complete`,async(
 });
 
 test('documentation center is searchable and task oriented',async({page})=>{
-  await page.goto('/docs/');
+  await page.goto('/docs');
   await expect(page.getByRole('heading',{name:'从第一次创建，到日常运营'})).toBeVisible();
   await expect(page.locator('#docsNav')).toBeVisible();
   await expect(page.locator('.docsArticle')).toHaveCount(16);
