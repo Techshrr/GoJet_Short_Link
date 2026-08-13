@@ -84,6 +84,8 @@ expect 200 "$notify" epay-get-notify | grep -Fxq success
 [[ "$(mysqlq "SELECT payment_reference FROM billing_invoices WHERE id=$invoice_id;")" == "$trade" ]] || { echo 'invoice payment reference was not recorded' >&2; exit 1; }
 [[ "$(mysqlq "SELECT p.code FROM workspace_subscriptions s JOIN plans p ON p.id=s.plan_id WHERE s.workspace_id=$wid;")" == pro ]] || { echo 'paid Epay invoice did not activate purchased plan' >&2; exit 1; }
 [[ "$(mysqlq "SELECT status FROM workspace_subscriptions WHERE workspace_id=$wid;")" == active ]] || { echo 'paid Epay invoice did not activate subscription' >&2; exit 1; }
+callback_row=$(mysqlq "SELECT CONCAT(merchant_order_no,'|',provider_reference,'|',outcome,'|',response_status) FROM payment_callback_events WHERE provider='epay' ORDER BY id DESC LIMIT 1;")
+[[ "$callback_row" == "$order|$trade|accepted|200" ]] || { echo "GET callback observability mismatch: $callback_row" >&2; exit 1; }
 
 # Provider retries may use POST even when the original callback used GET. The
 # identical notification must remain idempotent and return the provider ack.
