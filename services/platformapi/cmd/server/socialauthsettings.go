@@ -68,20 +68,41 @@ func (s *server) publicSocialProviders(w http.ResponseWriter, r *http.Request) {
 		if !configured {
 			continue
 		}
-		providers = append(providers, map[string]string{
-			"id":    definition.ID,
-			"label": definition.Label,
+		providers = append(providers, map[string]string{"id": definition.ID, "label": definition.Label})
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"providers": providers})
+}
+
+func (s *server) adminSocialProviders(w http.ResponseWriter, r *http.Request) {
+	base, _, err := socialPublicBase()
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录回调地址配置无效"})
+		return
+	}
+	providers := make([]map[string]any, 0, len(socialProviderDefinitions))
+	for _, definition := range socialProviderDefinitions {
+		enabled, getErr := s.socialBoolSetting(r.Context(), "auth.social."+definition.ID+".enabled")
+		if getErr != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置读取失败"})
+			return
+		}
+		complete, getErr := s.socialProviderCredentialsComplete(r.Context(), definition.ID)
+		if getErr != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置读取失败"})
+			return
+		}
+		implemented := socialProviderImplemented(definition.ID)
+		providers = append(providers, map[string]any{
+			"id": definition.ID, "label": definition.Label, "implemented": implemented,
+			"enabled": enabled, "configured": complete, "visible": implemented && enabled && complete,
+			"callback_url": base + "/api/public/auth/" + definition.ID + "/callback",
 		})
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{"providers": providers})
 }
 
-func (s *server) socialProviderConfigured(ctx context.Context, provider string) (bool, error) {
+func (s *server) socialProviderCredentialsComplete(ctx context.Context, provider string) (bool, error) {
 	prefix := "auth.social." + provider + "."
-	enabled, err := s.socialBoolSetting(ctx, prefix+"enabled")
-	if err != nil || !enabled {
-		return false, err
-	}
 	clientID, err := s.socialStringSetting(ctx, prefix+"client_id")
 	if err != nil || strings.TrimSpace(clientID) == "" {
 		return false, err
@@ -97,6 +118,15 @@ func (s *server) socialProviderConfigured(ctx context.Context, provider string) 
 		}
 	}
 	return true, nil
+}
+
+func (s *server) socialProviderConfigured(ctx context.Context, provider string) (bool, error) {
+	enabled, err := s.socialBoolSetting(ctx, "auth.social."+provider+".enabled")
+	if err != nil || !enabled {
+		return false, err
+	}
+	complete, err := s.socialProviderCredentialsComplete(ctx, provider)
+	return complete, err
 }
 
 func (s *server) socialProviderConfiguration(ctx context.Context, provider string) (socialProviderConfig, bool, error) {

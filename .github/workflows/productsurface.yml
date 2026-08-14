@@ -38,10 +38,8 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: packagelock.json
-
       - name: Enforce repository naming policy
         run: python3 scripts/checknames.py
-
       - name: Install browser and runtime dependencies
         run: |
           set -euo pipefail
@@ -49,14 +47,12 @@ jobs:
           sudo apt-get install -y default-mysql-client nginx poppler-utils zbar-tools python3-fonttools
           bash scripts/npmci.sh
           npx playwright install --with-deps chromium
-
       - name: Prepare PDF font resources
         run: |
           set -euo pipefail
           chmod 0755 scripts/preparepdffonts.sh
           scripts/preparepdffonts.sh
           go mod download
-
       - name: Build canonical public site and validate runtime sources
         run: |
           set -euo pipefail
@@ -74,48 +70,28 @@ jobs:
           test ! -e frontend/adminconsole/settingsfull.js
           test -z "$(find frontend/publicsite/pages -type f -name index.html -print -quit)"
           RUNTIME_PATHS='frontend/publicsite frontend/adminconsole frontend/userconsole services/platformapi/cmd/server'
-          VERSION_QUERY='?'
-          VERSION_QUERY+='v='
-          if grep -R -I -n -F "$VERSION_QUERY" $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then
-            echo 'static asset version query leaked into canonical runtime source' >&2
-            exit 1
-          fi
-          if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then
-            echo 'retired system image namespace leaked into canonical runtime source' >&2
-            exit 1
-          fi
+          VERSION_QUERY='?'; VERSION_QUERY+='v='
+          if grep -R -I -n -F "$VERSION_QUERY" $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then echo 'static asset version query leaked into canonical runtime source' >&2; exit 1; fi
+          if grep -R -n -E '/system-images/|SYSTEM_IMAGE_PATH|data/system/images' $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then echo 'retired system image namespace leaked into canonical runtime source' >&2; exit 1; fi
           node --check frontend/publicsite/assets/app.js
           node --check frontend/publicsite/assets/fileshare.js
-          for file in frontend/adminconsole/settings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js frontend/adminconsole/destinationrisk.js; do
-            node --check "$file"
-          done
-          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do
-            node --check "$file"
-          done
-          if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/userconsole; then
-            echo 'retired customer console page registry detected' >&2
-            exit 1
-          fi
+          for file in frontend/adminconsole/settings.js frontend/adminconsole/socialauthsettings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js frontend/adminconsole/destinationrisk.js; do node --check "$file"; done
+          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do node --check "$file"; done
+          if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/userconsole; then echo 'retired customer console page registry detected' >&2; exit 1; fi
           node --check tests/e2e/productsurface.spec.js
           node --check tests/e2e/fullsurfaceconsistency.spec.js
           node --check tests/e2e/announcementrotation.spec.js
           node --check tests/e2e/destinationriskadmin.spec.js
+          node --check tests/e2e/socialauthsettings.spec.js
           python3 -m py_compile tests/integration/assertpdfcontrast.py
-
       - name: Run source level tests
         run: |
           set -euo pipefail
           bash tests/integration/releasestoragenamespaces.sh
           go test ./...
           go vet ./...
-
       - name: Apply migration catalog and build runtime services
-        env:
-          MYSQL_HOST: 127.0.0.1
-          MYSQL_PORT: '3306'
-          MYSQL_USER: root
-          MYSQL_PASSWORD: root
-          MYSQL_DATABASE: gojet_surface
+        env: {MYSQL_HOST: 127.0.0.1, MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
         run: |
           set -euo pipefail
           bash scripts/runmigrations.sh
@@ -124,7 +100,6 @@ jobs:
           go build -o /tmp/gojetsurface/bin/redirectengine ./services/redirectengine/cmd/server
           go build -o /tmp/gojetsurface/bin/analyticsworker ./services/analyticsworker/cmd/worker
           go build -o /tmp/gojetsurface/bin/operationsmonitor ./services/platformapi/cmd/operationsmonitor
-
       - name: Start backend, analytics and destination risk services
         run: |
           set -euo pipefail
@@ -134,23 +109,12 @@ jobs:
           PY
           )
           QR_KEY='9c2f6b3a8d7e4f10b5a1c9d8e7f6a5b49c2f6b3a8d7e4f10b5a1c9d8e7f6a5b4'
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojetsurface/uploads' BRAND_ASSET_PATH='/tmp/gojetsurface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetsurface/generated/qr' FILE_STORAGE_PATH='/tmp/gojetsurface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" /tmp/gojetsurface/bin/platformapi >/tmp/gojetsurface/platformapi.log 2>&1 &
-          echo $! >/tmp/gojetsurface/platformapi.pid
-          env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='productsurfacevisitorkey2026' QR_TRACKING_KEY="$QR_KEY" /tmp/gojetsurface/bin/redirectengine >/tmp/gojetsurface/redirectengine.log 2>&1 &
-          echo $! >/tmp/gojetsurface/redirectengine.pid
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetsurface' ANALYTICS_CONSUMER='browsersurface' /tmp/gojetsurface/bin/analyticsworker >/tmp/gojetsurface/analyticsworker.log 2>&1 &
-          echo $! >/tmp/gojetsurface/analyticsworker.pid
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' /tmp/gojetsurface/bin/operationsmonitor >/tmp/gojetsurface/operationsmonitor.log 2>&1 &
-          echo $! >/tmp/gojetsurface/operationsmonitor.pid
-          for port in 18090 18080; do
-            for i in $(seq 1 60); do
-              curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
-              sleep 1
-              test "$i" -lt 60
-            done
-          done
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojetsurface/uploads' BRAND_ASSET_PATH='/tmp/gojetsurface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetsurface/generated/qr' FILE_STORAGE_PATH='/tmp/gojetsurface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" /tmp/gojetsurface/bin/platformapi >/tmp/gojetsurface/platformapi.log 2>&1 & echo $! >/tmp/gojetsurface/platformapi.pid
+          env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='productsurfacevisitorkey2026' QR_TRACKING_KEY="$QR_KEY" /tmp/gojetsurface/bin/redirectengine >/tmp/gojetsurface/redirectengine.log 2>&1 & echo $! >/tmp/gojetsurface/redirectengine.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetsurface' ANALYTICS_CONSUMER='browsersurface' /tmp/gojetsurface/bin/analyticsworker >/tmp/gojetsurface/analyticsworker.log 2>&1 & echo $! >/tmp/gojetsurface/analyticsworker.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' /tmp/gojetsurface/bin/operationsmonitor >/tmp/gojetsurface/operationsmonitor.log 2>&1 & echo $! >/tmp/gojetsurface/operationsmonitor.pid
+          for port in 18090 18080; do for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done; done
           kill -0 "$(cat /tmp/gojetsurface/operationsmonitor.pid)"
-
       - name: Serve product through Nginx
         run: |
           set -euo pipefail
@@ -182,20 +146,15 @@ jobs:
           sudo cp /tmp/gojetsurfacenginx.conf /etc/nginx/conf.d/gojetsurface.conf
           sudo nginx -t
           sudo nginx
-          for path in / /privacy /terms /forgotpassword /reportabuse /products/urlshortener; do
-            curl -fsS "http://127.0.0.1:4180$path" >/dev/null
-          done
-
+          for path in / /privacy /terms /forgotpassword /reportabuse /products/urlshortener; do curl -fsS "http://127.0.0.1:4180$path" >/dev/null; done
       - name: Run browser product surface acceptance
         env: {GOJET_SURFACE_BASE: 'http://127.0.0.1:4180'}
-        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
-
+        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js socialauthsettings.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
       - name: Run invoice PDF visual contrast acceptance
         env: {GOJET_TEST_BASE: 'http://127.0.0.1:18090', MYSQL_HOST: '127.0.0.1', MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
         run: |
           bash tests/integration/invoicepdfrender.sh
           python3 tests/integration/assertpdfcontrast.py /tmp/gojet-pdf-acceptance/invoice-pixels.ppm
-
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -206,7 +165,6 @@ jobs:
           echo '===== nginx error ====='; sudo cat /var/log/nginx/error.log 2>/dev/null || true
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_surface -e 'SELECT link_id,decision,score,target_fingerprint,manual_decision,manual_reason,scanned_at,next_scan_at FROM link_destination_risk ORDER BY link_id DESC LIMIT 30;' || true
           find /tmp/gojetsurface -maxdepth 4 -type f -printf '%M %u:%g %p\n' 2>/dev/null | sort || true
-
       - name: Upload browser and PDF evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -217,11 +175,8 @@ jobs:
             /tmp/gojet-pdf-acceptance/
           if-no-files-found: ignore
           retention-days: 14
-
       - name: Stop runtime services
         if: always()
         run: |
           sudo nginx -s stop 2>/dev/null || true
-          for name in platformapi redirectengine analyticsworker operationsmonitor; do
-            test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true
-          done
+          for name in platformapi redirectengine analyticsworker operationsmonitor; do test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true; done
