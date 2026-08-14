@@ -38,33 +38,33 @@ function gojetRenderInstallerProgress(): never
 <link rel="stylesheet" href="/install/install.css">
 </head>
 <body>
-<main class="progressPage">
-  <header class="progressTop">
-    <div class="progressBrand"><span class="progressMark">G</span>GoJet</div>
-    <div class="progressMetaBadge">安全安装向导 · 可恢复进度</div>
+<main class="shell">
+  <header class="top">
+    <div class="brand"><span class="mark">G</span>GoJet</div>
+    <div class="meta">安全安装向导 · 可恢复进度</div>
   </header>
-  <section class="progressFrame">
-    <aside class="progressRail">
+  <section class="frame">
+    <aside class="rail">
       <h2>安装进度</h2>
-      <div class="progressSteps">
-        <div class="progressStep"><span>✓</span>环境检查</div>
-        <div class="progressStep"><span>✓</span>数据连接</div>
-        <div class="progressStep"><span>✓</span>站点设置</div>
-        <div class="progressStep"><span>✓</span>系统安装</div>
+      <div class="steps">
+        <div class="step done"><span>✓</span>环境检查</div>
+        <div class="step done"><span>✓</span>数据连接</div>
+        <div class="step done"><span>✓</span>站点设置</div>
+        <div class="step on"><span>4</span>系统安装</div>
       </div>
-      <div class="progressRailNote"><b>不重复提交</b>安装任务已经交给服务器执行。刷新页面、短暂断网或重新打开此地址，只会恢复状态显示，不会创建第二个安装任务。</div>
+      <div class="railNote"><b>安装任务只提交一次</b>刷新页面、短暂断网或重新打开此地址，只会恢复服务器上的真实安装进度，不会创建第二个任务。</div>
     </aside>
-    <section class="progressMain">
+    <section class="main">
       <div class="progressStage" data-install-progress>
         <div class="orb" aria-hidden="true"></div>
-        <div class="progressKicker">INSTALLATION IN PROGRESS</div>
+        <div class="kicker">INSTALLATION IN PROGRESS</div>
         <h1>正在完成 GoJet 安装</h1>
-        <p class="progressLead" id="installMessage">正在连接安装状态，请保持此页面打开。</p>
+        <p class="lead" id="installMessage">正在连接安装状态，请保持此页面打开。</p>
         <div class="track"><div class="bar" id="installProgressBar"></div></div>
-        <div class="progressStatus"><strong id="installPhase">正在同步安装状态…</strong><span id="installPercent">0%</span></div>
+        <div class="progressMeta"><strong id="installPhase">正在同步安装状态…</strong><span id="installPercent">0%</span></div>
         <div class="sync" id="installSync">安装任务已由服务器接管。页面刷新或连接中断不会重新提交任务。</div>
         <div class="progressActions"><button class="btn secondary" type="button" id="installReconnect" hidden>立即重连</button></div>
-        <p class="recovery">如果浏览器与服务器的状态通道暂时中断，本页会自动退避重连并继续读取服务器上的真实进度。请勿重复运行安装命令或重复提交安装表单。</p>
+        <p class="recovery">状态通道临时中断时，本页会自动重连并继续读取服务器上的真实进度。无需重复运行安装命令，也不要重复提交安装表单。</p>
       </div>
     </section>
   </section>
