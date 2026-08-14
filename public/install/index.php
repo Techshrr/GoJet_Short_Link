@@ -36,6 +36,7 @@ function gojetRenderInstallerProgress(): never
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>正在安装 GoJet</title>
 <link rel="stylesheet" href="/install/install.css">
+<link rel="stylesheet" href="/install/progresspolish.css">
 </head>
 <body>
 <main class="shell">
