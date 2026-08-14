@@ -1,5 +1,6 @@
 const {test,expect}=require('@playwright/test');
 const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
+test.skip(!process.env.GOJET_SURFACE_BASE,'requires the full product runtime used by Product Surface Gate');
 
 async function json(request,method,path,body,token){
   const headers={'Content-Type':'application/json'};
