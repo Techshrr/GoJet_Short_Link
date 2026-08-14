@@ -100,6 +100,18 @@ test('pricing public route is driven by the active plan catalog',async({page})=>
   await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
 
+test('signed-in pricing never shows guest login or registration CTAs',async({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('gojet_token','signed-in-test-token'));
+  await page.route('**/api/me',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({id:7,email:'owner@example.test',display_name:'TechShr'})}));
+  await page.goto('/pricing');
+  await expect(page.locator('.pricing .livePlanCard')).toHaveCount(3);
+  await expect(page.getByRole('link',{name:'登录账户'})).toHaveCount(0);
+  await expect(page.locator('main a[href="/register"]')).toHaveCount(0);
+  await expect(page.locator('[data-plan-cta]')).toHaveCount(3);
+  await expect(page.locator('[data-plan-cta]').first()).toHaveAttribute('href','/app/billing');
+  await expect(page.locator('[data-account-nav]')).toContainText('TechShr');
+});
+
 test('register public route is complete',async({page})=>{
   await page.goto('/register');
   await expect(page.getByRole('heading',{name:'开始使用 GoJet'})).toBeVisible();
