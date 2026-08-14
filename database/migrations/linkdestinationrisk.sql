@@ -5,6 +5,7 @@ CREATE TABLE link_destination_risk (
     categories JSON NULL,
     evidence JSON NULL,
     provider VARCHAR(80) NOT NULL DEFAULT 'builtin',
+    target_fingerprint CHAR(32) NOT NULL DEFAULT '',
     scanned_url TEXT NOT NULL,
     final_url TEXT NOT NULL,
     scanned_at DATETIME NULL,
@@ -22,7 +23,7 @@ CREATE TABLE link_destination_risk (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO link_destination_risk(
-    link_id,decision,score,categories,evidence,provider,scanned_url,final_url,scanned_at,next_scan_at
+    link_id,decision,score,categories,evidence,provider,target_fingerprint,scanned_url,final_url,scanned_at,next_scan_at
 )
 SELECT
     id,
@@ -31,6 +32,7 @@ SELECT
     JSON_ARRAY(),
     JSON_OBJECT('reason','legacy migration baseline; queued for scheduled rescan'),
     'migration_legacy',
+    '',
     destination,
     destination,
     UTC_TIMESTAMP(),
