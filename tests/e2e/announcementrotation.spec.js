@@ -57,11 +57,10 @@ test.describe.serial('multi announcement bar',()=>{
     const bar=page.locator('.siteAnnouncement');
     await expect(bar).toBeVisible();
     await expect(bar).toContainText('第一条优惠');
-    const initialNode=await bar.evaluate(node=>node);
+    await page.evaluate(()=>{window.__gojetAnnouncementNode=document.querySelector('.siteAnnouncement')});
+
     await expect(bar).toContainText('第二条提醒',{timeout:6000});
-    const afterNode=await bar.evaluate(node=>node);
-    expect(Boolean(initialNode)).toBe(true);
-    expect(Boolean(afterNode)).toBe(true);
+    expect(await page.evaluate(()=>window.__gojetAnnouncementNode===document.querySelector('.siteAnnouncement'))).toBe(true);
 
     await page.evaluate(()=>sessionStorage.clear());
     await page.reload();
