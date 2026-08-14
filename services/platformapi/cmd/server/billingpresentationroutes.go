@@ -8,6 +8,7 @@ import (
 
 func (s *server) registerBillingPresentationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/plans", s.publicPlans)
+	mux.HandleFunc("GET /api/public/announcement-bar", s.publicAnnouncementBar)
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/invoices/{invoice}/pdf", s.user(s.invoicePDF))
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payments/{payment}/qr.png", s.user(s.paymentQRPNG))
 }
