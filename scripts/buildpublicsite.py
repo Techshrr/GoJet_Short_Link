@@ -28,11 +28,6 @@ GENERIC = {
         ('服务状态', '查看主要服务的当前状态和必要通知。'),
         ('安全与滥用', '了解安全使用建议，并报告可疑链接或内容。'),
     ]),
-    'docs': ('帮助文档', '从创建账户到管理链接、二维码、文件与团队，按功能查找操作说明。', [
-        ('开始使用', '账户、工作区和基础设置。'),
-        ('链接与分享', '创建、修改、保护和管理分享资源。'),
-        ('账户与安全', '密码、人机验证、权限和账户安全说明。'),
-    ]),
     'developers': ('开发者 API', '把常用的链接创建、查询与管理动作接入自己的业务流程。', [
         ('接口鉴权', '通过受控凭据访问允许的功能。'),
         ('清晰响应', '围绕常见业务动作提供明确的请求与结果。'),
@@ -118,15 +113,17 @@ def product_page(title, kicker, desc, features, steps):
 
 
 def pricing_page():
-    return f'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="GoJet 套餐覆盖个人使用、专业增长与团队协作；实际价格与配额以当前站点账户页面为准。"><title>套餐价格 · GoJet</title><link rel="stylesheet" href="/assets/styles.css"></head><body>{header()}<main><section class="hero"><div class="container"><span class="eyebrow">套餐价格</span><h1>从个人使用，到团队协作</h1><p>先从适合当前规模的套餐开始。实际价格、币种、资源配额和可用支付方式以登录后的账户页面与正式账单为准。</p><div class="actions"><a class="btn primary" href="/register">免费开始</a><a class="btn" href="/login">登录账户</a></div></div></section><section class="section"><div class="container"><div class="pricing"><article class="price"><span class="eyebrow">FREE</span><h3>Free</h3><b>适合个人试用与轻量分享</b><p>短链接、二维码和基础分享能力，适合先体验完整工作流程。</p><a class="btn" href="/register">免费开始</a></article><article class="price featured"><span class="eyebrow">PRO</span><h3>Pro</h3><b>适合持续运营和专业使用</b><p>更高资源配额、更多分析与品牌能力。具体价格以账户页面为准。</p><a class="btn primary" href="/register">创建账户</a></article><article class="price"><span class="eyebrow">BUSINESS</span><h3>Business</h3><b>适合多人团队与业务协作</b><p>面向团队工作区、成员管理和更高业务规模。具体方案以账户页面为准。</p><a class="btn" href="/contact">了解更多</a></article></div></div></section></main>{footer()}</body></html>'
+    return f'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="GoJet 套餐覆盖个人使用、专业增长与团队协作；价格与权益实时读取当前站点配置。"><title>套餐价格 · GoJet</title><link rel="stylesheet" href="/assets/styles.css"></head><body>{header()}<main><section class="hero pricingHero"><div class="container"><h1>从个人使用，到团队协作</h1><p>每档套餐的价格、资源配额与功能差异都会从当前站点配置读取，方便直接比较后选择。</p><div class="actions"><a class="btn primary" href="/register">免费开始</a><a class="btn pricingLogin" href="/login">登录账户</a></div></div></section><section class="section"><div class="container"><div id="livePricing" class="pricing"><article class="price pricingSkeleton"><h3>正在读取套餐</h3><p>价格与权益正在同步…</p></article></div></div></section></main>{footer()}</body></html>'
 
 
 def validate(route, html):
     match = FORBIDDEN.search(html)
     if match:
-        raise SystemExit(f'engineering copy or release asset token leaked into {route}: {match.group(0)}')
+        raise SystemExit(f'public page {route} contains forbidden engineering copy: {match.group(0)}')
+    if '<!doctype html>' not in html.lower() or '</html>' not in html.lower():
+        raise SystemExit(f'public page {route} is not a complete HTML document')
     if route.startswith('products/'):
-        for marker in ('/assets/styles.css', '/assets/app.js', 'siteHeader'):
+        for marker in ('class="hero"', 'class="section"', 'class="cta"'):
             if marker not in html:
                 raise SystemExit(f'product page {route} is missing canonical shell marker {marker}')
 
@@ -168,14 +165,18 @@ def build(output):
         route = 'home' if rel == Path('home.html') else rel.with_suffix('').as_posix()
         write(output, route, src.read_text(encoding='utf-8'))
 
+    # Do not overwrite authored public pages (notably /docs/) with generic fallbacks.
+    authored = {'home' if p.relative_to(PAGES) == Path('home.html') else p.relative_to(PAGES).with_suffix('').as_posix() for p in PAGES.rglob('*.html')}
     for route, (title, desc, cards) in GENERIC.items():
+        if route in authored:
+            continue
         write(output, route, generic_page(title, desc, cards, route == 'contact'))
     for slug, data in PRODUCTS.items():
         write(output, f'products/{slug}', product_page(*data))
     write(output, 'pricing', pricing_page())
 
     expected = set(GENERIC) | {
-        'home', 'pricing', 'announcements', 'forgotpassword', 'login', 'privacy',
+        'home', 'docs', 'pricing', 'announcements', 'forgotpassword', 'login', 'privacy',
         'register', 'reportabuse', 'resetpassword', 'status', 'terms', 'verifyemail',
     } | {f'products/{slug}' for slug in PRODUCTS}
     built = {route_from_output(output, path) for path in output.rglob('*.html')}
