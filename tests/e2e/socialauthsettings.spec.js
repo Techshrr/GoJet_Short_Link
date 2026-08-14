@@ -46,9 +46,16 @@ test('social login settings expose implemented Google and GitHub providers only 
   await expect(page.locator('[data-social-provider="github"] input[name="auth.social.github.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
   await expect(page.locator('[data-social-provider="google"] input[name="auth.social.google.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
 
+  await page.evaluate(()=>localStorage.setItem('gojet_post_auth_path','/app/links'));
   await page.goto(base+'/login');
-  await expect(page.locator('.social-provider')).toHaveCount(2);
-  await expect(page.locator('.social-provider')).toHaveText(['继续使用 Google','继续使用 GitHub']);
+  const socialButtons=page.locator('.social-provider');
+  await expect(socialButtons).toHaveCount(2);
+  await expect(socialButtons).toHaveText(['继续使用 Google','继续使用 GitHub']);
+  const targets=await socialButtons.evaluateAll(nodes=>nodes.map(node=>{const target=new URL(node.href);return{path:target.pathname,redirect:target.searchParams.get('redirect')}}));
+  expect(targets).toEqual([
+    {path:'/api/public/auth/google/start',redirect:'/app/links'},
+    {path:'/api/public/auth/github/start',redirect:'/app/links'},
+  ]);
 
   await page.goto(base+'/admin/');
   await expect(page.locator('#adminView')).toBeVisible();

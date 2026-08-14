@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/authpolicy.yml'
       - 'tests/integration/authpolicy.sh'
+      - 'tests/integration/authmigrationcontract.sh'
       - 'services/platformapi/cmd/server/**'
       - 'app/identity/**'
       - 'app/settings/**'
@@ -51,6 +52,8 @@ jobs:
           MYSQL_PASSWORD: root
           MYSQL_DATABASE: gojet_auth_policy
         run: bash scripts/runmigrations.sh
+      - name: Validate authentication migration contract
+        run: bash tests/integration/authmigrationcontract.sh
       - name: Start platform API
         run: |
           mkdir -p /tmp/gojetauth/uploads /tmp/gojetauth/files /tmp/gojetauth/brand /tmp/gojetauth/generated/qr
