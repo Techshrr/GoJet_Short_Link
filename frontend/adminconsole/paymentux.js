@@ -4,7 +4,7 @@
 const providerMeta={
   alipay:{label:'支付宝',note:'支付宝开放平台'},
   wechat:{label:'微信支付',note:'微信支付商户平台'},
-  epay:{label:'易支付',note:'第三方聚合支付接口'},
+  epay:{label:'易支付',note:'聚合支付接口'},
   paypal:{label:'PayPal',note:'PayPal Checkout'},
   stripe:{label:'Stripe',note:'Stripe Checkout'}
 };
@@ -45,11 +45,10 @@ async function enhancePaymentPane(){
     const displayName=String(saved[displayKey]||meta.label).trim()||meta.label;
     const field=document.createElement('label');
     field.className='paymentDisplayName full';
-    const title=document.createElement('span');title.textContent='客户区显示名称';
+    const title=document.createElement('span');title.textContent='前台名称';
     const input=document.createElement('input');
-    input.name=displayKey;input.type='text';input.maxLength=60;input.value=displayName;input.placeholder=meta.label;
-    const help=document.createElement('small');help.className='settingHelp';help.textContent='仅改变客户付款页面看到的名称，不影响支付接口类型与回调地址。';
-    field.append(title,input,help);
+    input.name=displayKey;input.type='text';input.maxLength=60;input.value=displayName;input.placeholder=meta.label;input.setAttribute('aria-label',`${meta.label}前台名称`);
+    field.append(title,input);
     head?.after(field);
     entries.push({key,meta,section,enabled,input});
   }
@@ -60,8 +59,8 @@ async function enhancePaymentPane(){
   chooser.innerHTML=`
     <div class="paymentMethodChooserCopy">
       <span class="paymentEyebrow">收款渠道</span>
-      <h3>选择需要启用的支付方式</h3>
-      <p>可同时启用多个渠道。下方只显示已选择渠道的配置。</p>
+      <h3>选择支付方式</h3>
+      <p>可同时启用多个渠道，只显示已选择渠道的配置。</p>
     </div>
     <details class="paymentMultiSelect">
       <summary><span data-payment-summary>选择支付方式</span><b aria-hidden="true">⌄</b></summary>
@@ -83,7 +82,7 @@ async function enhancePaymentPane(){
   const summary=chooser.querySelector('[data-payment-summary]');
   const chips=chooser.querySelector('[data-payment-chips]');
   const defaultSelect=form.querySelector('select[name="payments.default_provider"]');
-  if(defaultSelect){[...defaultSelect.options].forEach(option=>{const entry=entries.find(item=>item.key===option.value);if(entry)option.textContent=entry.meta.label})}
+  if(defaultSelect){[...defaultSelect.options].forEach(option=>{const entry=entries.find(item=>item.key===option.value);if(entry)option.textContent=entry.input.value.trim()||entry.meta.label})}
 
   const refresh=()=>{
     const active=[];
@@ -99,7 +98,7 @@ async function enhancePaymentPane(){
     if(active.length){active.forEach(entry=>{const chip=document.createElement('span');chip.textContent=entry.input.value.trim()||entry.meta.label;chips.append(chip)})}
     else{const none=document.createElement('span');none.className='paymentNone';none.textContent='尚未选择支付方式';chips.append(none)}
     if(defaultSelect){
-      [...defaultSelect.options].forEach(option=>{option.disabled=!active.some(item=>item.key===option.value)});
+      [...defaultSelect.options].forEach(option=>{const entry=entries.find(item=>item.key===option.value);if(entry)option.textContent=entry.input.value.trim()||entry.meta.label;option.disabled=!active.some(item=>item.key===option.value)});
       if(active.length&&!active.some(item=>item.key===defaultSelect.value))defaultSelect.value=active[0].key;
       defaultSelect.disabled=active.length===0;
     }
