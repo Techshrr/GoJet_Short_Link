@@ -27,8 +27,6 @@ expect(){
 }
 field(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
 
-# Create a deterministic invoice with a frozen FX snapshot so the rendered PDF
-# exercises both ordinary billing fields and the conversion section.
 mysqlq "UPDATE plans SET monthly_price_cents=1234,currency='USD' WHERE code='pro';"
 mysqlq "UPDATE system_settings SET setting_value='CNY',is_encrypted=FALSE WHERE setting_key='billing.settlement_currency';"
 mysqlq "UPDATE system_settings SET setting_value='manual',is_encrypted=FALSE WHERE setting_key='billing.fx.provider';"
@@ -36,8 +34,6 @@ mysqlq "UPDATE system_settings SET setting_value='0',is_encrypted=FALSE WHERE se
 mysqlq "UPDATE system_settings SET setting_value='{\"USD/CNY\":\"7.20\"}',is_encrypted=FALSE WHERE setting_key='billing.fx.manual_rates';"
 mysqlq "DELETE FROM fx_rate_cache;"
 
-# The shipped static font must actually contain the Chinese glyphs used by
-# customer invoices. A Latin-only or accidentally subsetted font is a hard fail.
 python3 - <<'PY'
 from fontTools.ttLib import TTFont
 font=TTFont('resources/fonts/NotoSansSCRegular.ttf', lazy=True)
@@ -49,9 +45,6 @@ if missing:
 print('PDF Chinese glyph coverage: PASS')
 PY
 
-# Brand linkage is part of PDF acceptance, not an optional visual nicety. Upload
-# a deterministic RGBA PNG so the test covers admin upload -> setting -> storage
-# path -> PDF decoder -> embedded PDF image in one real process.
 logo="$OUT_DIR/acceptance-logo.png"
 python3 - "$logo" <<'PY'
 import struct,sys,zlib
@@ -94,11 +87,27 @@ amount=$(mysqlq "SELECT CONCAT(UPPER(currency),' ',FORMAT(amount_cents/100,2,'en
 headers="$OUT_DIR/invoice.headers"
 pdf="$OUT_DIR/invoice.pdf"
 curl -fsS -D "$headers" -H "Authorization: Bearer $token" -o "$pdf" "$BASE/api/workspaces/$wid/billing/invoices/$invoice_id/pdf"
-
 grep -Eiq '^content-type:[[:space:]]*application/pdf' "$headers"
 grep -Eiq '^cache-control:.*private.*no-store' "$headers"
 grep -Fq '%PDF-' < <(head -c 8 "$pdf")
 test "$(wc -c < "$pdf")" -gt 1500
+
+# Browser-facing download flow: prepare over authenticated JSON, then consume a
+# short-lived native URL exactly once. This is the production path used by the UI.
+ticket=$(expect 200 "$(req POST "/api/workspaces/$wid/billing/invoices/$invoice_id/download-ticket" '{}' "$token")" prepare-download)
+download_url=$(printf '%s' "$ticket" | field "['url']")
+download_filename=$(printf '%s' "$ticket" | field "['filename']")
+[[ "$download_url" == /api/public/invoice-download/* ]] || { echo "unexpected invoice download URL: $download_url" >&2; exit 1; }
+[[ "$download_filename" == GoJetInvoice*.pdf ]] || { echo "unexpected invoice filename: $download_filename" >&2; exit 1; }
+prepared_headers="$OUT_DIR/prepared-invoice.headers"
+prepared_pdf="$OUT_DIR/prepared-invoice.pdf"
+curl -fsS -D "$prepared_headers" -o "$prepared_pdf" "$BASE$download_url"
+grep -Eiq '^content-type:[[:space:]]*application/pdf' "$prepared_headers"
+grep -Eiq '^content-disposition:.*attachment' "$prepared_headers"
+grep -Fq '%PDF-' < <(head -c 8 "$prepared_pdf")
+test "$(wc -c < "$prepared_pdf")" -gt 1500
+second_status=$(curl -sS -o /dev/null -w '%{http_code}' "$BASE$download_url")
+[[ "$second_status" == 404 ]] || { echo "prepared invoice URL must be single-use; got $second_status" >&2; exit 1; }
 
 pdfinfo "$pdf" | tee "$OUT_DIR/pdfinfo.txt"
 grep -Eq '^Pages:[[:space:]]+1$' "$OUT_DIR/pdfinfo.txt"
@@ -124,48 +133,34 @@ if grep -Fq '�' "$OUT_DIR/invoice.txt"; then
   exit 1
 fi
 
-# The configured brand mark must be embedded as an actual PDF image object.
 pdfimages -list "$pdf" | tee "$OUT_DIR/pdfimages.txt"
 awk 'NR>2 && $3=="image" { found=1 } END { exit(found?0:1) }' "$OUT_DIR/pdfimages.txt" || { echo 'configured brand logo was not embedded in invoice PDF' >&2; exit 1; }
 
-# Render twice: PNG is retained as a human-inspectable artifact; pdftoppm's
-# default PPM output lets CI inspect actual pixels using only Python stdlib.
 pdftoppm -f 1 -singlefile -r 144 -png "$pdf" "$OUT_DIR/invoice-page" >/dev/null
 pdftoppm -f 1 -singlefile -r 72 "$pdf" "$OUT_DIR/invoice-pixels" >/dev/null
 
 python3 - "$OUT_DIR/invoice-pixels.ppm" <<'PY'
 import sys
 from pathlib import Path
-
 path=Path(sys.argv[1])
 with path.open('rb') as f:
-    if f.readline().strip()!=b'P6':
-        raise SystemExit('render output is not binary PPM')
+    if f.readline().strip()!=b'P6': raise SystemExit('render output is not binary PPM')
     tokens=[]
     while len(tokens)<3:
         line=f.readline()
-        if not line:
-            raise SystemExit('truncated PPM header')
-        line=line.split(b'#',1)[0]
-        tokens.extend(line.split())
-    width,height,maxval=map(int,tokens[:3])
-    pixels=f.read()
-
-if (width,height)!=(595,842):
-    raise SystemExit(f'unexpected rendered dimensions: {width}x{height}')
-if maxval!=255:
-    raise SystemExit(f'unexpected PPM max value: {maxval}')
+        if not line: raise SystemExit('truncated PPM header')
+        line=line.split(b'#',1)[0]; tokens.extend(line.split())
+    width,height,maxval=map(int,tokens[:3]); pixels=f.read()
+if (width,height)!=(595,842): raise SystemExit(f'unexpected rendered dimensions: {width}x{height}')
+if maxval!=255: raise SystemExit(f'unexpected PPM max value: {maxval}')
 expected=width*height*3
-if len(pixels)!=expected:
-    raise SystemExit(f'truncated pixel data: {len(pixels)} != {expected}')
+if len(pixels)!=expected: raise SystemExit(f'truncated pixel data: {len(pixels)} != {expected}')
 nonwhite=sum(1 for i in range(0,len(pixels),3) if pixels[i:i+3] < b'\xfa\xfa\xfa')
-if nonwhite < 5000:
-    raise SystemExit(f'rendered page appears blank: only {nonwhite} non-white pixels')
+if nonwhite < 5000: raise SystemExit(f'rendered page appears blank: only {nonwhite} non-white pixels')
 print(f'PDF raster acceptance: {width}x{height}, non-white pixels={nonwhite}')
 PY
 
 test -s "$OUT_DIR/invoice-page.png"
 file "$OUT_DIR/invoice-page.png" | tee "$OUT_DIR/render-file.txt"
 grep -Fq 'PNG image data' "$OUT_DIR/render-file.txt"
-
-printf 'GoJet invoice PDF real Chinese render acceptance: PASS (%s, %s, %s)\n' "$invoice_number" "$amount" "$workspace_name"
+printf 'GoJet invoice PDF real Chinese render and prepared download acceptance: PASS (%s, %s, %s)\n' "$invoice_number" "$amount" "$workspace_name"
