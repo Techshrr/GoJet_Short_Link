@@ -57,6 +57,7 @@ test.describe.serial('multi announcement bar',()=>{
     const bar=page.locator('.siteAnnouncement');
     await expect(bar).toBeVisible();
     await expect(bar).toContainText('第一条优惠');
+    await page.mouse.move(640,360);
     await page.evaluate(()=>{window.__gojetAnnouncementNode=document.querySelector('.siteAnnouncement')});
 
     await expect(bar).toContainText('第二条提醒',{timeout:6000});
