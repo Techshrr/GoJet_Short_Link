@@ -70,7 +70,7 @@ echo '[11/12] completed provider is public while its secret stays encrypted and 
 SECRET='GoJetPhaseD-Secret-2026'
 expect 200 "$(req PUT /api/admin/settings/socialauth "{\"auth.social.github.client_secret\":\"$SECRET\"}" "$ADMIN")" github-secret >/dev/null
 r=$(req GET /api/public/auth/providers); b=$(expect 200 "$r" providers-complete)
-printf '%s' "$b"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["providers"] == [{"id":"github","label":"GitHub"}]; assert "secret" not in sys.stdin.read().lower()'
+printf '%s' "$b"|python3 -c 'import json,sys; raw=sys.stdin.read(); d=json.loads(raw); assert d["providers"] == [{"id":"github","label":"GitHub"}]; assert "client_secret" not in raw.lower(); assert "gojetphased-secret-2026" not in raw.lower()'
 r=$(req GET /api/admin/settings '' "$ADMIN"); b=$(expect 200 "$r" settings-masked)
 printf '%s' "$b"|python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["socialauth"]["auth.social.github.client_secret"] == "********"'
 [[ $(mysqlq "SELECT is_encrypted FROM system_settings WHERE setting_key='auth.social.github.client_secret';") == 1 ]] || { echo 'social client secret is not marked encrypted' >&2; exit 1; }
