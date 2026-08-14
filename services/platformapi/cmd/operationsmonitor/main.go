@@ -100,7 +100,7 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 					targets := destinationrisk.Targets(item.Destination, item.RoutingRules, item.ABDestinations)
 					assessment := scanner.Assess(scanCtx, targets)
 					scanCancel()
-					if err := store.Save(ctx, item.LinkID, assessment); err != nil {
+					if err := store.Save(ctx, item.LinkID, targets, assessment); err != nil {
 						log.Printf("destination risk save link=%d: %v", item.LinkID, err)
 						continue
 					}
