@@ -7,8 +7,18 @@ import (
 )
 
 func (s *server) registerBillingPresentationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/public/plans", s.publicPlans)
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/invoices/{invoice}/pdf", s.user(s.invoicePDF))
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payments/{payment}/qr.png", s.user(s.paymentQRPNG))
+}
+
+func (s *server) publicPlans(w http.ResponseWriter, r *http.Request) {
+	plans, err := s.billing.Plans(r.Context(), false)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "套餐信息暂时不可用"})
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"data": plans})
 }
 
 func (s *server) paymentQRPNG(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +53,9 @@ func (s *server) paymentQRPNG(w http.ResponseWriter, r *http.Request) {
 }
 
 func itoaLen(value int) string {
-	if value == 0 { return "0" }
+	if value == 0 {
+		return "0"
+	}
 	var buf [24]byte
 	pos := len(buf)
 	for value > 0 {
