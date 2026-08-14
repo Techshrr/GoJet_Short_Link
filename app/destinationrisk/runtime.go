@@ -25,12 +25,12 @@ func SyncDecision(ctx context.Context, client *redis.Client, linkID int64, targe
 	return err
 }
 
-// BackfillRedis publishes persisted effective decisions at service startup. The
-// key includes every currently reachable destination, so a stored ALLOW decision
-// cannot be reused after the primary, routing or A/B target set changes.
+// BackfillRedis only republishes a decision when it belongs to the exact current
+// set of reachable destinations. Legacy migration rows have no fingerprint yet;
+// their baseline is bound to the current target set exactly once at first boot.
 func BackfillRedis(ctx context.Context, db *sql.DB, client *redis.Client) error {
 	rows, err := db.QueryContext(ctx, `
-		SELECT r.link_id,COALESCE(r.manual_decision,r.decision),l.destination,
+		SELECT r.link_id,COALESCE(r.manual_decision,r.decision),r.provider,r.target_fingerprint,l.destination,
 		       COALESCE(l.routing_rules,JSON_ARRAY()),COALESCE(l.ab_destinations,JSON_ARRAY())
 		FROM link_destination_risk r JOIN short_links l ON l.id=r.link_id
 		WHERE l.deleted_at IS NULL`)
@@ -38,19 +38,35 @@ func BackfillRedis(ctx context.Context, db *sql.DB, client *redis.Client) error 
 		return err
 	}
 	defer rows.Close()
+	type stale struct {
+		id          int64
+		fingerprint string
+		legacy      bool
+	}
+	staleRows := []stale{}
 	pipe := client.Pipeline()
 	for rows.Next() {
 		var item DueLink
 		var decision Decision
-		if err = rows.Scan(&item.LinkID, &decision, &item.Destination, &item.RoutingRules, &item.ABDestinations); err != nil {
+		var provider, storedFingerprint string
+		if err = rows.Scan(&item.LinkID, &decision, &provider, &storedFingerprint, &item.Destination, &item.RoutingRules, &item.ABDestinations); err != nil {
 			return err
-		}
-		if !validDecision(decision) {
-			decision = Review
 		}
 		targets := Targets(item.Destination, item.RoutingRules, item.ABDestinations)
 		if len(targets) == 0 {
 			continue
+		}
+		currentFingerprint := Fingerprint(targets)
+		if storedFingerprint == "" && provider == "migration_legacy" {
+			storedFingerprint = currentFingerprint
+			staleRows = append(staleRows, stale{id: item.LinkID, fingerprint: currentFingerprint, legacy: true})
+		}
+		if storedFingerprint != currentFingerprint {
+			staleRows = append(staleRows, stale{id: item.LinkID})
+			continue
+		}
+		if !validDecision(decision) {
+			decision = Review
 		}
 		pipe.Del(ctx, legacyRedisKey(item.LinkID))
 		pipe.Set(ctx, RedisKey(item.LinkID, targets), string(decision), 0)
@@ -58,14 +74,23 @@ func BackfillRedis(ctx context.Context, db *sql.DB, client *redis.Client) error 
 	if err = rows.Err(); err != nil {
 		return err
 	}
+	for _, item := range staleRows {
+		if item.legacy {
+			if _, err = db.ExecContext(ctx, `UPDATE link_destination_risk SET target_fingerprint=? WHERE link_id=? AND target_fingerprint='' AND provider='migration_legacy'`, item.fingerprint, item.id); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err = db.ExecContext(ctx, `UPDATE link_destination_risk SET next_scan_at=UTC_TIMESTAMP(),manual_decision=NULL,manual_reason=NULL,manual_administrator_id=NULL,manual_at=NULL WHERE link_id=?`, item.id); err != nil {
+			return err
+		}
+	}
 	_, err = pipe.Exec(ctx)
 	return err
 }
 
-// Pending includes both due rescans and newly-created links that do not yet have
-// a risk row. A target edit naturally invalidates the old Redis decision because
-// redirectengine computes a different destination fingerprint, even before the
-// persisted row becomes due again.
+// Pending includes newly-created links and all due rescans. Target edits are made
+// due immediately by the short_links_destination_risk_invalidate database trigger.
 func (s *Store) Pending(ctx context.Context, limit int) ([]DueLink, error) {
 	if limit < 1 || limit > 500 {
 		limit = 100
