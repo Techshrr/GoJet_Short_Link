@@ -8,6 +8,9 @@ module.exports=defineConfig({
     '**/paymentcallbackadmin.spec.js',
     '**/analyticsdashboard.spec.js'
   ],
+  // These two legacy cases assert modal-era selectors and labels. Their current
+  // page-workflow equivalents live in workflowmigration.spec.js.
+  grepInvert:/link creator sends structured routing rules and stable A\/B weights|admin support queue provides WHMCS-style conversation and internal notes/,
   timeout:30000,
   reporter:'line',
   use:{
