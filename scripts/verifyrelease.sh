@@ -10,9 +10,12 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 unzip -q "$ARCHIVE" -d "$TMP"
 ROOT=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -1)
 [ -n "$ROOT" ] || { echo 'release root is missing' >&2; exit 1; }
-[ "$(grep -cve '^[[:space:]]*$' "$ROOT/database/migrations/migrationcatalog.txt")" -eq 41 ] || { echo 'migration catalog count is invalid' >&2; exit 1; }
-[ "$(find "$ROOT/database/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 41 ] || { echo 'migration SQL count is invalid' >&2; exit 1; }
-for path in public/install/index.php public/install/install.css public/install/wizard.css public/install/install.js database/migrations/supportticketmessageip.sql database/migrations/officialshortdomains.sql database/migrations/emailauthcodes.sql database/migrations/mailinvoicepresentation.sql; do
+[ "$(grep -cve '^[[:space:]]*$' "$ROOT/database/migrations/migrationcatalog.txt")" -eq 43 ] || { echo 'migration catalog count is invalid' >&2; exit 1; }
+[ "$(find "$ROOT/database/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 43 ] || { echo 'migration SQL count is invalid' >&2; exit 1; }
+for migration in linkdestinationrisk.sql socialauth.sql; do
+  grep -Fxq "$migration" "$ROOT/database/migrations/migrationcatalog.txt" || { echo "migration catalog is missing $migration" >&2; exit 1; }
+done
+for path in public/install/index.php public/install/install.css public/install/wizard.css public/install/install.js database/migrations/supportticketmessageip.sql database/migrations/officialshortdomains.sql database/migrations/emailauthcodes.sql database/migrations/mailinvoicepresentation.sql database/migrations/linkdestinationrisk.sql database/migrations/socialauth.sql; do
   [ -s "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
 (cd "$ROOT" && sha256sum -c MANIFEST.sha256 >/dev/null)
