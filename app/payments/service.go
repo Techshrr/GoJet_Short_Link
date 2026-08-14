@@ -69,7 +69,7 @@ func providerDefinition(code string) Method {
 	case "wechat":
 		return Method{Code: code, Name: "微信支付", Mode: "qr"}
 	case "epay":
-		return Method{Code: code, Name: "易支付兼容协议", Mode: "redirect"}
+		return Method{Code: code, Name: "易支付", Mode: "redirect"}
 	case "paypal":
 		return Method{Code: code, Name: "PayPal", Mode: "redirect"}
 	case "stripe":
@@ -92,6 +92,7 @@ func (s *Service) Methods(ctx context.Context) ([]Method, error) {
 		providerDefinition("stripe"),
 	}
 	for i := range defs {
+		defs[i].Name = s.setting(ctx, "payments."+defs[i].Code+".display_name", defs[i].Name)
 		enabled, exists, e := s.boolSetting(ctx, "payments."+defs[i].Code+".enabled")
 		if e != nil {
 			return nil, e
@@ -176,6 +177,7 @@ func (s *Service) CreateCheckout(ctx context.Context, userID, workspaceID, invoi
 			return Checkout{}, err
 		}
 		definition := providerDefinition(existing.Provider)
+		definition.Name = s.setting(ctx, "payments."+existing.Provider+".display_name", definition.Name)
 		existing.ProviderName = definition.Name
 		existing.Mode = definition.Mode
 		existing.Reused = true
