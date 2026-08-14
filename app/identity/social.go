@@ -46,7 +46,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 	if profile.DisplayName == "" {
 		profile.DisplayName = strings.Split(profile.Email, "@")[0]
 	}
-	profile.DisplayName = truncate(profile.DisplayName, 120)
+	profile.DisplayName = socialTruncate(profile.DisplayName, 120)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -61,7 +61,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 			return User{}, false, ErrSocialAccountUnavailable
 		}
 		profileJSON, _ := json.Marshal(map[string]any{"login": profile.Login, "email_verified": profile.EmailVerified})
-		if _, err = tx.ExecContext(ctx, `UPDATE user_social_identities SET provider_email=?,email_verified=?,display_name=?,avatar_url=?,profile_json=?,last_login_at=UTC_TIMESTAMP() WHERE provider=? AND provider_subject=?`, profile.Email, profile.EmailVerified, nullable(profile.DisplayName), nullable(truncate(profile.AvatarURL, 1024)), string(profileJSON), profile.Provider, profile.Subject); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE user_social_identities SET provider_email=?,email_verified=?,display_name=?,avatar_url=?,profile_json=?,last_login_at=UTC_TIMESTAMP() WHERE provider=? AND provider_subject=?`, profile.Email, profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(socialTruncate(profile.AvatarURL, 1024)), string(profileJSON), profile.Provider, profile.Subject); err != nil {
 			return User{}, false, err
 		}
 		if err = tx.Commit(); err != nil {
@@ -104,7 +104,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 	if err != nil {
 		return User{}, false, err
 	}
-	workspaceResult, err := tx.ExecContext(ctx, `INSERT INTO workspaces(name,workspace_type,owner_id) VALUES(?,'personal',?)`, truncate(profile.DisplayName+" 的工作区", 120), userID)
+	workspaceResult, err := tx.ExecContext(ctx, `INSERT INTO workspaces(name,workspace_type,owner_id) VALUES(?,'personal',?)`, socialTruncate(profile.DisplayName+" 的工作区", 120), userID)
 	if err != nil {
 		return User{}, false, err
 	}
@@ -119,7 +119,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 		return User{}, false, err
 	}
 	profileJSON, _ := json.Marshal(map[string]any{"login": profile.Login, "email_verified": profile.EmailVerified})
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_social_identities(user_id,provider,provider_subject,provider_email,email_verified,display_name,avatar_url,profile_json,last_login_at) VALUES(?,?,?,?,?,?,?,?,UTC_TIMESTAMP())`, userID, profile.Provider, profile.Subject, profile.Email, profile.EmailVerified, nullable(profile.DisplayName), nullable(truncate(profile.AvatarURL, 1024)), string(profileJSON)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_social_identities(user_id,provider,provider_subject,provider_email,email_verified,display_name,avatar_url,profile_json,last_login_at) VALUES(?,?,?,?,?,?,?,?,UTC_TIMESTAMP())`, userID, profile.Provider, profile.Subject, profile.Email, profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(socialTruncate(profile.AvatarURL, 1024)), string(profileJSON)); err != nil {
 		return User{}, false, err
 	}
 	metadata, _ := json.Marshal(map[string]any{"provider": profile.Provider, "provider_subject": profile.Subject})
@@ -149,7 +149,7 @@ func (s *Service) CreateSessionForUser(ctx context.Context, userID int64, ip, us
 		return User{}, "", err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, socialNullable(ip), socialNullable(socialTruncate(userAgent, 500)), time.Now().Add(s.sessionTTL)); err != nil {
 		return User{}, "", err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE users SET last_login_at=UTC_TIMESTAMP() WHERE id=?`, user.ID); err != nil {
@@ -167,4 +167,19 @@ func socialPassword() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func socialTruncate(value string, limit int) string {
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return value[:limit]
+}
+
+func socialNullable(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return value
 }
