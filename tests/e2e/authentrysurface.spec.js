@@ -1,5 +1,5 @@
 const {test,expect}=require('@playwright/test');
-const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
+const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4173';
 
 async function noOverflow(page){const size=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));expect(size.scroll).toBeLessThanOrEqual(size.client+2)}
 
