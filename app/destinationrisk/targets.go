@@ -1,17 +1,12 @@
 package destinationrisk
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strings"
 )
-
-type routingTarget struct {
-	Destination string `json:"Destination"`
-}
-
-type abTarget struct {
-	Destination string `json:"Destination"`
-}
 
 // Targets returns every destination that can be reached through a short link.
 // The links package currently serializes routing/A-B structs with Go field names,
@@ -33,6 +28,25 @@ func Targets(primary string, routingRules, abDestinations json.RawMessage) []str
 	return out
 }
 
+// Fingerprint is intentionally order-independent. Changing any reachable target
+// produces a new risk cache key, so an ALLOW decision for an old destination can
+// never authorize a newly-edited primary, routing, or A/B target.
+func Fingerprint(targets []string) string {
+	unique := map[string]bool{}
+	canonical := []string{}
+	for _, target := range targets {
+		target = strings.TrimSpace(target)
+		if target == "" || unique[target] {
+			continue
+		}
+		unique[target] = true
+		canonical = append(canonical, target)
+	}
+	sort.Strings(canonical)
+	hash := sha256.Sum256([]byte(strings.Join(canonical, "\n")))
+	return hex.EncodeToString(hash[:16])
+}
+
 func decodeMapTargets(raw json.RawMessage, add func(string)) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return
@@ -47,6 +61,5 @@ func decodeMapTargets(raw json.RawMessage, add func(string)) {
 				add(value)
 				break
 			}
-		}
 	}
 }
