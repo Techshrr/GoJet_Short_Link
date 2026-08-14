@@ -50,9 +50,8 @@ renderSettings=async function(){
   input('links.default_click_limit','默认访问上限',value(links,'links.default_click_limit',0),'number','min="0"')+
   check('links.force_https','目标网址必须使用 HTTPS',bool(value(links,'links.force_https',false)))
  );
- const paymentPane=pane('payments','支付方式','启用并配置可用于在线支付账单的渠道。只有配置完整并启用的渠道才会显示给用户。',
+ const paymentPane=pane('payments','支付方式','控制在线收款总开关，并选择需要向用户提供的支付渠道。只有启用且配置完整的渠道才会出现在付款页。',
   check('payments.enabled','启用在线支付',bool(value(pay,'payments.enabled',false)),'关闭后用户仍可查看账单，但不会显示在线支付入口。')+
-  select('payments.default_provider','默认支付方式',value(pay,'payments.default_provider','alipay'),[['alipay','支付宝'],['wechat','微信支付'],['epay','易支付兼容协议'],['paypal','PayPal'],['stripe','Stripe']])+
   `<div class="full paymentProviders">`+
   provider('支付宝','适用于人民币账单，使用支付宝开放平台网页支付。',
    check('payments.alipay.enabled','启用支付宝',bool(value(pay,'payments.alipay.enabled',false)))+
@@ -64,10 +63,10 @@ renderSettings=async function(){
    input('payments.wechat.mch_serial_no','商户证书序列号',value(pay,'payments.wechat.mch_serial_no'))+input('payments.wechat.platform_serial_no','平台公钥编号',value(pay,'payments.wechat.platform_serial_no'))+
    secret('payments.wechat.private_key','商户私钥',configured(pay,'payments.wechat.private_key'))+secret('payments.wechat.api_v3_key','接口安全密钥',configured(pay,'payments.wechat.api_v3_key'),'32 字节密钥')+
    secret('payments.wechat.platform_public_key','微信支付平台公钥',configured(pay,'payments.wechat.platform_public_key')))+
-  provider('易支付兼容协议','兼容常见易支付 V1 接口。不同服务商存在差异，上线前请使用实际服务商完成支付与回调测试。',
-   check('payments.epay.enabled','启用易支付兼容协议',bool(value(pay,'payments.epay.enabled',false)))+
+  provider('易支付','接入第三方聚合支付服务。不同服务商参数可能存在差异，上线前请完成真实支付与回调测试。',
+   check('payments.epay.enabled','启用易支付',bool(value(pay,'payments.epay.enabled',false)))+
    input('payments.epay.gateway','接口地址',value(pay,'payments.epay.gateway'),'url')+input('payments.epay.pid','商户编号',value(pay,'payments.epay.pid'))+
-   select('payments.epay.default_type','默认付款类型',value(pay,'payments.epay.default_type','alipay'),[['alipay','支付宝'],['wxpay','微信支付'],['qqpay','QQ 钱包']])+
+   select('payments.epay.default_type','付款类型',value(pay,'payments.epay.default_type','alipay'),[['alipay','支付宝'],['wxpay','微信支付'],['qqpay','QQ 钱包']])+
    secret('payments.epay.key','商户密钥',configured(pay,'payments.epay.key')))+
   provider('PayPal','支持沙盒和正式环境，使用 PayPal 商户应用完成付款。',
    check('payments.paypal.enabled','启用 PayPal',bool(value(pay,'payments.paypal.enabled',false)))+
