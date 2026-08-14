@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/destinationkey"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirectengine/internal/domain"
 )
 
@@ -105,6 +106,25 @@ func (s *RedisStore) SaveLink(ctx context.Context, l domain.Link) error {
 	_, e := s.command(ctx, "SET", "gojet:link:"+key, string(b))
 	return e
 }
+
+func reachableTargets(l domain.Link) []string {
+	targets := []string{l.Destination}
+	for _, rule := range l.RoutingRules {
+		targets = append(targets, rule.Destination)
+	}
+	for _, item := range l.Destinations {
+		targets = append(targets, item.Destination)
+	}
+	return targets
+}
+
+func enforceRiskDecision(l *domain.Link, raw any) {
+	decision, ok := raw.(string)
+	if !ok || decision != "allow" {
+		l.Active = false
+	}
+}
+
 func (s *RedisStore) FindLink(ctx context.Context, host, code string) (domain.Link, error) {
 	var l domain.Link
 	v, e := s.command(ctx, "GET", "gojet:link:"+host+"|"+code)
@@ -120,8 +140,19 @@ func (s *RedisStore) FindLink(ctx context.Context, host, code string) (domain.Li
 	if v == nil {
 		return l, ErrNotFound
 	}
-	e = json.Unmarshal([]byte(v.(string)), &l)
-	return l, e
+	if e = json.Unmarshal([]byte(v.(string)), &l); e != nil {
+		return l, e
+	}
+	fingerprint := destinationkey.Fingerprint(reachableTargets(l))
+	risk, e := s.command(ctx, "GET", "gojet:risk:"+l.ID+":"+fingerprint)
+	if e != nil {
+		return l, e
+	}
+	// Missing, REVIEW, BLOCK, malformed or unknown risk state all fail closed.
+	// Only an exact ALLOW decision bound to the current target fingerprint can
+	// preserve the link's active state.
+	enforceRiskDecision(&l, risk)
+	return l, nil
 }
 
 const recordScript = `
