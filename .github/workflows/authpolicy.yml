@@ -11,6 +11,7 @@ on:
       - 'tests/integration/authpolicy.sh'
       - 'tests/integration/authmigrationcontract.sh'
       - 'tests/integration/socialbindapi.sh'
+      - 'tests/integration/socialprovideradapters.sh'
       - 'tests/integration/socialidentitybinding_test.go'
       - 'services/platformapi/cmd/server/**'
       - 'app/identity/**'
@@ -24,9 +25,7 @@ jobs:
     services:
       mysql:
         image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: gojet_auth_policy
+        env: {MYSQL_ROOT_PASSWORD: root, MYSQL_DATABASE: gojet_auth_policy}
         ports: [3306:3306]
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
@@ -40,25 +39,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: false
+        with: {go-version-file: go.mod, cache: false}
       - name: Install MySQL client
-        run: |
-          if ! command -v mysql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y mysql-client; fi
+        run: if ! command -v mysql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y mysql-client; fi
       - name: Apply migration catalog
-        env:
-          MYSQL_HOST: 127.0.0.1
-          MYSQL_PORT: '3306'
-          MYSQL_USER: root
-          MYSQL_PASSWORD: root
-          MYSQL_DATABASE: gojet_auth_policy
+        env: {MYSQL_HOST: 127.0.0.1, MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_auth_policy}
         run: bash scripts/runmigrations.sh
       - name: Validate authentication migration contract
         run: bash tests/integration/authmigrationcontract.sh
       - name: Validate social identity binding lifecycle
-        env:
-          GOJET_IDENTITY_BINDING_DSN: root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true
+        env: {GOJET_IDENTITY_BINDING_DSN: 'root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true'}
         run: go test ./tests/integration -run TestSocialIdentityBindingLifecycle -count=1 -v
       - name: Start platform API
         run: |
@@ -69,26 +59,17 @@ jobs:
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true' \
-            REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" \
-            ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' \
-            QR_TRACKING_KEY='da36f0ea6470b3d23f69e1f3bf989136de2b23ea30b4af066097080475dd6cc0' PUBLIC_BASE_URL='http://127.0.0.1:18091' \
-            PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojetauth/uploads' FILE_STORAGE_PATH='/tmp/gojetauth/files' \
-            BRAND_ASSET_PATH='/tmp/gojetauth/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetauth/generated/qr' \
-            /tmp/gojetauth/platformapi >/tmp/gojetauth/platformapi.log 2>&1 &
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY='da36f0ea6470b3d23f69e1f3bf989136de2b23ea30b4af066097080475dd6cc0' PUBLIC_BASE_URL='http://127.0.0.1:18091' PLATFORM_HTTP_ADDRESS='127.0.0.1:18091' UPLOAD_STORAGE_PATH='/tmp/gojetauth/uploads' FILE_STORAGE_PATH='/tmp/gojetauth/files' BRAND_ASSET_PATH='/tmp/gojetauth/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetauth/generated/qr' /tmp/gojetauth/platformapi >/tmp/gojetauth/platformapi.log 2>&1 &
           echo $! >/tmp/gojetauth/pid
       - name: Run authentication policy acceptance
-        env:
-          GOJET_TEST_BASE: http://127.0.0.1:18091
-          MYSQL_PASSWORD: root
-          MYSQL_DATABASE: gojet_auth_policy
+        env: {GOJET_TEST_BASE: http://127.0.0.1:18091, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_auth_policy}
         run: bash tests/integration/authpolicy.sh
       - name: Run social bind and unbind API acceptance
-        env:
-          GOJET_TEST_BASE: http://127.0.0.1:18091
-          MYSQL_PASSWORD: root
-          MYSQL_DATABASE: gojet_auth_policy
+        env: {GOJET_TEST_BASE: http://127.0.0.1:18091, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_auth_policy}
         run: bash tests/integration/socialbindapi.sh
+      - name: Run social provider adapter acceptance
+        env: {GOJET_TEST_BASE: http://127.0.0.1:18091, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_auth_policy}
+        run: bash tests/integration/socialprovideradapters.sh
       - name: Diagnostics on failure
         if: failure()
         run: |
