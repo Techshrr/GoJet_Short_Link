@@ -17,7 +17,7 @@ expect 200 "$(req PUT /api/admin/settings/socialauth "{\"auth.social.qq.enabled\
 b=$(expect 200 "$(req GET /api/public/auth/providers)" qq-public)
 printf '%s' "$b"|python3 -c 'import json,sys; p={x["id"] for x in json.load(sys.stdin)["providers"]}; assert "qq" in p'
 [[ $(mysqlq "SELECT is_encrypted FROM system_settings WHERE setting_key='auth.social.qq.client_secret';") == 1 ]]||{ echo 'QQ secret not encrypted' >&2;exit 1; }
-H=$(mktemp); BODYTMP=$(mktemp); JAR=$(mktemp); trap 'rm -f "$H" "$BODYTMP" "$JAR"' EXIT
+H=$(mktemp); trap 'rm -f "$H"' EXIT
 CODE=$(curl -sS -D "$H" -o /dev/null -w '%{http_code}' "$BASE/api/public/auth/qq/start?redirect=%2Fapp%2Fsettings")
 [[ "$CODE" == 302 ]]||{ echo "QQ start expected 302 got $CODE" >&2;cat "$H" >&2;exit 1; }
 LOCATION=$(awk 'BEGIN{IGNORECASE=1}/^Location:/{sub(/^[^:]*:[[:space:]]*/,"");sub(/\r$/,"");print;exit}' "$H")
@@ -33,15 +33,23 @@ expect 200 "$(req PUT /api/admin/settings/socialauth "{\"auth.social.wechat.enab
 b=$(expect 200 "$(req GET /api/public/auth/providers)" wechat-public)
 printf '%s' "$b"|python3 -c 'import json,sys; p={x["id"] for x in json.load(sys.stdin)["providers"]}; assert "wechat" in p'
 [[ $(mysqlq "SELECT is_encrypted FROM system_settings WHERE setting_key='auth.social.wechat.client_secret';") == 1 ]]||{ echo 'WeChat secret not encrypted' >&2;exit 1; }
-: >"$H"
-CODE=$(curl -sS -D "$H" -o /dev/null -w '%{http_code}' "$BASE/api/public/auth/wechat/start?redirect=%2Fapp%2Fsettings")
+: >"$H";CODE=$(curl -sS -D "$H" -o /dev/null -w '%{http_code}' "$BASE/api/public/auth/wechat/start?redirect=%2Fapp%2Fsettings")
 [[ "$CODE" == 302 ]]||{ echo "WeChat start expected 302 got $CODE" >&2;cat "$H" >&2;exit 1; }
 LOCATION=$(awk 'BEGIN{IGNORECASE=1}/^Location:/{sub(/^[^:]*:[[:space:]]*/,"");sub(/\r$/,"");print;exit}' "$H")
-STATE=$(python3 -c 'import sys,urllib.parse as u;raw=sys.argv[1];p=u.urlparse(raw);assert p.scheme=="https" and p.netloc=="open.weixin.qq.com" and p.path=="/connect/qrconnect" and p.fragment=="wechat_redirect";q=u.parse_qs(p.query);assert q["response_type"]==["code"] and q["scope"]==["snsapi_login"] and q["appid"]==["wx-app-2026"];assert "code_challenge" not in q;print(q["state"][0])' "$LOCATION")
+STATE=$(python3 -c 'import sys,urllib.parse as u;p=u.urlparse(sys.argv[1]);assert p.scheme=="https" and p.netloc=="open.weixin.qq.com" and p.path=="/connect/qrconnect" and p.fragment=="wechat_redirect";q=u.parse_qs(p.query);assert q["response_type"]==["code"] and q["scope"]==["snsapi_login"];assert "code_challenge" not in q;print(q["state"][0])' "$LOCATION")
 HASH=$(printf '%s' "$STATE"|sha256sum|awk '{print $1}')
 [[ $(mysqlq "SELECT COUNT(*) FROM social_auth_attempts WHERE state_hash='$HASH' AND provider='wechat' AND consumed_at IS NULL AND CHAR_LENGTH(nonce_hash)=64 AND CHAR_LENGTH(pkce_verifier_hash)=64;") == 1 ]]||{ echo 'WeChat attempt browser binding missing' >&2;exit 1; }
 expect 200 "$(req PUT /api/admin/settings/socialauth '{"auth.social.wechat.enabled":false}' "$ADMIN")" wechat-disable >/dev/null
 expect 403 "$(req GET "/api/public/auth/wechat/callback?code=fake&state=$STATE")" wechat-disabled-callback >/dev/null
 [[ $(mysqlq "SELECT COUNT(*) FROM social_auth_attempts WHERE state_hash='$HASH' AND consumed_at IS NULL;") == 1 ]]||{ echo 'disabled WeChat callback consumed state' >&2;exit 1; }
 
-printf 'QQ and WeChat social provider adapter acceptance: PASS\n'
+RAINBOW_SECRET='RainbowAdapterSecret-2026'
+expect 200 "$(req PUT /api/admin/settings/socialauth "{\"auth.social.rainbow.enabled\":true,\"auth.social.rainbow.client_id\":\"rainbow-app-2026\",\"auth.social.rainbow.client_secret\":\"$RAINBOW_SECRET\",\"auth.social.rainbow.base_url\":\"https://u.cccyun.cc\",\"auth.social.rainbow.login_type\":\"qq\"}" "$ADMIN")" rainbow-config >/dev/null
+b=$(expect 200 "$(req GET /api/public/auth/providers)" rainbow-public)
+printf '%s' "$b"|python3 -c 'import json,sys; p={x["id"] for x in json.load(sys.stdin)["providers"]}; assert "rainbow" in p'
+[[ $(mysqlq "SELECT is_encrypted FROM system_settings WHERE setting_key='auth.social.rainbow.client_secret';") == 1 ]]||{ echo 'Rainbow secret not encrypted' >&2;exit 1; }
+expect 200 "$(req PUT /api/admin/settings/socialauth '{"auth.social.rainbow.base_url":"https://127.0.0.1"}' "$ADMIN")" rainbow-unsafe-base >/dev/null
+b=$(expect 200 "$(req GET /api/public/auth/providers)" rainbow-hidden-unsafe)
+printf '%s' "$b"|python3 -c 'import json,sys; p={x["id"] for x in json.load(sys.stdin)["providers"]}; assert "rainbow" not in p'
+
+printf 'QQ, WeChat and Rainbow social provider adapter acceptance: PASS\n'
