@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,8 +20,8 @@ func TestQQCodeAndProfileExchange(t *testing.T){
 	qqOAuthTokenURL=ts.URL+"/token";qqOAuthOpenIDURL=ts.URL+"/me";qqUserInfoURL=ts.URL+"/userinfo";socialOAuthHTTPClient=ts.Client()
 	defer func(){qqOAuthTokenURL=oldToken;qqOAuthOpenIDURL=oldOpenID;qqUserInfoURL=oldInfo;socialOAuthHTTPClient=oldClient}()
 	config:=socialProviderConfig{ClientID:"qq-client",ClientSecret:"qq-secret"}
-	token,err:=exchangeQQCode(t.Context(),config,"qq-code","https://gojet.test/callback");if err!=nil||token!="qq-token"{t.Fatalf("token=%q err=%v",token,err)}
-	profile,err:=fetchQQSocialProfile(t.Context(),config,token);if err!=nil{t.Fatal(err)}
+	token,err:=exchangeQQCode(context.Background(),config,"qq-code","https://gojet.test/callback");if err!=nil||token!="qq-token"{t.Fatalf("token=%q err=%v",token,err)}
+	profile,err:=fetchQQSocialProfile(context.Background(),config,token);if err!=nil{t.Fatal(err)}
 	if profile.Provider!="qq"||profile.Subject!="qq-client:OPENID-123"||profile.DisplayName!="QQ User"||profile.Email!=""||profile.EmailVerified{t.Fatalf("unexpected profile: %#v",profile)}
 }
 

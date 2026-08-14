@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,7 @@ func TestWeChatCodeAndProfileExchange(t *testing.T) {
 	socialOAuthHTTPClient = ts.Client()
 	defer func() { wechatOAuthTokenURL, wechatUserInfoURL, socialOAuthHTTPClient = oldToken, oldInfo, oldClient }()
 	config := socialProviderConfig{ClientID: "wx-app", ClientSecret: "wx-secret"}
-	profile, err := fetchWeChatProfileFromCode(t.Context(), config, "wx-code", "https://gojet.test/callback")
+	profile, err := fetchWeChatProfileFromCode(context.Background(), config, "wx-code", "https://gojet.test/callback")
 	if err != nil {
 		t.Fatal(err)
 	}

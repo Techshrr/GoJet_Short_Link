@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -37,14 +38,14 @@ func TestRainbowLoginAndProfileExchangeKeepSecretServerSide(t *testing.T) {
 	rainbowOfficialBaseURL, socialOAuthHTTPClient = ts.URL, ts.Client()
 	defer func() { rainbowOfficialBaseURL, socialOAuthHTTPClient = oldBase, oldClient }()
 	config := socialProviderConfig{ClientID: "rainbow-app", ClientSecret: "rainbow-secret", BaseURL: ts.URL, LoginType: "qq"}
-	authorize, err := rainbowAuthorizationURL(t.Context(), config, "https://gojet.test/api/public/auth/rainbow/callback?state=state-value")
+	authorize, err := rainbowAuthorizationURL(context.Background(), config, "https://gojet.test/api/public/auth/rainbow/callback?state=state-value")
 	if err != nil || authorize != "https://graph.qq.com/oauth2.0/authorize?from=rainbow" {
 		t.Fatalf("authorize=%q err=%v", authorize, err)
 	}
 	if parsed, _ := url.Parse(authorize); parsed.Query().Get("appkey") != "" {
 		t.Fatal("Rainbow appkey leaked into browser authorization URL")
 	}
-	profile, err := fetchRainbowSocialProfile(t.Context(), config, "qq", "provider-code")
+	profile, err := fetchRainbowSocialProfile(context.Background(), config, "qq", "provider-code")
 	if err != nil {
 		t.Fatal(err)
 	}

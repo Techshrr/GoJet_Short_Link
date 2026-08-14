@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func TestFacebookCodeAndProfileExchangeTreatsEmailAsUnverified(t *testing.T) {
 	facebookOAuthTokenURL, facebookProfileURL, socialOAuthHTTPClient = ts.URL+"/token", ts.URL+"/me", ts.Client()
 	defer func() { facebookOAuthTokenURL, facebookProfileURL, socialOAuthHTTPClient = oldToken, oldProfile, oldClient }()
 	config := socialProviderConfig{ClientID: "fb-app", ClientSecret: "fb-secret"}
-	profile, err := fetchFacebookProfileFromCode(t.Context(), config, "fb-code", "https://gojet.test/callback")
+	profile, err := fetchFacebookProfileFromCode(context.Background(), config, "fb-code", "https://gojet.test/callback")
 	if err != nil {
 		t.Fatal(err)
 	}
