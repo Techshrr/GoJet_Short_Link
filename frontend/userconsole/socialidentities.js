@@ -1,0 +1,88 @@
+(()=>{
+'use strict';
+
+const bindErrorText={
+  cancelled:'已取消第三方账户绑定',
+  provider_failed:'第三方平台暂时无法完成绑定，请稍后重试',
+  identity_in_use:'该第三方账户已经绑定到其他 GoJet 账户',
+  provider_already_linked:'当前 GoJet 账户已经绑定该平台的另一个账户',
+  account_unavailable:'当前 GoJet 账户不可用',
+};
+
+function consumeSocialBindingFragment(){
+  const params=new URLSearchParams(location.hash.replace(/^#/,''));
+  const bound=(params.get('social_bound')||'').trim().toLowerCase();
+  const error=(params.get('social_bind_error')||'').trim().toLowerCase();
+  if(!bound&&!error)return'';
+  history.replaceState(history.state,'',location.pathname+location.search);
+  if(bound)return`${bound==='google'?'Google':bound==='github'?'GitHub':bound} 已绑定到当前账户`;
+  return bindErrorText[error]||'第三方账户绑定未完成';
+}
+
+function safeAuthorizeURL(provider,raw){
+  let target;
+  try{target=new URL(raw)}catch{return''}
+  if(target.protocol!=='https:')return'';
+  if(provider==='google'&&target.hostname==='accounts.google.com'&&target.pathname==='/o/oauth2/v2/auth')return target.href;
+  if(provider==='github'&&target.hostname==='github.com'&&target.pathname==='/login/oauth/authorize')return target.href;
+  return'';
+}
+
+function providerIdentity(data,provider){
+  return (data.identities||[]).find(item=>item.provider===provider)||null;
+}
+
+function providerRow(data,provider){
+  const identity=providerIdentity(data,provider.id);
+  const linked=Boolean(provider.linked&&identity);
+  const detail=linked
+    ? (identity.provider_email||identity.display_name||'第三方身份已验证')
+    : provider.configured?'尚未绑定':'管理员尚未启用此登录方式';
+  const action=linked
+    ? `<button type="button" class="socialIdentityAction danger" data-social-unbind="${escapeHTML(provider.id)}">解除绑定</button>`
+    : provider.configured
+      ? `<button type="button" class="socialIdentityAction primary" data-social-bind="${escapeHTML(provider.id)}">绑定</button>`
+      : '<button type="button" class="socialIdentityAction" disabled>不可用</button>';
+  return `<article class="socialIdentityRow" data-social-provider="${escapeHTML(provider.id)}"><div class="socialIdentityMark" aria-hidden="true">${escapeHTML(provider.label.slice(0,1))}</div><div class="socialIdentityCopy"><strong>${escapeHTML(provider.label)}</strong><span>${linked?'已绑定':'未绑定'}</span><small>${escapeHTML(detail)}</small></div>${action}</article>`;
+}
+
+async function renderSocialIdentitySettings(mount){
+  if(!mount)return null;
+  mount.innerHTML='<div class="productLoading">正在读取第三方账户…</div>';
+  try{
+    const data=await api('/api/me/social-identities');
+    const fragmentMessage=consumeSocialBindingFragment();
+    const providers=Array.isArray(data.providers)?data.providers:[];
+    mount.innerHTML=`<div class="socialIdentityHead"><div><h3>第三方账户</h3><p>绑定后可使用对应平台登录。绑定和解除绑定不会按邮箱自动合并其他 GoJet 账户。</p></div></div>${fragmentMessage?`<div class="socialIdentityNotice success" data-social-notice>${escapeHTML(fragmentMessage)}</div>`:''}${data.password_login_enabled===false?'<div class="socialIdentityNotice warning">当前账户还没有可用的密码登录凭据。解除最后一个第三方登录方式会被拒绝；如需解除，请先通过邮箱找回密码设置登录密码。</div>':''}<div class="socialIdentityList">${providers.length?providers.map(provider=>providerRow(data,provider)).join(''):'<div class="productEmpty"><h3>暂无可管理的第三方登录方式</h3><p>管理员启用第三方登录后会显示在这里。</p></div>'}</div><div class="error socialIdentityError" data-social-error></div>`;
+
+    mount.querySelectorAll('[data-social-bind]').forEach(button=>button.onclick=async()=>{
+      const provider=button.dataset.socialBind;
+      const error=mount.querySelector('[data-social-error]');
+      error.textContent='';button.disabled=true;
+      try{
+        const result=await api(`/api/me/social/${encodeURIComponent(provider)}/bind/start`,{method:'POST'});
+        const authorize=safeAuthorizeURL(provider,result.authorize_url||'');
+        if(!authorize)throw new Error('第三方授权地址校验失败');
+        location.assign(authorize);
+      }catch(err){error.textContent=err.message;button.disabled=false}
+    });
+    mount.querySelectorAll('[data-social-unbind]').forEach(button=>button.onclick=async()=>{
+      const provider=button.dataset.socialUnbind;
+      const label=providers.find(item=>item.id===provider)?.label||provider;
+      if(!confirm(`确定解除 ${label} 与当前 GoJet 账户的绑定吗？`))return;
+      const error=mount.querySelector('[data-social-error]');
+      error.textContent='';button.disabled=true;
+      try{
+        await api(`/api/me/social/${encodeURIComponent(provider)}`,{method:'DELETE'});
+        await renderSocialIdentitySettings(mount);
+      }catch(err){error.textContent=err.message;button.disabled=false}
+    });
+    return data;
+  }catch(err){
+    mount.innerHTML=`<div class="productError">${escapeHTML(err.message||'第三方账户读取失败')}</div>`;
+    return null;
+  }
+}
+
+window.renderSocialIdentitySettings=renderSocialIdentitySettings;
+})();

@@ -76,13 +76,14 @@ jobs:
           node --check frontend/publicsite/assets/app.js
           node --check frontend/publicsite/assets/fileshare.js
           for file in frontend/adminconsole/settings.js frontend/adminconsole/socialauthsettings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js frontend/adminconsole/destinationrisk.js; do node --check "$file"; done
-          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do node --check "$file"; done
+          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js frontend/userconsole/socialidentities.js; do node --check "$file"; done
           if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/userconsole; then echo 'retired customer console page registry detected' >&2; exit 1; fi
           node --check tests/e2e/productsurface.spec.js
           node --check tests/e2e/fullsurfaceconsistency.spec.js
           node --check tests/e2e/announcementrotation.spec.js
           node --check tests/e2e/destinationriskadmin.spec.js
           node --check tests/e2e/socialauthsettings.spec.js
+          node --check tests/e2e/socialidentitysettings.spec.js
           python3 -m py_compile tests/integration/assertpdfcontrast.py
       - name: Run source level tests
         run: |
@@ -149,7 +150,7 @@ jobs:
           for path in / /privacy /terms /forgotpassword /reportabuse /products/urlshortener; do curl -fsS "http://127.0.0.1:4180$path" >/dev/null; done
       - name: Run browser product surface acceptance
         env: {GOJET_SURFACE_BASE: 'http://127.0.0.1:4180'}
-        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js socialauthsettings.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
+        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js socialauthsettings.spec.js socialidentitysettings.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
       - name: Run invoice PDF visual contrast acceptance
         env: {GOJET_TEST_BASE: 'http://127.0.0.1:18090', MYSQL_HOST: '127.0.0.1', MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
         run: |
