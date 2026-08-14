@@ -233,7 +233,10 @@ jobs:
           echo $! >/tmp/gojetcandidateredirectengine.pid
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetmysql' ANALYTICS_CONSUMER='freshinstallcandidate' "$ROOT/bin/analyticsworker" >/tmp/gojetcandidateanalyticsworker.log 2>&1 &
           echo $! >/tmp/gojetcandidateanalyticsworker.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_candidate?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' "$ROOT/bin/operationsmonitor" >/tmp/gojetcandidateoperationsmonitor.log 2>&1 &
+          echo $! >/tmp/gojetcandidateoperationsmonitor.pid
           for port in 18090 18080; do for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done; done
+          kill -0 "$(cat /tmp/gojetcandidateoperationsmonitor.pid)"
       - name: Run packaged P0 acceptance
         env:
           GOJET_TEST_BASE: http://127.0.0.1:18090
@@ -269,7 +272,8 @@ jobs:
           echo '===== platformapi ====='; cat /tmp/gojetcandidateplatformapi.log 2>/dev/null || true
           echo '===== redirectengine ====='; cat /tmp/gojetcandidateredirectengine.log 2>/dev/null || true
           echo '===== analyticsworker ====='; cat /tmp/gojetcandidateanalyticsworker.log 2>/dev/null || true
+          echo '===== operationsmonitor ====='; cat /tmp/gojetcandidateoperationsmonitor.log 2>/dev/null || true
       - name: Stop candidate services
         if: always()
         run: |
-          for pidfile in /tmp/gojetcandidateplatformapi.pid /tmp/gojetcandidateredirectengine.pid /tmp/gojetcandidateanalyticsworker.pid; do if [ -f "$pidfile" ]; then kill "$(cat "$pidfile")" 2>/dev/null || true; fi; done
+          for pidfile in /tmp/gojetcandidateplatformapi.pid /tmp/gojetcandidateredirectengine.pid /tmp/gojetcandidateanalyticsworker.pid /tmp/gojetcandidateoperationsmonitor.pid; do if [ -f "$pidfile" ]; then kill "$(cat "$pidfile")" 2>/dev/null || true; fi; done
