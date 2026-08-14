@@ -35,7 +35,7 @@ html{color-scheme:light}
 body{font-family:var(--gojet-font);color:var(--gojet-ink);background:var(--gojet-bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 a{color:inherit}
 button,input,select,textarea{font:inherit}
-button,.button,.btn,input,select,textarea{border-radius:var(--gojet-radius-sm)}
+button,.button,.btn,input:not([type="checkbox"]):not([type="radio"]),select,textarea{border-radius:var(--gojet-radius-sm)}
 button,.button,.btn{min-height:var(--gojet-control-h);border:1px solid var(--gojet-line-strong);background:var(--gojet-panel);color:var(--gojet-ink);padding:0 15px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:650;text-decoration:none;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease,color .16s ease}
 button:hover,.button:hover,.btn:hover{border-color:#aebfb6;background:#fbfcfb}
 button:active,.button:active,.btn:active{transform:translateY(1px)}
@@ -45,18 +45,27 @@ button.primary:hover,.button.primary:hover,.btn.primary:hover,.productPrimary:ho
 button.danger,.button.danger,.btn.danger,.danger{color:var(--gojet-danger);border-color:#ecc5c5;background:#fff}
 button.danger:hover,.button.danger:hover,.btn.danger:hover{background:var(--gojet-danger-soft);border-color:#e5adad}
 button:disabled,.button.disabled,.btn:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
-input,select,textarea{width:100%;min-height:var(--gojet-control-h);border:1px solid var(--gojet-line-strong);background:#fff;color:var(--gojet-ink);padding:9px 12px;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
+input:not([type="checkbox"]):not([type="radio"]),select,textarea{width:100%;min-height:var(--gojet-control-h);border:1px solid var(--gojet-line-strong);background:#fff;color:var(--gojet-ink);padding:9px 12px;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
 textarea{min-height:116px;resize:vertical;line-height:1.65}
-select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#607169 50%),linear-gradient(135deg,#607169 50%,transparent 50%);background-position:calc(100% - 17px) 18px,calc(100% - 12px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:34px}
-input:hover,select:hover,textarea:hover{border-color:#afbeb6}
-input:focus,select:focus,textarea:focus{border-color:var(--gojet-brand);box-shadow:0 0 0 3px var(--gojet-brand-ring);outline:0}
+select{appearance:none;background-color:#fff;background-image:linear-gradient(45deg,transparent 50%,#607169 50%),linear-gradient(135deg,#607169 50%,transparent 50%);background-position:calc(100% - 17px) 18px,calc(100% - 12px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px}
+input:not([type="checkbox"]):not([type="radio"]):hover,select:hover,textarea:hover{border-color:#afbeb6}
+input:not([type="checkbox"]):not([type="radio"]):focus,select:focus,textarea:focus{border-color:var(--gojet-brand);box-shadow:0 0 0 3px var(--gojet-brand-ring);outline:0}
 input::placeholder,textarea::placeholder{color:#98a69f}
+input[type="checkbox"],input[type="radio"]{appearance:auto!important;-webkit-appearance:auto!important;width:17px!important;height:17px!important;min-width:17px!important;min-height:17px!important;max-width:17px!important;margin:0!important;padding:0!important;border:0!important;border-radius:3px!important;background:transparent!important;background-image:none!important;box-shadow:none!important;accent-color:var(--gojet-brand);vertical-align:middle;flex:0 0 17px}
+input[type="radio"]{border-radius:50%!important}
+input[type="checkbox"]:focus,input[type="radio"]:focus{outline:0!important;box-shadow:none!important}
+input[type="checkbox"]:focus-visible,input[type="radio"]:focus-visible{outline:3px solid var(--gojet-brand-ring)!important;outline-offset:3px!important}
+label.check,label.productCheck,.ah-switch{cursor:pointer}
 label{color:var(--gojet-ink-2)}
 ::selection{background:#c9f1df;color:#103c2b}
+.modalClose,.iconClose,[data-modal-close].iconClose{width:38px!important;height:38px!important;min-height:38px!important;min-width:38px!important;padding:0!important;border-radius:10px!important;font-size:0!important;position:relative!important;flex:0 0 38px!important}
+.modalClose::before,.modalClose::after,.iconClose::before,.iconClose::after,[data-modal-close].iconClose::before,[data-modal-close].iconClose::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:1.5px;background:currentColor;border-radius:2px}
+.modalClose::before,.iconClose::before,[data-modal-close].iconClose::before{transform:translate(-50%,-50%) rotate(45deg)}
+.modalClose::after,.iconClose::after,[data-modal-close].iconClose::after{transform:translate(-50%,-50%) rotate(-45deg)}
 .productPageHead,.title{gap:20px}
 .productPageHead h1,.title h1{letter-spacing:-.025em;color:var(--gojet-ink)}
 .productPageHead p,.title p,.fieldHelp{color:var(--gojet-muted)}
-.resourceForm,.resourceEditor,.shareCard,.overviewPanel,.overviewPanel,.teamWorkspaceCard,.teamInvite,.teamSection,.subscriptionSummary,.planCard,.analyticsTrendPanel,.linkDrilldown{border:1px solid var(--gojet-line)!important;border-radius:var(--gojet-radius)!important;background:var(--gojet-panel)!important;box-shadow:none}
+.resourceForm,.resourceEditor,.shareCard,.overviewPanel,.teamWorkspaceCard,.teamInvite,.teamSection,.subscriptionSummary,.planCard,.analyticsTrendPanel,.linkDrilldown{border:1px solid var(--gojet-line)!important;border-radius:var(--gojet-radius)!important;background:var(--gojet-panel)!important;box-shadow:none}
 .productStatus,.badge,.role-pill{border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;background:var(--gojet-brand-soft);color:var(--gojet-success)}
 .productError,.alert.error{border:1px solid #efc5c5;background:var(--gojet-danger-soft);color:#a52e2e;border-radius:var(--gojet-radius-sm);padding:12px 14px}
 .productSuccess,.alert.success{border:1px solid #bde1d0;background:var(--gojet-brand-soft);color:var(--gojet-success);border-radius:var(--gojet-radius-sm);padding:12px 14px}
