@@ -1,3 +1,4 @@
+// Public announcement Markdown is escaped before formatting so admin-authored notices cannot execute HTML or script.
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function markdown(raw){
   let s=esc(raw||'');
