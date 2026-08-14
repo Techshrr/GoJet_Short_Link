@@ -193,6 +193,54 @@ func validateAnnouncementItem(item *announcementBarItem, index int) error {
 	if hasStart && hasEnd && !end.After(start) {
 		return fmt.Errorf("第 %d 条公告结束时间必须晚于开始时间", index+1)
 	}
+	if item.SortOrder < -10000 || item.SortOrder > 10000 {
+		return fmt.Errorf("第 %d 条公告排序值超出允许范围", index+1)
+	}
+	return nil
+}
+
+// validateAnnouncementSettings is the server-side trust boundary for the admin
+// settings API. The browser editor is only a convenience and must never be the
+// only validation layer for data later rendered on the public site.
+func validateAnnouncementSettings(values map[string]any) error {
+	if raw, ok := values["announcementbar.enabled"]; ok {
+		if _, valid := raw.(bool); !valid {
+			return fmt.Errorf("announcementbar.enabled 必须为布尔值")
+		}
+	}
+	if raw, ok := values["announcementbar.rotation_seconds"]; ok {
+		rotation := announcementInt(raw, -1)
+		if rotation < 4 || rotation > 60 {
+			return fmt.Errorf("顶部飘窗轮换间隔必须为 4 到 60 秒")
+		}
+		values["announcementbar.rotation_seconds"] = rotation
+	}
+	raw, exists := values["announcementbar.items"]
+	if !exists {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("顶部飘窗列表格式无效")
+	}
+	var items []announcementBarItem
+	if err = json.Unmarshal(data, &items); err != nil {
+		return fmt.Errorf("顶部飘窗列表必须是公告数组")
+	}
+	if len(items) > 20 {
+		return fmt.Errorf("顶部飘窗最多允许 20 条公告")
+	}
+	seen := map[string]bool{}
+	for index := range items {
+		if err = validateAnnouncementItem(&items[index], index); err != nil {
+			return err
+		}
+		if seen[items[index].ID] {
+			return fmt.Errorf("公告 ID 重复: %s", items[index].ID)
+		}
+		seen[items[index].ID] = true
+	}
+	values["announcementbar.items"] = items
 	return nil
 }
 
@@ -204,12 +252,24 @@ func announcementItemsFromSetting(value any) []announcementBarItem {
 	if err != nil {
 		return nil
 	}
-	var items []announcementBarItem
-	if json.Unmarshal(data, &items) != nil {
+	var stored []announcementBarItem
+	if json.Unmarshal(data, &stored) != nil {
 		return nil
 	}
-	for index := range items {
-		_ = validateAnnouncementItem(&items[index], index)
+	items := make([]announcementBarItem, 0, len(stored))
+	seen := map[string]bool{}
+	for index := range stored {
+		// Stored multi-item data must already have a stable ID. Missing or otherwise
+		// malformed records fail closed instead of being repaired differently on each read.
+		if strings.TrimSpace(stored[index].ID) == "" {
+			continue
+		}
+		item := stored[index]
+		if validateAnnouncementItem(&item, index) != nil || seen[item.ID] {
+			continue
+		}
+		seen[item.ID] = true
+		items = append(items, item)
 	}
 	return items
 }
