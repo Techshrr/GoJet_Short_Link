@@ -1,0 +1,92 @@
+name: GoJet Final Candidate Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: gojetfinalcandidate${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exactheadcandidate:
+    name: Exact HEAD candidate promotion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Wait for exact HEAD required gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.request
+          repo=os.environ['GITHUB_REPOSITORY']; sha=os.environ['GITHUB_SHA']; token=os.environ['GH_TOKEN']
+          api=os.environ.get('GITHUB_API_URL','https://api.github.com')
+          required=[
+            'GoJet Database Schema Naming Gate',
+            'GoJet Analytics Dashboard Gate',
+            'GoJet Authentication Policy Gate',
+            'GoJet Installer Validation',
+            'GoJet Full stack P0 gate',
+            'GoJet Product Surface Gate',
+            'GoJet Release Package Gate',
+            'GoJet Public Payment Callback Gate',
+            'GoJet Payment Callback Browser Gate',
+          ]
+          def get(path):
+            req=urllib.request.Request(api+path,headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'GoJet-Final-Candidate'})
+            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          latest={}
+          for attempt in range(120):
+            payload=get(f'/repos/{repo}/actions/runs?head_sha={sha}&per_page=100')
+            latest={}
+            for run in payload.get('workflow_runs',[]):
+              name=run.get('name')
+              if name not in required:continue
+              current=latest.get(name)
+              if current is None or (run.get('run_number',0),run.get('run_attempt',0),run.get('id',0))>(current.get('run_number',0),current.get('run_attempt',0),current.get('id',0)):
+                latest[name]=run
+            failed=[name for name in required if name in latest and latest[name].get('status')=='completed' and latest[name].get('conclusion')!='success']
+            if failed:
+              for name in failed:print(f'{name}: {latest[name].get("conclusion")}',file=sys.stderr)
+              raise SystemExit('exact HEAD gate failed')
+            pending=[name for name in required if name not in latest or latest[name].get('status')!='completed']
+            if not pending:break
+            print('waiting for: '+', '.join(pending))
+            time.sleep(10)
+          else:raise SystemExit('timed out waiting for exact HEAD gates')
+          non_success=[name for name in required if latest[name].get('conclusion')!='success']
+          if non_success:raise SystemExit('required exact HEAD gates are not all successful')
+          ref=get(f'/repos/{repo}/git/ref/heads/rebuild/v4-rc12-real-install-fixes')
+          if ref.get('object',{}).get('sha')!=sha:raise SystemExit('candidate SHA is no longer the branch HEAD')
+          release=latest['GoJet Release Package Gate']; release_id=release['id']
+          jobs=get(f'/repos/{repo}/actions/runs/{release_id}/jobs?per_page=100').get('jobs',[])
+          jobmap={job.get('name'):job for job in jobs}
+          for name in ('Production package','Fresh install candidate'):
+            if jobmap.get(name,{}).get('conclusion')!='success':raise SystemExit(f'{name} is not successful in exact release run')
+          artifacts=get(f'/repos/{repo}/actions/runs/{release_id}/artifacts?per_page=100').get('artifacts',[])
+          expected='gojetreleasepackage'+sha
+          matches=[artifact for artifact in artifacts if artifact.get('name')==expected and not artifact.get('expired')]
+          if len(matches)!=1:raise SystemExit('exact release package artifact is missing, duplicated, or expired')
+          artifact=matches[0]
+          evidence=['tested_sha='+sha,'release_run_id='+str(release_id),'release_artifact_id='+str(artifact['id']),'release_artifact_name='+expected]
+          evidence += [name+'=success' for name in required]
+          open('/tmp/GOJETFINALCANDIDATE.txt','w').write('\n'.join(evidence)+'\n')
+          print('\n'.join(evidence))
+          PY
+      - name: Upload immutable final candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojetfinalcandidateevidence${{ github.sha }}
+          path: /tmp/GOJETFINALCANDIDATE.txt
+          if-no-files-found: error
+          retention-days: 14
