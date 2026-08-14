@@ -40,3 +40,4 @@ officialshortdomains.sql
 emailauthcodes.sql
 mailinvoicepresentation.sql
 linkdestinationrisk.sql
+socialauth.sql
