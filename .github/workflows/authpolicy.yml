@@ -10,6 +10,7 @@ on:
       - '.github/workflows/authpolicy.yml'
       - 'tests/integration/authpolicy.sh'
       - 'services/platformapi/cmd/server/**'
+      - 'app/identity/**'
       - 'app/settings/**'
       - 'database/migrations/**'
       - 'scripts/runmigrations.sh'
