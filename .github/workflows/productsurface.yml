@@ -86,8 +86,10 @@ jobs:
           fi
           node --check frontend/publicsite/assets/app.js
           node --check frontend/publicsite/assets/fileshare.js
-          node --check frontend/adminconsole/settings.js
-          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do
+          for file in frontend/adminconsole/settings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js; do
+            node --check "$file"
+          done
+          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do
             node --check "$file"
           done
           if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/userconsole; then
