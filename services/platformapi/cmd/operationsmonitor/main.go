@@ -104,7 +104,7 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 						log.Printf("destination risk save link=%d: %v", item.LinkID, err)
 						continue
 					}
-					if err := destinationrisk.SyncDecision(ctx, rdb, item.LinkID, assessment.Decision); err != nil {
+					if err := destinationrisk.SyncDecision(ctx, rdb, item.LinkID, targets, assessment.Decision); err != nil {
 						log.Printf("destination risk cache link=%d: %v", item.LinkID, err)
 					}
 				}
