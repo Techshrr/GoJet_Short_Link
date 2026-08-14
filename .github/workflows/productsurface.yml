@@ -86,7 +86,7 @@ jobs:
           fi
           node --check frontend/publicsite/assets/app.js
           node --check frontend/publicsite/assets/fileshare.js
-          for file in frontend/adminconsole/settings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js; do
+          for file in frontend/adminconsole/settings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js frontend/adminconsole/destinationrisk.js; do
             node --check "$file"
           done
           for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/support.js; do
@@ -98,6 +98,8 @@ jobs:
           fi
           node --check tests/e2e/productsurface.spec.js
           node --check tests/e2e/fullsurfaceconsistency.spec.js
+          node --check tests/e2e/announcementrotation.spec.js
+          node --check tests/e2e/destinationriskadmin.spec.js
           python3 -m py_compile tests/integration/assertpdfcontrast.py
 
       - name: Run source level tests
@@ -121,8 +123,9 @@ jobs:
           go build -o /tmp/gojetsurface/bin/platformapi ./services/platformapi/cmd/server
           go build -o /tmp/gojetsurface/bin/redirectengine ./services/redirectengine/cmd/server
           go build -o /tmp/gojetsurface/bin/analyticsworker ./services/analyticsworker/cmd/worker
+          go build -o /tmp/gojetsurface/bin/operationsmonitor ./services/platformapi/cmd/operationsmonitor
 
-      - name: Start backend and analytics services
+      - name: Start backend, analytics and destination risk services
         run: |
           set -euo pipefail
           SETTINGS_KEY=$(python3 - <<'PY'
@@ -137,6 +140,8 @@ jobs:
           echo $! >/tmp/gojetsurface/redirectengine.pid
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetsurface' ANALYTICS_CONSUMER='browsersurface' /tmp/gojetsurface/bin/analyticsworker >/tmp/gojetsurface/analyticsworker.log 2>&1 &
           echo $! >/tmp/gojetsurface/analyticsworker.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' /tmp/gojetsurface/bin/operationsmonitor >/tmp/gojetsurface/operationsmonitor.log 2>&1 &
+          echo $! >/tmp/gojetsurface/operationsmonitor.pid
           for port in 18090 18080; do
             for i in $(seq 1 60); do
               curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
@@ -144,6 +149,7 @@ jobs:
               test "$i" -lt 60
             done
           done
+          kill -0 "$(cat /tmp/gojetsurface/operationsmonitor.pid)"
 
       - name: Serve product through Nginx
         run: |
@@ -182,7 +188,7 @@ jobs:
 
       - name: Run browser product surface acceptance
         env: {GOJET_SURFACE_BASE: 'http://127.0.0.1:4180'}
-        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
+        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
 
       - name: Run invoice PDF visual contrast acceptance
         env: {GOJET_TEST_BASE: 'http://127.0.0.1:18090', MYSQL_HOST: '127.0.0.1', MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
@@ -196,7 +202,9 @@ jobs:
           echo '===== platformapi ====='; cat /tmp/gojetsurface/platformapi.log 2>/dev/null || true
           echo '===== redirectengine ====='; cat /tmp/gojetsurface/redirectengine.log 2>/dev/null || true
           echo '===== analyticsworker ====='; cat /tmp/gojetsurface/analyticsworker.log 2>/dev/null || true
+          echo '===== operationsmonitor ====='; cat /tmp/gojetsurface/operationsmonitor.log 2>/dev/null || true
           echo '===== nginx error ====='; sudo cat /var/log/nginx/error.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_surface -e 'SELECT link_id,decision,score,target_fingerprint,manual_decision,manual_reason,scanned_at,next_scan_at FROM link_destination_risk ORDER BY link_id DESC LIMIT 30;' || true
           find /tmp/gojetsurface -maxdepth 4 -type f -printf '%M %u:%g %p\n' 2>/dev/null | sort || true
 
       - name: Upload browser and PDF evidence
@@ -214,6 +222,6 @@ jobs:
         if: always()
         run: |
           sudo nginx -s stop 2>/dev/null || true
-          for name in platformapi redirectengine analyticsworker; do
+          for name in platformapi redirectengine analyticsworker operationsmonitor; do
             test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true
           done
