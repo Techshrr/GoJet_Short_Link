@@ -10,21 +10,22 @@ import (
 )
 
 type Record struct {
-	LinkID                    int64           `json:"link_id"`
-	Decision                  Decision        `json:"decision"`
-	EffectiveDecision         Decision        `json:"effective_decision"`
-	Score                     int             `json:"score"`
-	Categories                []Category      `json:"categories"`
-	Evidence                  json.RawMessage `json:"evidence"`
-	Provider                  string          `json:"provider"`
-	ScannedURL                string          `json:"scanned_url"`
-	FinalURL                  string          `json:"final_url"`
-	ScannedAt                 *time.Time       `json:"scanned_at,omitempty"`
-	NextScanAt                *time.Time       `json:"next_scan_at,omitempty"`
-	ManualDecision            *Decision        `json:"manual_decision,omitempty"`
-	ManualReason              string           `json:"manual_reason,omitempty"`
-	ManualAdministratorID     *int64           `json:"manual_administrator_id,omitempty"`
-	ManualAt                  *time.Time       `json:"manual_at,omitempty"`
+	LinkID                int64           `json:"link_id"`
+	Decision              Decision        `json:"decision"`
+	EffectiveDecision     Decision        `json:"effective_decision"`
+	Score                 int             `json:"score"`
+	Categories            []Category      `json:"categories"`
+	Evidence              json.RawMessage `json:"evidence"`
+	Provider              string          `json:"provider"`
+	TargetFingerprint     string          `json:"target_fingerprint"`
+	ScannedURL            string          `json:"scanned_url"`
+	FinalURL              string          `json:"final_url"`
+	ScannedAt             *time.Time      `json:"scanned_at,omitempty"`
+	NextScanAt            *time.Time      `json:"next_scan_at,omitempty"`
+	ManualDecision        *Decision       `json:"manual_decision,omitempty"`
+	ManualReason          string          `json:"manual_reason,omitempty"`
+	ManualAdministratorID *int64          `json:"manual_administrator_id,omitempty"`
+	ManualAt              *time.Time      `json:"manual_at,omitempty"`
 }
 
 type ReviewItem struct {
@@ -52,8 +53,8 @@ func validDecision(value Decision) bool {
 	return value == Allow || value == Review || value == Block
 }
 
-func (s *Store) Save(ctx context.Context, linkID int64, assessment Assessment) error {
-	if linkID < 1 || !validDecision(assessment.Decision) {
+func (s *Store) Save(ctx context.Context, linkID int64, targets []string, assessment Assessment) error {
+	if linkID < 1 || len(targets) == 0 || !validDecision(assessment.Decision) {
 		return errors.New("invalid destination risk assessment")
 	}
 	categories, err := json.Marshal(assessment.Categories)
@@ -68,15 +69,20 @@ func (s *Store) Save(ctx context.Context, linkID int64, assessment Assessment) e
 	if provider == "" {
 		provider = "builtin"
 	}
+	fingerprint := Fingerprint(targets)
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO link_destination_risk(
-			link_id,decision,score,categories,evidence,provider,scanned_url,final_url,scanned_at,next_scan_at
-		) VALUES(?,?,?,?,?,?,?,?,?,?)
+			link_id,decision,score,categories,evidence,provider,target_fingerprint,scanned_url,final_url,scanned_at,next_scan_at
+		) VALUES(?,?,?,?,?,?,?,?,?,?,?)
 		ON DUPLICATE KEY UPDATE
-			decision=VALUES(decision),score=VALUES(score),categories=VALUES(categories),evidence=VALUES(evidence),
-			provider=VALUES(provider),scanned_url=VALUES(scanned_url),final_url=VALUES(final_url),
+			decision=VALUES(decision),score=VALUES(score),categories=VALUES(categories),evidence=VALUES(evidence),provider=VALUES(provider),
+			manual_decision=IF(link_destination_risk.target_fingerprint=VALUES(target_fingerprint),manual_decision,NULL),
+			manual_reason=IF(link_destination_risk.target_fingerprint=VALUES(target_fingerprint),manual_reason,NULL),
+			manual_administrator_id=IF(link_destination_risk.target_fingerprint=VALUES(target_fingerprint),manual_administrator_id,NULL),
+			manual_at=IF(link_destination_risk.target_fingerprint=VALUES(target_fingerprint),manual_at,NULL),
+			target_fingerprint=VALUES(target_fingerprint),scanned_url=VALUES(scanned_url),final_url=VALUES(final_url),
 			scanned_at=VALUES(scanned_at),next_scan_at=VALUES(next_scan_at)`,
-		linkID, assessment.Decision, assessment.Score, categories, evidence, provider,
+		linkID, assessment.Decision, assessment.Score, categories, evidence, provider, fingerprint,
 		assessment.ScannedURL, assessment.FinalURL, assessment.ScannedAt, assessment.NextScanAt)
 	return err
 }
@@ -88,10 +94,10 @@ func (s *Store) Get(ctx context.Context, linkID int64) (Record, error) {
 	var manualDecision, manualReason sql.NullString
 	var manualAdmin sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT link_id,decision,score,COALESCE(categories,JSON_ARRAY()),COALESCE(evidence,JSON_ARRAY()),provider,
+		SELECT link_id,decision,score,COALESCE(categories,JSON_ARRAY()),COALESCE(evidence,JSON_ARRAY()),provider,target_fingerprint,
 		       scanned_url,final_url,scanned_at,next_scan_at,manual_decision,manual_reason,manual_administrator_id,manual_at
 		FROM link_destination_risk WHERE link_id=?`, linkID).Scan(
-		&record.LinkID, &record.Decision, &record.Score, &categories, &evidence, &record.Provider,
+		&record.LinkID, &record.Decision, &record.Score, &categories, &evidence, &record.Provider, &record.TargetFingerprint,
 		&record.ScannedURL, &record.FinalURL, &scannedAt, &nextScanAt, &manualDecision, &manualReason, &manualAdmin, &manualAt)
 	if err != nil {
 		return record, err
@@ -192,7 +198,7 @@ func (s *Store) List(ctx context.Context, decision string, limit, offset int) ([
 	queryArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.link_id,l.workspace_id,l.code,l.domain,l.destination,l.title,l.status,
-		       r.decision,r.score,COALESCE(r.categories,JSON_ARRAY()),COALESCE(r.evidence,JSON_ARRAY()),r.provider,
+		       r.decision,r.score,COALESCE(r.categories,JSON_ARRAY()),COALESCE(r.evidence,JSON_ARRAY()),r.provider,r.target_fingerprint,
 		       r.scanned_url,r.final_url,r.scanned_at,r.next_scan_at,r.manual_decision,r.manual_reason,r.manual_administrator_id,r.manual_at
 		FROM link_destination_risk r JOIN short_links l ON l.id=r.link_id
 		WHERE `+where+`
@@ -210,7 +216,7 @@ func (s *Store) List(ctx context.Context, decision string, limit, offset int) ([
 		var manualDecision, manualReason sql.NullString
 		var manualAdmin sql.NullInt64
 		if err = rows.Scan(&item.LinkID, &item.WorkspaceID, &item.Code, &item.Domain, &item.Destination, &item.Title, &item.LinkStatus,
-			&item.Decision, &item.Score, &categories, &evidence, &item.Provider, &item.ScannedURL, &item.FinalURL,
+			&item.Decision, &item.Score, &categories, &evidence, &item.Provider, &item.TargetFingerprint, &item.ScannedURL, &item.FinalURL,
 			&scannedAt, &nextScanAt, &manualDecision, &manualReason, &manualAdmin, &manualAt); err != nil {
 			return nil, 0, err
 		}
@@ -253,8 +259,12 @@ func (s *Store) Due(ctx context.Context, limit int) ([]DueLink, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT l.id,l.destination,COALESCE(l.routing_rules,JSON_ARRAY()),COALESCE(l.ab_destinations,JSON_ARRAY())
 		FROM link_destination_risk r JOIN short_links l ON l.id=r.link_id
-		WHERE l.deleted_at IS NULL AND r.manual_decision IS NULL AND r.next_scan_at IS NOT NULL AND r.next_scan_at<=UTC_TIMESTAMP()
-		ORDER BY r.next_scan_at ASC LIMIT ?`, limit)
+		WHERE l.deleted_at IS NULL AND (
+			l.updated_at>COALESCE(r.scanned_at,'1970-01-01 00:00:00') OR
+			(r.manual_decision IS NULL AND r.next_scan_at IS NOT NULL AND r.next_scan_at<=UTC_TIMESTAMP())
+		)
+		ORDER BY CASE WHEN l.updated_at>COALESCE(r.scanned_at,'1970-01-01 00:00:00') THEN 0 ELSE 1 END,r.next_scan_at ASC
+		LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
