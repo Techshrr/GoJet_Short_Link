@@ -64,10 +64,11 @@ jobs:
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
           test -f database/migrations/migrationcatalog.txt
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 43
-          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 43
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 44
+          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 44
           grep -Fxq 'linkdestinationrisk.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'socialauth.sql' database/migrations/migrationcatalog.txt
+          grep -Fxq 'socialsubjectwidth.sql' database/migrations/migrationcatalog.txt
           test -z "$(find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -E '^[0-9]' || true)"
           MIGRATION_GLOB='database/migrations/'
           MIGRATION_GLOB+='*.sql'
@@ -89,6 +90,7 @@ jobs:
           node --check frontend/publicsite/assets/fileshare.js
           node --check frontend/adminconsole/app.js
           node --check frontend/adminconsole/settings.js
+          node --check frontend/adminconsole/socialauthsettings.js
           node --check frontend/adminconsole/paymentux.js
           node --check frontend/adminconsole/officialdomains.js
           node --check frontend/adminconsole/supportsecurity.js

@@ -74,10 +74,12 @@ func TestGitHubOAuthExchangeAndProfile(t *testing.T) {
 }
 
 func TestSocialAuthSafetyHelpers(t *testing.T) {
-	if !socialProviderImplemented("github") {
-		t.Fatal("github adapter must be implemented")
+	for _, provider := range []string{"github", "google"} {
+		if !socialProviderImplemented(provider) {
+			t.Fatalf("%s adapter must be implemented", provider)
+		}
 	}
-	for _, provider := range []string{"google", "facebook", "qq", "wechat", "rainbow"} {
+	for _, provider := range []string{"facebook", "qq", "wechat", "rainbow"} {
 		if socialProviderImplemented(provider) {
 			t.Fatalf("%s must not be exposed before its adapter exists", provider)
 		}
@@ -100,6 +102,10 @@ func TestSocialAuthSafetyHelpers(t *testing.T) {
 	parsed, err := url.Parse(githubOAuthAuthorizeURL)
 	if err != nil || parsed.Scheme != "https" || parsed.Host != "github.com" {
 		t.Fatalf("unexpected GitHub authorize endpoint: %s", githubOAuthAuthorizeURL)
+	}
+	googleParsed, err := url.Parse(googleOAuthAuthorizeURL)
+	if err != nil || googleParsed.Scheme != "https" || googleParsed.Host != "accounts.google.com" {
+		t.Fatalf("unexpected Google authorize endpoint: %s", googleOAuthAuthorizeURL)
 	}
 }
 

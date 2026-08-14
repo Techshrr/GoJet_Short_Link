@@ -41,7 +41,7 @@ func init() {
 }
 
 func socialProviderImplemented(provider string) bool {
-	return provider == "github"
+	return provider == "github" || provider == "google"
 }
 
 func socialProviderDefinitionByID(provider string) (socialProviderDefinition, bool) {

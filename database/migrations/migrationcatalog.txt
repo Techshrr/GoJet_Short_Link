@@ -41,3 +41,4 @@ emailauthcodes.sql
 mailinvoicepresentation.sql
 linkdestinationrisk.sql
 socialauth.sql
+socialsubjectwidth.sql

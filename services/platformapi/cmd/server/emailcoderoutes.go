@@ -8,6 +8,8 @@ import (
 func (s *server) registerEmailCodeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/account-policy", s.authPolicy)
 	mux.HandleFunc("GET /api/public/auth/providers", noStoreHandler(s.publicSocialProviders))
+	mux.HandleFunc("GET /api/public/auth/google/start", noStoreHandler(sanitizeSocialRedirect(s.googleAuthStart)))
+	mux.HandleFunc("GET /api/public/auth/google/callback", noStoreHandler(s.googleAuthCallback))
 	mux.HandleFunc("GET /api/public/auth/{provider}/start", noStoreHandler(sanitizeSocialRedirect(s.socialAuthStart)))
 	mux.HandleFunc("GET /api/public/auth/{provider}/callback", noStoreHandler(s.socialAuthCallback))
 	mux.HandleFunc("POST /api/public/auth/handoff", noStoreHandler(s.socialAuthHandoff))

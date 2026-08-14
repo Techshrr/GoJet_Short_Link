@@ -26,35 +26,44 @@ async function configureProvider(card,{enabled=true,clientID,secret}){
   if(secret!==undefined)await card.locator('input[name$="client_secret"]').fill(secret);
 }
 
-test('social login settings expose only implemented and fully configured providers',async({page})=>{
+test('social login settings expose implemented Google and GitHub providers only when complete and enabled',async({page})=>{
   await adminLogin(page);
   await openSocialSettings(page);
 
   const github=page.locator('[data-social-provider="github"]');
   const google=page.locator('[data-social-provider="google"]');
+  const facebook=page.locator('[data-social-provider="facebook"]');
   await expect(github).toContainText('适配器已启用');
-  await expect(google).toContainText('适配器待接入');
+  await expect(google).toContainText('适配器已启用');
+  await expect(facebook).toContainText('适配器待接入');
 
   await configureProvider(github,{clientID:'surface-github-client',secret:'SurfaceGitHubSecret!2026'});
   await configureProvider(google,{clientID:'surface-google-client',secret:'SurfaceGoogleSecret!2026'});
   await page.getByRole('button',{name:'保存设置',exact:true}).click();
 
   await expect(page.locator('[data-social-provider="github"]')).toContainText('前台可用');
-  await expect(page.locator('[data-social-provider="google"]')).toContainText('前台不展示');
+  await expect(page.locator('[data-social-provider="google"]')).toContainText('前台可用');
   await expect(page.locator('[data-social-provider="github"] input[name="auth.social.github.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
+  await expect(page.locator('[data-social-provider="google"] input[name="auth.social.google.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
 
   await page.goto(base+'/login');
-  await expect(page.locator('.social-provider')).toHaveText('继续使用 GitHub');
-  await expect(page.locator('.social-provider')).toHaveCount(1);
+  await expect(page.locator('.social-provider')).toHaveCount(2);
+  await expect(page.locator('.social-provider')).toHaveText(['继续使用 Google','继续使用 GitHub']);
 
   await page.goto(base+'/admin/');
   await expect(page.locator('#adminView')).toBeVisible();
   await openSocialSettings(page);
-  const githubAfter=page.locator('[data-social-provider="github"]');
-  await configureProvider(githubAfter,{enabled:false});
+  await configureProvider(page.locator('[data-social-provider="github"]'),{enabled:false});
   await page.getByRole('button',{name:'保存设置',exact:true}).click();
-  await expect(page.locator('[data-social-provider="github"]')).toContainText('前台不展示');
+  await page.goto(base+'/login');
+  await expect(page.locator('.social-provider')).toHaveCount(1);
+  await expect(page.locator('.social-provider')).toHaveText('继续使用 Google');
 
+  await page.goto(base+'/admin/');
+  await expect(page.locator('#adminView')).toBeVisible();
+  await openSocialSettings(page);
+  await configureProvider(page.locator('[data-social-provider="google"]'),{enabled:false});
+  await page.getByRole('button',{name:'保存设置',exact:true}).click();
   await page.goto(base+'/login');
   await expect(page.locator('.social-provider')).toHaveCount(0,{timeout:5000});
   await expect(page.locator('#socialAuth')).toHaveClass(/hidden/);
