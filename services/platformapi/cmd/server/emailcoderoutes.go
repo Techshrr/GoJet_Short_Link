@@ -12,6 +12,8 @@ func (s *server) registerEmailCodeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/auth/google/callback", noStoreHandler(s.socialCallbackRouter("google", s.googleAuthCallback)))
 	mux.HandleFunc("GET /api/public/auth/qq/start", noStoreHandler(sanitizeSocialRedirect(s.qqAuthStart)))
 	mux.HandleFunc("GET /api/public/auth/qq/callback", noStoreHandler(s.socialCallbackRouter("qq", s.qqAuthCallback)))
+	mux.HandleFunc("GET /api/public/auth/wechat/start", noStoreHandler(sanitizeSocialRedirect(s.wechatAuthStart)))
+	mux.HandleFunc("GET /api/public/auth/wechat/callback", noStoreHandler(s.socialCallbackRouter("wechat", s.wechatAuthCallback)))
 	mux.HandleFunc("GET /api/public/auth/{provider}/start", noStoreHandler(sanitizeSocialRedirect(s.socialAuthStart)))
 	mux.HandleFunc("GET /api/public/auth/{provider}/callback", noStoreHandler(s.socialCallbackRouter("", s.socialAuthCallback)))
 	mux.HandleFunc("POST /api/public/auth/handoff", noStoreHandler(s.socialAuthHandoff))
