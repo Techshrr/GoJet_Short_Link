@@ -69,6 +69,8 @@ jobs:
           SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='billing_invoices' AND COLUMN_NAME='fx_rate';
           SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='mail_messages' AND COLUMN_NAME='dedupe_key';
           SELECT COUNT(*) FROM mail_templates WHERE template_key IN ('verification','account_welcome','password_reset','invoice_created','invoice_due_soon','invoice_overdue','invoice_paid','payment_started','payment_failed','subscription_changed','subscription_renewed','subscription_expiring','subscription_cancelled');
+          SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='link_destination_risk';
+          SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='gojet_test' AND TRIGGER_NAME='short_links_destination_risk_invalidate';
           SQL
           mapfile -t schema < /tmp/gojetschemacheck
           test "${schema[0]}" = 1
@@ -77,6 +79,8 @@ jobs:
           test "${schema[3]}" = 1
           test "${schema[4]}" = 1
           test "${schema[5]}" -ge 13
+          test "${schema[6]}" = 1
+          test "${schema[7]}" = 1
       - name: Build P0 runtime services
         run: |
           set -euo pipefail
@@ -164,6 +168,9 @@ jobs:
       - name: Administrator link lifecycle
         env: *integrationenv
         run: bash tests/integration/adminlinklifecycle.sh
+      - name: Destination risk API and redirect enforcement
+        env: *integrationenv
+        run: bash tests/integration/destinationriskenforcement.sh
       - name: Zero visit analytics remains readable
         env: *integrationenv
         run: bash tests/integration/analyticszero.sh
@@ -204,7 +211,7 @@ jobs:
           echo '===== redirectengine ====='; cat /tmp/gojet/redirectengine.log 2>/dev/null || true
           echo '===== analyticsworker ====='; cat /tmp/gojet/analyticsworker.log 2>/dev/null || true
           echo '===== operationsmonitor ====='; cat /tmp/gojet/operationsmonitor.log 2>/dev/null || true
-          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT link_id,decision,score,provider,target_fingerprint,scanned_at,next_scan_at FROM link_destination_risk ORDER BY link_id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT link_id,decision,score,provider,target_fingerprint,manual_decision,manual_reason,scanned_at,next_scan_at FROM link_destination_risk ORDER BY link_id DESC LIMIT 30; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
       - name: Stop acceptance services
         if: always()
         run: |
