@@ -38,6 +38,8 @@ async function enhancePaymentPane(){
     const originalSwitch=enabled.closest('.ah-switch,.check,label');
     if(originalSwitch)originalSwitch.classList.add('paymentProviderLegacySwitch');
     section.dataset.paymentProvider=key;
+    const head=section.querySelector('.paymentProviderHead');
+    if(head){const heading=head.querySelector('h3,b,strong');const description=head.querySelector('p,small');if(heading)heading.textContent=meta.label;if(description)description.textContent=meta.note}
 
     const displayKey=`payments.${key}.display_name`;
     const displayName=String(saved[displayKey]||meta.label).trim()||meta.label;
@@ -48,7 +50,7 @@ async function enhancePaymentPane(){
     input.name=displayKey;input.type='text';input.maxLength=60;input.value=displayName;input.placeholder=meta.label;
     const help=document.createElement('small');help.className='settingHelp';help.textContent='仅改变客户付款页面看到的名称，不影响支付接口类型与回调地址。';
     field.append(title,input,help);
-    section.querySelector('.paymentProviderHead')?.after(field);
+    head?.after(field);
     entries.push({key,meta,section,enabled,input});
   }
   if(!entries.length){delete form.dataset.paymentUxLoading;return}
