@@ -25,8 +25,8 @@ echo '[4/17] incomplete social providers stay hidden'
 expect 200 "$(req PUT /api/admin/settings/socialauth '{"auth.social.github.enabled":true,"auth.social.github.client_id":"gojet-github-client"}' "$ADMIN")" github-incomplete >/dev/null
 b=$(expect 200 "$(req GET /api/public/auth/providers)" providers-incomplete);printf '%s' "$b"|python3 -c 'import json,sys;assert json.load(sys.stdin)["providers"]==[]'
 
-echo '[5/17] email-code endpoint remains reachable'
-expect 400 "$(req POST /api/public/email-code '{}')" email-code >/dev/null
+echo '[5/17] email-code endpoint remains reachable with semantic validation'
+expect 422 "$(req POST /api/public/email-code '{}')" email-code >/dev/null
 
 echo '[6/17] password forgot endpoint does not enumerate accounts'
 expect 202 "$(req POST /api/auth/forgotpassword '{"email":"does-not-exist@example.test"}')" forgot >/dev/null
