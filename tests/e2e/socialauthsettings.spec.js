@@ -62,6 +62,8 @@ test('social login settings expose implemented Google and GitHub providers only 
   await openSocialSettings(page);
   await configureProvider(page.locator('[data-social-provider="github"]'),{enabled:false});
   await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await expect(page.locator('[data-social-provider="github"]')).toContainText('前台不展示');
+  await expect(page.locator('[data-social-provider="google"]')).toContainText('前台可用');
   await page.goto(base+'/login');
   await expect(page.locator('.social-provider')).toHaveCount(1);
   await expect(page.locator('.social-provider')).toHaveText('继续使用 Google');
@@ -71,6 +73,7 @@ test('social login settings expose implemented Google and GitHub providers only 
   await openSocialSettings(page);
   await configureProvider(page.locator('[data-social-provider="google"]'),{enabled:false});
   await page.getByRole('button',{name:'保存设置',exact:true}).click();
+  await expect(page.locator('[data-social-provider="google"]')).toContainText('前台不展示');
   await page.goto(base+'/login');
   await expect(page.locator('.social-provider')).toHaveCount(0,{timeout:5000});
   await expect(page.locator('#socialAuth')).toHaveClass(/hidden/);
