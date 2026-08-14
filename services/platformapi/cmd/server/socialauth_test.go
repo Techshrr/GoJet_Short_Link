@@ -102,3 +102,29 @@ func TestSocialAuthSafetyHelpers(t *testing.T) {
 		t.Fatalf("unexpected GitHub authorize endpoint: %s", githubOAuthAuthorizeURL)
 	}
 }
+
+func TestSocialRedirectGuardDropsBrowserAmbiguousPaths(t *testing.T) {
+	for _, target := range []string{`/\evil.example.test/`, "/app/\nbad", "/app/\x00bad"} {
+		if !unsafeAuthRedirect(target) {
+			t.Fatalf("unsafe redirect was accepted: %q", target)
+		}
+	}
+	if unsafeAuthRedirect("/app/dashboard?tab=links") {
+		t.Fatal("valid local redirect was rejected")
+	}
+
+	seen := "not-called"
+	guarded := sanitizeSocialRedirect(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.Query().Get("redirect")
+		w.WriteHeader(http.StatusNoContent)
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "http://gojet.test/api/public/auth/github/start?redirect=%2F%5Cevil.example.test%2F", nil)
+	guarded(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("guarded handler status = %d", recorder.Code)
+	}
+	if seen != "" {
+		t.Fatalf("unsafe redirect reached social auth start: %q", seen)
+	}
+}
