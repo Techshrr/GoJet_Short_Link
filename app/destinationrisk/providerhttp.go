@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -78,7 +79,7 @@ func (p *HTTPProvider) Assess(ctx context.Context, snapshot Snapshot) (ProviderR
 		Categories []Category `json:"categories"`
 		Signals    []string   `json:"signals"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(nil, response.Body, 256<<10))
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 256<<10))
 	if err = decoder.Decode(&raw); err != nil {
 		return ProviderResult{}, err
 	}
