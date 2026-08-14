@@ -173,7 +173,7 @@ func (s *server) updateTag(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &input) != nil {
 		return
 	}
-	if e1 != nil || e2 != nil || s.organizer.UpdateTag(r.Context(), currentUser(r).ID, wid, id, input.Name, input.Status); err != nil {
+	if e1 != nil || e2 != nil || s.organizer.UpdateTag(r.Context(), currentUser(r).ID, wid, id, input.Name, input.Color) != nil {
 		jsonResponse(w, 422, map[string]string{"error": "无法修改标签"})
 		return
 	}
