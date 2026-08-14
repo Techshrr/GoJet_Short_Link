@@ -84,8 +84,9 @@ jobs:
           go build -o /tmp/gojet/platformapi ./services/platformapi/cmd/server
           go build -o /tmp/gojet/redirectengine ./services/redirectengine/cmd/server
           go build -o /tmp/gojet/analyticsworker ./services/analyticsworker/cmd/worker
+          go build -o /tmp/gojet/operationsmonitor ./services/platformapi/cmd/operationsmonitor
           go build -o /tmp/gojet/mailworker ./services/platformapi/cmd/mailworker
-      - name: Start platform, redirect and analytics services
+      - name: Start platform, redirect, analytics and risk monitor services
         run: |
           set -euo pipefail
           SETTINGS_KEY=$(python3 - <<'PY'
@@ -126,6 +127,15 @@ jobs:
             ANALYTICS_CONSUMER='fullstackp0' \
             /tmp/gojet/analyticsworker >/tmp/gojet/analyticsworker.log 2>&1 &
           echo $! >/tmp/gojet/analyticsworker.pid
+          env \
+            MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_test?parseTime=true&multiStatements=true' \
+            REDIS_ADDRESS='127.0.0.1:6379' \
+            DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' \
+            DESTINATION_RISK_SCAN_WORKERS='2' \
+            DESTINATION_RISK_SCAN_BATCH='32' \
+            OPERATIONS_MONITOR_INTERVAL_SECONDS='60' \
+            /tmp/gojet/operationsmonitor >/tmp/gojet/operationsmonitor.log 2>&1 &
+          echo $! >/tmp/gojet/operationsmonitor.pid
           for port in 18090 18080; do
             for i in $(seq 1 60); do
               curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
@@ -133,6 +143,7 @@ jobs:
               test "$i" -lt 60
             done
           done
+          kill -0 "$(cat /tmp/gojet/operationsmonitor.pid)"
       - name: Core product and administrator API acceptance
         env: &integrationenv
           GOJET_TEST_BASE: http://127.0.0.1:18090
@@ -192,10 +203,11 @@ jobs:
           echo '===== platformapi ====='; cat /tmp/gojet/platformapi.log 2>/dev/null || true
           echo '===== redirectengine ====='; cat /tmp/gojet/redirectengine.log 2>/dev/null || true
           echo '===== analyticsworker ====='; cat /tmp/gojet/analyticsworker.log 2>/dev/null || true
-          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
+          echo '===== operationsmonitor ====='; cat /tmp/gojet/operationsmonitor.log 2>/dev/null || true
+          MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_test -e 'SHOW TABLES; SELECT id,email,status FROM users ORDER BY id DESC LIMIT 20; SELECT link_id,decision,score,provider,target_fingerprint,scanned_at,next_scan_at FROM link_destination_risk ORDER BY link_id DESC LIMIT 20; SELECT id,invoice_number,status,amount_cents,currency FROM billing_invoices ORDER BY id DESC LIMIT 20; SELECT id,message_type,recipient,status,last_error FROM mail_messages ORDER BY id DESC LIMIT 30;' || true
       - name: Stop acceptance services
         if: always()
         run: |
-          for name in platformapi redirectengine analyticsworker; do
+          for name in platformapi redirectengine analyticsworker operationsmonitor; do
             if [ -f "/tmp/gojet/$name.pid" ]; then kill "$(cat "/tmp/gojet/$name.pid")" 2>/dev/null || true; fi
           done
