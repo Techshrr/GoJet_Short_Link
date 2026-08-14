@@ -20,6 +20,7 @@ const syncBodyLock=()=>{
 };
 
 const escapeCode=value=>String(value??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+const escapeText=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function codeKind(value){
   const source=String(value||'').trim();
   if(/<!doctype\s+html|<html\b|<body\b|<div\b|<section\b|<main\b/i.test(source))return'HTML';
@@ -58,6 +59,42 @@ function enhanceTextComposer(){
   };
   format.addEventListener('change',()=>requestAnimationFrame(sync));textarea.addEventListener('input',sync);sync();
 }
+
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function fetchInvoicePDF(invoiceID,onAttempt){
+  const delays=[0,1200,2600],url=`/api/workspaces/${state.workspace}/billing/invoices/${invoiceID}/pdf`;
+  let lastError=new Error('账单文件暂时无法读取');
+  for(let index=0;index<delays.length;index++){
+    if(delays[index])await wait(delays[index]);
+    onAttempt(index+1,delays.length);
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000);
+    try{
+      const response=await fetch(url,{headers:{Authorization:`Bearer ${state.token}`,'Cache-Control':'no-cache'},cache:'no-store',signal:controller.signal,credentials:'same-origin'});
+      if(!response.ok){let message='';try{message=(await response.json()).error||''}catch{}const error=new Error(message||`账单服务返回 HTTP ${response.status}`);error.retryable=response.status>=500||response.status===429;throw error}
+      const contentType=String(response.headers.get('Content-Type')||'').toLowerCase();
+      if(!contentType.includes('application/pdf'))throw new Error('账单服务没有返回 PDF 文件');
+      const blob=await response.blob();
+      if(blob.size<1000)throw new Error('账单 PDF 文件不完整');
+      return blob;
+    }catch(error){
+      lastError=error?.name==='AbortError'?new Error('账单生成连接超过 45 秒'):error;
+      if(error?.retryable===false)break;
+    }finally{clearTimeout(timeout)}
+  }
+  throw lastError;
+}
+async function resilientInvoiceDownload(button){
+  const invoiceID=Number(button.dataset.downloadInvoice),number=button.dataset.invoiceNumber||'Document';
+  if(!invoiceID)return;
+  const layer=document.createElement('div');layer.className='productModalLayer';layer.innerHTML='<div class="productModal billingDialog"><div class="productModalHead"><h2>正在准备账单</h2><button type="button" data-close aria-label="关闭">×</button></div><div class="billingDialogBody"><div class="productLoading" data-pdf-state>正在生成 PDF…</div><div class="productModalFoot"><button type="button" data-close-secondary>关闭</button></div></div></div>';document.body.append(layer);
+  const close=()=>layer.remove();layer.querySelector('[data-close]').onclick=close;layer.querySelector('[data-close-secondary]').onclick=close;const host=layer.querySelector('[data-pdf-state]');
+  try{
+    const blob=await fetchInvoicePDF(invoiceID,(attempt,total)=>{host.className='productLoading';host.textContent=attempt===1?'正在生成 PDF…':`连接暂时未完成，正在自动恢复（${attempt}/${total}）…`});
+    const objectURL=URL.createObjectURL(blob),anchor=document.createElement('a'),safe=String(number).replace(/[^a-z0-9]/gi,'')||'Document';anchor.href=objectURL;anchor.download=`GoJetInvoice${safe}.pdf`;document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(objectURL),8000);close();
+  }catch(error){host.className='productError';host.innerHTML=`<b>账单 PDF 未能完成下载</b><p>${escapeText(error?.message||'服务器连接异常')}。系统已经自动完成多次连接尝试；账单本身不会重复生成或产生新的费用。</p>`}
+}
+// Capture invoice download clicks before the legacy one-shot handler. Network failures recover automatically.
+document.addEventListener('click',event=>{const button=event.target.closest?.('[data-download-invoice]');if(!button)return;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();void resilientInvoiceDownload(button)},true);
 
 const observer=new MutationObserver(()=>{syncBodyLock();enhanceTextComposer()});
 observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style','hidden']});
