@@ -9,53 +9,20 @@ async function json(request,method,path,body,token){const options={method,header
 async function user(request){const stamp=Date.now();const reg=await json(request,'POST','/api/auth/register',{email:`crawl-${stamp}@example.test`,display_name:'GoJet Surface',password:'SurfaceUser!2026'});return reg.token;}
 async function setSession(page,token){await page.addInitScript(t=>localStorage.setItem('gojet_token',t),token);}
 async function noOverflow(page){const d=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));expect(d.scroll).toBeLessThanOrEqual(d.client+2);}
+async function noNodeOverflow(locator){const d=await locator.evaluate(node=>({scroll:node.scrollWidth,client:node.clientWidth}));expect(d.scroll).toBeLessThanOrEqual(d.client+2);}
 async function noBrokenImages(page){const bad=await page.locator('img:visible').evaluateAll(imgs=>imgs.filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.getAttribute('src')));expect(bad).toEqual([]);}
 async function noEngineering(page){expect((await page.locator('body').innerText())).not.toMatch(engineering);}
-async function branded(locator){
- await expect(locator).toBeVisible();
- const mark=locator.locator('.logo,.brand').first();
- await expect(mark).toBeVisible();
- const image=mark.locator('img');
- if(await image.count()){
-  await expect(image).toBeVisible();
-  await expect(image).toHaveAttribute('alt',/\S+/);
-  expect(await image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
- }else{
-  await expect(mark).toContainText('GoJet');
- }
-}
-
-async function validateAdminSurface(page,label){
- await expect.poll(async()=>((await page.locator('#content').innerText()).trim().length),{message:label,timeout:10000}).toBeGreaterThan(0);
- await noEngineering(page);
- await noBrokenImages(page);
- await noOverflow(page);
-}
+async function branded(locator){await expect(locator).toBeVisible();const mark=locator.locator('.logo,.brand').first();await expect(mark).toBeVisible();const image=mark.locator('img');if(await image.count()){await expect(image).toBeVisible();await expect(image).toHaveAttribute('alt',/\S+/);expect(await image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);}else{await expect(mark).toContainText('GoJet');}}
+async function adminLogin(page){await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();}
+async function validateAdminSurface(page,label){await expect.poll(async()=>((await page.locator('#content').innerText()).trim().length),{message:label,timeout:10000}).toBeGreaterThan(0);await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
 
 test.describe.serial('whole product visual and route consistency',()=>{
- test('every public product route uses a stable GoJet shell',async({page})=>{
-  for(const route of publicRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('body')).toBeVisible();await branded(page.locator('body > header[data-gojet-shell]'));await branded(page.locator('body > footer[data-gojet-shell]'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
- });
- test('all account entry pages keep the GoJet identity without release-stage copy',async({page})=>{
-  for(const route of authRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('.auth-brand')).toContainText('GoJet');await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
- });
- test('every customer-console route owns and renders its page',async({page,request})=>{
-  const token=await user(request);await setSession(page,token);
-  for(const route of consoleRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('#shell')).toBeVisible();await expect(page.locator('.content h1').first(),route).toBeVisible({timeout:10000});await branded(page.locator('aside'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}
- });
- test('every administrator primary module and nested settings pane renders inside the same branded shell',async({page})=>{
-  await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();await branded(page.locator('.sidebar'));
-  await expect(page.locator('#nav [data-view="mail"]')).toHaveCount(0);
-  await expect(page.locator('#nav [data-view="botprotection"]')).toHaveCount(0);
-  for(const view of adminViews){const button=page.locator(`#nav [data-view="${view}"]`);await expect(button,view).toBeVisible();await button.click();await validateAdminSurface(page,view);}
-  const settings=page.locator('#nav [data-view="settings"]');
-  await settings.click();
-  for(const [label,heading] of [['邮件服务','邮件服务'],['人机验证','人机验证']]){
-   const tab=page.getByRole('button',{name:new RegExp(`^${label}`)});
-   await expect(tab,label).toBeVisible();
-   await tab.click();
-   await expect(page.locator('#content').getByRole('heading',{name:heading,exact:true}).first()).toBeVisible({timeout:10000});
-   await validateAdminSurface(page,label);
-  }
- });
+ test('every public product route uses a stable GoJet shell',async({page})=>{for(const route of publicRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('body')).toBeVisible();await branded(page.locator('body > header[data-gojet-shell]'));await branded(page.locator('body > footer[data-gojet-shell]'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}});
+ test('all account entry pages keep the GoJet identity without release-stage copy',async({page})=>{for(const route of authRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('.auth-brand')).toContainText('GoJet');await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}});
+ test('email verification code input and action stay on the same row',async({page})=>{await page.route('**/api/public/account-policy',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({registration_code_required:true,email_code_login_available:true})}));await page.goto(base+'/register');const row=page.locator('.auth-code-row');await expect(row).toBeVisible();const input=row.locator('input'),button=row.getByRole('button',{name:'获取验证码'});const [a,b]=await Promise.all([input.boundingBox(),button.boundingBox()]);expect(a&&b).toBeTruthy();expect(Math.abs((a.y+a.height/2)-(b.y+b.height/2))).toBeLessThanOrEqual(2);expect(b.x).toBeGreaterThan(a.x+a.width-2);await noNodeOverflow(row);});
+ test('every customer-console route owns and renders its page',async({page,request})=>{const token=await user(request);await setSession(page,token);for(const route of consoleRoutes){const response=await page.goto(base+route,{waitUntil:'domcontentloaded'});expect(response&&response.status(),route).toBeLessThan(400);await expect(page.locator('#shell')).toBeVisible();await expect(page.locator('.content h1').first(),route).toBeVisible({timeout:10000});await branded(page.locator('aside'));await noEngineering(page);await noBrokenImages(page);await noOverflow(page);}});
+ test('short-link create dialog never creates a horizontal scrollbar',async({page,request})=>{const token=await user(request);await setSession(page,token);await page.goto(base+'/app/links');await page.getByRole('button',{name:/创建链接|新建链接/}).first().click();const layer=page.locator('#linkEditorLayer,.productModalLayer').filter({has:page.getByRole('heading',{name:'创建短链接'})}).first();await expect(layer).toBeVisible();const modal=layer.locator('.productModal');await noNodeOverflow(layer);await noNodeOverflow(modal);const form=modal.locator('form');await noNodeOverflow(form);});
+ test('every administrator primary module and nested settings pane renders inside the same branded shell',async({page})=>{await adminLogin(page);await branded(page.locator('.sidebar'));await expect(page.locator('#nav [data-view="mail"]')).toHaveCount(0);await expect(page.locator('#nav [data-view="botprotection"]')).toHaveCount(0);for(const view of adminViews){const button=page.locator(`#nav [data-view="${view}"]`);await expect(button,view).toBeVisible();await button.click();await validateAdminSurface(page,view);}const settings=page.locator('#nav [data-view="settings"]');await settings.click();for(const [label,heading] of [['邮件服务','邮件服务'],['人机验证','人机验证']]){const tab=page.getByRole('button',{name:new RegExp(`^${label}`)});await expect(tab,label).toBeVisible();await tab.click();await expect(page.locator('#content').getByRole('heading',{name:heading,exact:true}).first()).toBeVisible({timeout:10000});await validateAdminSurface(page,label);}});
+ test('announcement-bar settings behaves as one exclusive settings tab',async({page})=>{await adminLogin(page);await page.locator('#nav [data-view="settings"]').click();const announcement=page.getByRole('button',{name:/^顶部飘窗/});await expect(announcement).toBeVisible({timeout:10000});await announcement.click();const pane=page.locator('[data-announcementbar-pane]');await expect(pane).toBeVisible();await page.getByRole('button',{name:/^站点信息/}).click();await expect(pane).toBeHidden();await expect(page.locator('[data-ah-pane="basic"]')).toBeVisible();});
+ test('plan numeric units are aligned beside their inputs and admin modal does not overflow',async({page})=>{await adminLogin(page);await page.locator('#nav [data-view="billing"]').click();const edit=page.getByRole('button',{name:'编辑'}).first();await expect(edit).toBeVisible();await edit.click();const modal=page.locator('#modal .modal');await expect(modal).toBeVisible();await noNodeOverflow(modal);const suffixes=modal.locator('.inputSuffix');expect(await suffixes.count()).toBeGreaterThanOrEqual(3);for(let i=0;i<await suffixes.count();i++){const row=suffixes.nth(i),input=row.locator('input'),unit=row.locator('b');const [a,b]=await Promise.all([input.boundingBox(),unit.boundingBox()]);expect(a&&b).toBeTruthy();expect(Math.abs((a.y+a.height/2)-(b.y+b.height/2))).toBeLessThanOrEqual(3);expect(b.x).toBeGreaterThan(a.x+a.width-2);}});
 });
