@@ -11,6 +11,7 @@ on:
       - 'scripts/runmigrations.sh'
       - 'tests/e2e/paymentcallbackadmin.spec.js'
       - '.github/workflows/paymentcallbackbrowser.yml'
+      - '.github/workflows/paymentcallbackpublic.yml'
   push:
     branches:
       - rebuild/v4-rc12-real-install-fixes
@@ -22,6 +23,7 @@ on:
       - 'scripts/runmigrations.sh'
       - 'tests/e2e/paymentcallbackadmin.spec.js'
       - '.github/workflows/paymentcallbackbrowser.yml'
+      - '.github/workflows/paymentcallbackpublic.yml'
 
 concurrency:
   group: gojetpaymentcallbackbrowser${{ github.ref }}
