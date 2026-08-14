@@ -6,7 +6,8 @@ module.exports=defineConfig({
     '**/productsurface.spec.js',
     '**/fullsurfaceconsistency.spec.js',
     '**/paymentcallbackadmin.spec.js',
-    '**/analyticsdashboard.spec.js'
+    '**/analyticsdashboard.spec.js',
+    '**/announcementrotation.spec.js'
   ],
   // These two legacy cases assert modal-era selectors and labels. Their current
   // page-workflow equivalents live in workflowmigration.spec.js.
