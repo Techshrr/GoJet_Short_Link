@@ -39,3 +39,19 @@ SELECT
     DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 DAY)
 FROM short_links
 WHERE deleted_at IS NULL;
+
+CREATE TRIGGER short_links_destination_risk_invalidate
+AFTER UPDATE ON short_links
+FOR EACH ROW
+UPDATE link_destination_risk
+SET next_scan_at=UTC_TIMESTAMP(),
+    manual_decision=NULL,
+    manual_reason=NULL,
+    manual_administrator_id=NULL,
+    manual_at=NULL
+WHERE link_id=NEW.id
+  AND (
+    NOT (OLD.destination <=> NEW.destination)
+    OR NOT (OLD.routing_rules <=> NEW.routing_rules)
+    OR NOT (OLD.ab_destinations <=> NEW.ab_destinations)
+  );
