@@ -10,7 +10,7 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/support/departments", s.user(s.supportDepartments))
 	mux.HandleFunc("GET /api/support/tickets", s.user(s.listSupportTickets))
 	mux.HandleFunc("POST /api/support/tickets", s.user(s.turnstileGuard("ticket_create", "support_ticket_create", s.createSupportTicket)))
-	mux.HandleFunc("GET /api/support/tickets/{ticket}", s.user(s.supportTicketDetail))
+	mux.HandleFunc("GET /api/support/tickets/{ticket}", s.user(s.supportTicketDetailCustomer))
 	mux.HandleFunc("POST /api/support/tickets/{ticket}/replies", s.user(s.turnstileGuard("ticket_reply", "support_ticket_reply", s.replySupportTicket)))
 	mux.HandleFunc("PATCH /api/support/tickets/{ticket}/state", s.user(s.setSupportTicketState))
 
