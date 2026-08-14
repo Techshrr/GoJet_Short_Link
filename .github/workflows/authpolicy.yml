@@ -10,6 +10,8 @@ on:
       - '.github/workflows/authpolicy.yml'
       - 'tests/integration/authpolicy.sh'
       - 'tests/integration/authmigrationcontract.sh'
+      - 'tests/integration/socialbindapi.sh'
+      - 'tests/integration/socialidentitybinding_test.go'
       - 'services/platformapi/cmd/server/**'
       - 'app/identity/**'
       - 'app/settings/**'
@@ -54,6 +56,10 @@ jobs:
         run: bash scripts/runmigrations.sh
       - name: Validate authentication migration contract
         run: bash tests/integration/authmigrationcontract.sh
+      - name: Validate social identity binding lifecycle
+        env:
+          GOJET_IDENTITY_BINDING_DSN: root:root@tcp(127.0.0.1:3306)/gojet_auth_policy?parseTime=true&multiStatements=true
+        run: go test ./tests/integration -run TestSocialIdentityBindingLifecycle -count=1 -v
       - name: Start platform API
         run: |
           mkdir -p /tmp/gojetauth/uploads /tmp/gojetauth/files /tmp/gojetauth/brand /tmp/gojetauth/generated/qr
@@ -77,6 +83,12 @@ jobs:
           MYSQL_PASSWORD: root
           MYSQL_DATABASE: gojet_auth_policy
         run: bash tests/integration/authpolicy.sh
+      - name: Run social bind and unbind API acceptance
+        env:
+          GOJET_TEST_BASE: http://127.0.0.1:18091
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_auth_policy
+        run: bash tests/integration/socialbindapi.sh
       - name: Diagnostics on failure
         if: failure()
         run: |

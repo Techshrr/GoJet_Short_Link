@@ -15,10 +15,14 @@ import (
 )
 
 var (
-	ErrSocialEmailCollision     = errors.New("该邮箱已经存在 GoJet 账户，请先使用原登录方式进入账户后再绑定第三方身份")
-	ErrSocialRegistrationClosed = errors.New("当前暂未开放新用户注册")
-	ErrSocialEmailBlocked       = errors.New("该邮箱域名不允许注册")
-	ErrSocialAccountUnavailable = errors.New("账户当前不可用")
+	ErrSocialEmailCollision          = errors.New("该邮箱已经存在 GoJet 账户，请先使用原登录方式进入账户后再绑定第三方身份")
+	ErrSocialRegistrationClosed      = errors.New("当前暂未开放新用户注册")
+	ErrSocialEmailBlocked            = errors.New("该邮箱域名不允许注册")
+	ErrSocialAccountUnavailable      = errors.New("账户当前不可用")
+	ErrSocialIdentityInUse           = errors.New("该第三方账户已经绑定到其他 GoJet 账户")
+	ErrSocialProviderAlreadyLinked   = errors.New("当前 GoJet 账户已经绑定了该第三方平台的另一个账户")
+	ErrSocialIdentityNotLinked       = errors.New("当前账户尚未绑定该第三方登录方式")
+	ErrLastLoginCredential           = errors.New("不能解除最后一个可用登录凭据，请先设置密码或绑定另一种第三方登录方式")
 )
 
 type SocialProfile struct {
@@ -31,22 +35,26 @@ type SocialProfile struct {
 	Login         string
 }
 
-func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialProfile, allowRegister, emailAllowed bool) (User, bool, error) {
+func normalizeSocialProfile(profile SocialProfile) SocialProfile {
 	profile.Provider = strings.ToLower(strings.TrimSpace(profile.Provider))
 	profile.Subject = strings.TrimSpace(profile.Subject)
 	profile.Email = strings.ToLower(strings.TrimSpace(profile.Email))
 	profile.DisplayName = strings.TrimSpace(profile.DisplayName)
 	profile.Login = strings.TrimSpace(profile.Login)
-	if profile.Provider == "" || profile.Subject == "" || profile.Email == "" || !profile.EmailVerified || !strings.Contains(profile.Email, "@") {
-		return User{}, false, errors.New("第三方账户没有可用的已验证邮箱")
-	}
+	profile.AvatarURL = strings.TrimSpace(profile.AvatarURL)
 	if profile.DisplayName == "" {
 		profile.DisplayName = profile.Login
 	}
-	if profile.DisplayName == "" {
-		profile.DisplayName = strings.Split(profile.Email, "@")[0]
-	}
 	profile.DisplayName = socialTruncate(profile.DisplayName, 120)
+	profile.AvatarURL = socialTruncate(profile.AvatarURL, 1024)
+	return profile
+}
+
+func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialProfile, allowRegister, emailAllowed bool) (User, bool, error) {
+	profile = normalizeSocialProfile(profile)
+	if profile.Provider == "" || profile.Subject == "" || len(profile.Subject) > 255 {
+		return User{}, false, errors.New("第三方账户身份标识无效")
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -61,7 +69,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 			return User{}, false, ErrSocialAccountUnavailable
 		}
 		profileJSON, _ := json.Marshal(map[string]any{"login": profile.Login, "email_verified": profile.EmailVerified})
-		if _, err = tx.ExecContext(ctx, `UPDATE user_social_identities SET provider_email=?,email_verified=?,display_name=?,avatar_url=?,profile_json=?,last_login_at=UTC_TIMESTAMP() WHERE provider=? AND provider_subject=?`, profile.Email, profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(socialTruncate(profile.AvatarURL, 1024)), string(profileJSON), profile.Provider, profile.Subject); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE user_social_identities SET provider_email=COALESCE(?,provider_email),email_verified=IF(?,TRUE,email_verified),display_name=COALESCE(?,display_name),avatar_url=COALESCE(?,avatar_url),profile_json=?,last_login_at=UTC_TIMESTAMP() WHERE provider=? AND provider_subject=?`, socialNullable(profile.Email), profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(profile.AvatarURL), string(profileJSON), profile.Provider, profile.Subject); err != nil {
 			return User{}, false, err
 		}
 		if err = tx.Commit(); err != nil {
@@ -72,11 +80,17 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 	if !errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, err
 	}
+	if profile.Email == "" || !profile.EmailVerified || !strings.Contains(profile.Email, "@") {
+		return User{}, false, errors.New("第三方账户没有可用的已验证邮箱")
+	}
 	if !allowRegister {
 		return User{}, false, ErrSocialRegistrationClosed
 	}
 	if !emailAllowed {
 		return User{}, false, ErrSocialEmailBlocked
+	}
+	if profile.DisplayName == "" {
+		profile.DisplayName = socialTruncate(strings.Split(profile.Email, "@")[0], 120)
 	}
 
 	var existingID int64
@@ -96,7 +110,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 	if err != nil {
 		return User{}, false, err
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO users(email,password_hash,display_name,email_verified_at) VALUES(?,?,?,UTC_TIMESTAMP())`, profile.Email, string(passwordHash), profile.DisplayName)
+	result, err := tx.ExecContext(ctx, `INSERT INTO users(email,password_hash,password_login_enabled,display_name,email_verified_at) VALUES(?,?,FALSE,?,UTC_TIMESTAMP())`, profile.Email, string(passwordHash), profile.DisplayName)
 	if err != nil {
 		return User{}, false, err
 	}
@@ -119,7 +133,7 @@ func (s *Service) ResolveOrRegisterSocial(ctx context.Context, profile SocialPro
 		return User{}, false, err
 	}
 	profileJSON, _ := json.Marshal(map[string]any{"login": profile.Login, "email_verified": profile.EmailVerified})
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_social_identities(user_id,provider,provider_subject,provider_email,email_verified,display_name,avatar_url,profile_json,last_login_at) VALUES(?,?,?,?,?,?,?,?,UTC_TIMESTAMP())`, userID, profile.Provider, profile.Subject, profile.Email, profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(socialTruncate(profile.AvatarURL, 1024)), string(profileJSON)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_social_identities(user_id,provider,provider_subject,provider_email,email_verified,display_name,avatar_url,profile_json,last_login_at) VALUES(?,?,?,?,?,?,?,?,UTC_TIMESTAMP())`, userID, profile.Provider, profile.Subject, profile.Email, profile.EmailVerified, socialNullable(profile.DisplayName), socialNullable(profile.AvatarURL), string(profileJSON)); err != nil {
 		return User{}, false, err
 	}
 	metadata, _ := json.Marshal(map[string]any{"provider": profile.Provider, "provider_subject": profile.Subject})
