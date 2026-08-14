@@ -77,7 +77,7 @@ async function renderBilling(){
 function planModal(plan=null){
   const editing=Boolean(plan);
   const title=editing?`编辑套餐 · ${esc(plan.name)}`:'新增套餐';
-  const description=editing?'修改面向客户展示的价格、说明和资源配额。套餐代码与币种创建后保持不变。':'创建后套餐会立即出现在客户可选套餐中。';
+  const description=editing?'修改客户看到的价格、说明和资源配额。套餐代码与币种创建后保持不变。':'定义面向客户的套餐信息和工作区资源上限。创建成功后返回套餐列表。';
   const codeField=editing
     ?`<label><span>套餐代码</span><input value="${esc(plan.code)}" disabled><small>创建后不可修改</small></label>`
     :`<label><span>套餐代码</span><input name="code" pattern="[a-z0-9_]{2,40}" placeholder="例如 team" required><small>仅小写字母、数字和下划线</small></label>`;
@@ -85,37 +85,37 @@ function planModal(plan=null){
     ?`<label><span>币种</span><input value="${esc(plan.currency)}" disabled><small>避免影响历史账单，创建后不可修改</small></label>`
     :`<label><span>币种</span><select name="currency"><option value="CNY">CNY · 人民币</option><option value="USD">USD · 美元</option><option value="HKD">HKD · 港币</option></select></label>`;
 
-  openModal(`<div class="modal-head"><div><h2>${title}</h2><p>${description}</p></div><button class="btn" data-modal-close>关闭</button></div>
-    <form id="planForm">
-      <div class="modal-body planForm">
-        <section class="planFormSection">
-          <div class="planFormHeading"><h3>基本信息</h3><p>客户在套餐选择页直接看到这些内容。</p></div>
-          <div class="form-grid">
-            ${codeField}
-            <label><span>套餐名称</span><input name="name" value="${esc(plan?.name||'')}" maxlength="80" required></label>
-            ${currencyField}
-            <label><span>月价</span><div class="inputSuffix"><input name="monthly_price" type="number" min="0" step="0.01" value="${editing?centsToYuan(plan.monthly_price_cents):'0.00'}" required><b>元 / 月</b></div></label>
-            <label class="full"><span>套餐说明</span><textarea name="description" rows="3" maxlength="255" placeholder="适合哪些客户和使用场景">${esc(plan?.description||'')}</textarea></label>
-            <label class="full"><span>客户可见功能</span><textarea name="features" rows="5" placeholder="每行一项，例如：\n5,000 条短链接\n180 天访问分析\n10 位团队成员">${esc(planFeatureLines(plan))}</textarea><small>每行一项，不需要填写 JSON。</small></label>
-          </div>
-        </section>
-        <section class="planFormSection">
-          <div class="planFormHeading"><h3>资源配额</h3><p>这些数值直接决定工作区可以使用的资源上限。</p></div>
-          <div class="form-grid">
-            <label><span>短链接</span><input name="link_limit" type="number" min="1" value="${plan?.link_limit||100}" required></label>
-            <label><span>二维码</span><input name="qr_limit" type="number" min="1" value="${plan?.qr_limit||25}" required></label>
-            <label><span>文本分享</span><input name="text_limit" type="number" min="1" value="${plan?.text_limit||25}" required></label>
-            <label><span>个人主页</span><input name="bio_limit" type="number" min="1" value="${plan?.bio_limit||3}" required></label>
-            <label><span>成员上限</span><input name="member_limit" type="number" min="1" value="${plan?.member_limit||3}" required></label>
-            <label><span>分析保留</span><div class="inputSuffix"><input name="analytics_retention_days" type="number" min="1" value="${plan?.analytics_retention_days||30}" required><b>天</b></div></label>
-            <label><span>文件空间</span><div class="inputSuffix"><input name="file_storage_gb" type="number" min="0.01" step="0.01" value="${editing?bytesToGB(plan.file_storage_bytes):'1'}" required><b>GB</b></div></label>
-          </div>
-        </section>
-        <div id="planError" class="alert hidden"></div>
-      </div>
-      <div class="modal-foot"><button type="button" class="btn" data-modal-close>取消</button><button class="btn blue">${editing?'保存修改':'创建套餐'}</button></div>
-    </form>`);
+  $('#content').innerHTML=`<div class="adminWorkflowHead"><div><button type="button" class="adminWorkflowBack" id="planBack">← 返回套餐与账单</button><span class="eyebrow">PLAN SETTINGS</span><h2>${title}</h2><p>${description}</p></div><div class="adminWorkflowActions"><button type="button" class="btn" id="planCancel">取消</button><button class="btn blue" type="submit" form="planForm">${editing?'保存修改':'创建套餐'}</button></div></div>
+    <form id="planForm" class="adminWorkflowForm planPageForm">
+      <section class="adminWorkflowSection">
+        <div class="adminWorkflowSectionHead"><span>01</span><div><h3>基本信息</h3><p>客户在套餐选择和账单页面看到的名称、价格与功能说明。</p></div></div>
+        <div class="form-grid adminWorkflowGrid">
+          ${codeField}
+          <label><span>套餐名称</span><input name="name" value="${esc(plan?.name||'')}" maxlength="80" required></label>
+          ${currencyField}
+          <label><span>月价</span><div class="inputSuffix"><input name="monthly_price" type="number" min="0" step="0.01" value="${editing?centsToYuan(plan.monthly_price_cents):'0.00'}" required><b>元 / 月</b></div></label>
+          <label class="full"><span>套餐说明</span><textarea name="description" rows="3" maxlength="255" placeholder="适合哪些客户和使用场景">${esc(plan?.description||'')}</textarea></label>
+          <label class="full"><span>客户可见功能</span><textarea name="features" rows="5" placeholder="每行一项，例如：\n5,000 条短链接\n180 天访问分析\n10 位团队成员">${esc(planFeatureLines(plan))}</textarea><small>每行一项，不需要填写 JSON。</small></label>
+        </div>
+      </section>
+      <section class="adminWorkflowSection">
+        <div class="adminWorkflowSectionHead"><span>02</span><div><h3>资源配额</h3><p>这些数值直接决定工作区可使用的资源上限。</p></div></div>
+        <div class="form-grid adminWorkflowGrid adminQuotaGrid">
+          <label><span>短链接</span><input name="link_limit" type="number" min="1" value="${plan?.link_limit||100}" required></label>
+          <label><span>二维码</span><input name="qr_limit" type="number" min="1" value="${plan?.qr_limit||25}" required></label>
+          <label><span>文本分享</span><input name="text_limit" type="number" min="1" value="${plan?.text_limit||25}" required></label>
+          <label><span>个人主页</span><input name="bio_limit" type="number" min="1" value="${plan?.bio_limit||3}" required></label>
+          <label><span>成员上限</span><input name="member_limit" type="number" min="1" value="${plan?.member_limit||3}" required></label>
+          <label><span>分析保留</span><div class="inputSuffix"><input name="analytics_retention_days" type="number" min="1" value="${plan?.analytics_retention_days||30}" required><b>天</b></div></label>
+          <label><span>文件空间</span><div class="inputSuffix"><input name="file_storage_gb" type="number" min="0.01" step="0.01" value="${editing?bytesToGB(plan.file_storage_bytes):'1'}" required><b>GB</b></div></label>
+        </div>
+      </section>
+      <div id="planError" class="alert hidden"></div>
+      <footer class="adminWorkflowFooter"><span>保存后新的套餐配置立即用于后续选择和资源限制。</span><div><button type="button" class="btn" id="planCancelBottom">取消</button><button class="btn blue">${editing?'保存修改':'创建套餐'}</button></div></footer>
+    </form>`;
 
+  const leave=()=>renderBilling();
+  $('#planBack').onclick=leave;$('#planCancel').onclick=leave;$('#planCancelBottom').onclick=leave;
   $('#planForm').onsubmit=async event=>{
     event.preventDefault();
     const form=Object.fromEntries(new FormData(event.currentTarget));
@@ -136,9 +136,8 @@ function planModal(plan=null){
     };
     try{
       await api(editing?`/api/admin/plans/${plan.id}`:'/api/admin/plans',{method:editing?'PUT':'POST',body:JSON.stringify(payload)});
-      closeModal();
       toast(editing?'套餐已更新':'套餐已创建');
-      load('billing');
+      await renderBilling();
     }catch(error){
       const host=$('#planError');host.textContent=error.message;host.classList.remove('hidden');
     }
@@ -165,7 +164,7 @@ async function reactivatePlan(plan){
 
 function invoiceSettle(id,status){
   const title=status==='paid'?'确认账单已支付':'作废账单';
-  openModal(`<div class="modal-head"><div><h2>${title}</h2><p>${status==='paid'?'仅用于人工收款场景；在线支付中的账单必须等待支付渠道回调。':'作废后该账单不再参与结算。'}</p></div><button class="btn" data-modal-close>关闭</button></div>
+  openModal(`<div class="modal-head"><div><h2>${title}</h2><p>${status==='paid'?'仅用于人工收款场景；在线支付中的账单必须等待支付渠道回调。':'作废后该账单不再参与结算。'}</p></div><button class="btn iconClose" data-modal-close aria-label="关闭">×</button></div>
     <form id="invoiceForm"><div class="modal-body form-grid"><label class="full"><span>处理备注（可选）</span><textarea name="note" rows="3" placeholder="例如：银行流水已核验"></textarea></label><div id="invoiceError" class="alert hidden full"></div></div><div class="modal-foot"><button type="button" class="btn" data-modal-close>取消</button><button class="btn ${status==='paid'?'blue':'danger'}">确认</button></div></form>`);
   $('#invoiceForm').onsubmit=async event=>{
     event.preventDefault();
