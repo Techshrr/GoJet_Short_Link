@@ -16,25 +16,38 @@
 <body>
   <div id="shell" class="shell hidden">
     <aside>
-      <a class="brand" href="/" aria-label="GoJet 首页">GoJet<span>.</span></a>
+      <a class="brand" href="/" aria-label="GoJet 首页"><strong>GoJet<span>.</span></strong><small>Workspace</small></a>
       <nav aria-label="客户控制台导航">
-        <button type="button" data-console-view="overview" class="active">总览</button>
-        <button type="button" data-console-view="links">链接管理</button>
-        <button type="button" data-console-view="team">工作区与团队</button>
-        <button type="button" data-console-view="organization">活动与组织</button>
-        <button type="button" data-console-view="domains">自定义域名</button>
-        <button type="button" data-console-view="texts">文本分享</button>
-        <button type="button" data-console-view="bios">个人主页</button>
-        <button type="button" data-console-view="files">文件分享</button>
-        <button type="button" data-console-view="qrs">二维码</button>
-        <button type="button" data-console-view="billing">套餐与账单</button>
-        <button type="button" data-console-view="analytics">访问分析</button>
-        <button type="button" data-console-view="settings">账户设置</button>
+        <div class="navGroup">
+          <span class="navGroupLabel">工作台</span>
+          <button type="button" data-console-view="overview" class="active">总览</button>
+          <button type="button" data-console-view="links">链接管理</button>
+          <button type="button" data-console-view="analytics">访问分析</button>
+        </div>
+        <div class="navGroup">
+          <span class="navGroupLabel">内容资产</span>
+          <button type="button" data-console-view="domains">自定义域名</button>
+          <button type="button" data-console-view="texts">文本分享</button>
+          <button type="button" data-console-view="bios">个人主页</button>
+          <button type="button" data-console-view="files">文件分享</button>
+          <button type="button" data-console-view="qrs">二维码</button>
+        </div>
+        <div class="navGroup">
+          <span class="navGroupLabel">协作与服务</span>
+          <button type="button" data-console-view="team">工作区与团队</button>
+          <button type="button" data-console-view="organization">活动与组织</button>
+          <button type="button" data-console-view="tickets">支持工单</button>
+        </div>
+        <div class="navGroup">
+          <span class="navGroupLabel">账户</span>
+          <button type="button" data-console-view="billing">套餐与账单</button>
+          <button type="button" data-console-view="settings">账户设置</button>
+        </div>
       </nav>
       <div class="profile">
-        <b id="userName">我的账户</b>
-        <small id="userEmail"></small>
-        <button type="button" id="logoutButton">退出登录</button>
+        <div class="profileAvatar" aria-hidden="true">G</div>
+        <div class="profileIdentity"><b id="userName">我的账户</b><small id="userEmail"></small></div>
+        <button type="button" id="logoutButton" class="profileLogout">退出</button>
       </div>
     </aside>
     <main>
