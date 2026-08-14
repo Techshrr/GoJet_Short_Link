@@ -2,21 +2,41 @@
 'use strict';
 const modalSelectors=['.productModalLayer','#linkEditorLayer','.dialogLayer','.modalLayer'];
 const visibleModal=()=>modalSelectors.map(selector=>document.querySelector(selector)).find(node=>node&&node.isConnected&&getComputedStyle(node).display!=='none');
+const focusableSelector='button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+let activeModal=null,returnFocus=null;
+function modalPanel(layer){return layer?.querySelector('.productModal,.dialog,.modal,[role="dialog"]')||layer}
+function syncModalFocus(){
+  const next=visibleModal();
+  if(next===activeModal)return;
+  if(activeModal&&!next&&returnFocus?.isConnected){try{returnFocus.focus({preventScroll:true})}catch{}}
+  activeModal=next;
+  if(!next){returnFocus=null;return}
+  returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  const panel=modalPanel(next);panel?.setAttribute('role','dialog');panel?.setAttribute('aria-modal','true');
+  requestAnimationFrame(()=>{const target=panel?.querySelector('[autofocus],input,textarea,select,button,a[href]');target?.focus?.({preventScroll:true})});
+}
 // A backdrop is not an action. Prevent legacy click-to-dismiss handlers from seeing it.
 document.addEventListener('click',event=>{
   const modal=visibleModal();
   if(!modal)return;
   if(event.target===modal){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation()}
 },true);
-// Preserve entered data. Modal dismissal is only through an explicit close/cancel/done control.
+// Preserve entered data. Escape never discards a form; Tab remains inside the modal until an explicit action closes it.
 document.addEventListener('keydown',event=>{
-  if(event.key!=='Escape'||!visibleModal())return;
-  event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+  const modal=visibleModal();if(!modal)return;
+  if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();return}
+  if(event.key!=='Tab')return;
+  const panel=modalPanel(modal),items=[...(panel?.querySelectorAll(focusableSelector)||[])].filter(node=>node.offsetParent!==null||node===document.activeElement);
+  if(!items.length){event.preventDefault();panel?.focus?.();return}
+  const first=items[0],last=items[items.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
 },true);
 const syncBodyLock=()=>{
   const open=Boolean(visibleModal());
   document.documentElement.classList.toggle('modalOpen',open);
   document.body.style.overflow=open?'hidden':'';
+  syncModalFocus();
 };
 
 const escapeCode=value=>String(value??'').replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
@@ -86,8 +106,8 @@ async function fetchInvoicePDF(invoiceID,onAttempt){
 async function resilientInvoiceDownload(button){
   const invoiceID=Number(button.dataset.downloadInvoice),number=button.dataset.invoiceNumber||'Document';
   if(!invoiceID)return;
-  const layer=document.createElement('div');layer.className='productModalLayer';layer.innerHTML='<div class="productModal billingDialog"><div class="productModalHead"><h2>正在准备账单</h2><button type="button" data-close aria-label="关闭">×</button></div><div class="billingDialogBody"><div class="productLoading" data-pdf-state>正在生成 PDF…</div><div class="productModalFoot"><button type="button" data-close-secondary>关闭</button></div></div></div>';document.body.append(layer);
-  const close=()=>layer.remove();layer.querySelector('[data-close]').onclick=close;layer.querySelector('[data-close-secondary]').onclick=close;const host=layer.querySelector('[data-pdf-state]');
+  const layer=document.createElement('div');layer.className='productModalLayer';layer.innerHTML='<div class="productModal billingDialog"><div class="productModalHead"><h2>正在准备账单</h2><button type="button" data-close aria-label="关闭">×</button></div><div class="billingDialogBody"><div class="productLoading" data-pdf-state>正在生成 PDF…</div><div class="productModalFoot"><button type="button" data-close-secondary>关闭</button></div></div></div>';document.body.append(layer);syncBodyLock();
+  const close=()=>{layer.remove();syncBodyLock()};layer.querySelector('[data-close]').onclick=close;layer.querySelector('[data-close-secondary]').onclick=close;const host=layer.querySelector('[data-pdf-state]');
   try{
     const blob=await fetchInvoicePDF(invoiceID,(attempt,total)=>{host.className='productLoading';host.textContent=attempt===1?'正在生成 PDF…':`连接暂时未完成，正在自动恢复（${attempt}/${total}）…`});
     const objectURL=URL.createObjectURL(blob),anchor=document.createElement('a'),safe=String(number).replace(/[^a-z0-9]/gi,'')||'Document';anchor.href=objectURL;anchor.download=`GoJetInvoice${safe}.pdf`;document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(objectURL),8000);close();
