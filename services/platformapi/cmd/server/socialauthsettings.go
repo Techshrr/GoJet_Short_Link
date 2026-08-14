@@ -11,6 +11,13 @@ type socialProviderDefinition struct {
 	Label string
 }
 
+type socialProviderConfig struct {
+	ID           string
+	Label        string
+	ClientID     string
+	ClientSecret string
+}
+
 var socialProviderDefinitions = []socialProviderDefinition{
 	{ID: "google", Label: "Google"},
 	{ID: "facebook", Label: "Facebook"},
@@ -33,9 +40,26 @@ func init() {
 	settingSections["socialauth"] = keys
 }
 
+func socialProviderImplemented(provider string) bool {
+	return provider == "github"
+}
+
+func socialProviderDefinitionByID(provider string) (socialProviderDefinition, bool) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	for _, definition := range socialProviderDefinitions {
+		if definition.ID == provider {
+			return definition, true
+		}
+	}
+	return socialProviderDefinition{}, false
+}
+
 func (s *server) publicSocialProviders(w http.ResponseWriter, r *http.Request) {
 	providers := make([]map[string]string, 0, len(socialProviderDefinitions))
 	for _, definition := range socialProviderDefinitions {
+		if !socialProviderImplemented(definition.ID) {
+			continue
+		}
 		configured, err := s.socialProviderConfigured(r.Context(), definition.ID)
 		if err != nil {
 			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置暂时不可用"})
@@ -73,6 +97,26 @@ func (s *server) socialProviderConfigured(ctx context.Context, provider string) 
 		}
 	}
 	return true, nil
+}
+
+func (s *server) socialProviderConfiguration(ctx context.Context, provider string) (socialProviderConfig, bool, error) {
+	definition, exists := socialProviderDefinitionByID(provider)
+	if !exists || !socialProviderImplemented(provider) {
+		return socialProviderConfig{}, false, nil
+	}
+	configured, err := s.socialProviderConfigured(ctx, provider)
+	if err != nil || !configured {
+		return socialProviderConfig{}, false, err
+	}
+	clientID, err := s.socialStringSetting(ctx, "auth.social."+provider+".client_id")
+	if err != nil {
+		return socialProviderConfig{}, false, err
+	}
+	secret, err := s.socialStringSetting(ctx, "auth.social."+provider+".client_secret")
+	if err != nil {
+		return socialProviderConfig{}, false, err
+	}
+	return socialProviderConfig{ID: provider, Label: definition.Label, ClientID: strings.TrimSpace(clientID), ClientSecret: strings.TrimSpace(secret)}, true, nil
 }
 
 func (s *server) socialBoolSetting(ctx context.Context, key string) (bool, error) {

@@ -21,6 +21,7 @@ CREATE TABLE social_auth_attempts (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     state_hash CHAR(64) NOT NULL,
     nonce_hash CHAR(64) NOT NULL,
+    pkce_verifier_hash CHAR(64) NOT NULL,
     provider VARCHAR(32) NOT NULL,
     mode ENUM('login','bind') NOT NULL DEFAULT 'login',
     user_id BIGINT UNSIGNED NULL,
