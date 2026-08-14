@@ -45,5 +45,6 @@ func decodeMapTargets(raw json.RawMessage, add func(string)) {
 				add(value)
 				break
 			}
+		}
 	}
 }
