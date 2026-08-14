@@ -39,3 +39,4 @@ supportticketmessageip.sql
 officialshortdomains.sql
 emailauthcodes.sql
 mailinvoicepresentation.sql
+linkdestinationrisk.sql
