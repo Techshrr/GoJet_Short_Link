@@ -23,6 +23,7 @@ mysqlq(){ MYSQL_PWD="$MYSQL_PASSWORD" mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$
 req(){ local method=$1 path=$2 body=${3:-} token=${4:-}; local args=(-sS -X "$method" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [[ -n "$token" ]]&&args+=(-H "Authorization: Bearer $token"); [[ -n "$body" ]]&&args+=(--data "$body"); curl "${args[@]}" "$API_BASE$path"; }
 expect(){ local wanted=$1 raw=$2 label=$3; local code body; code=$(printf '%s\n' "$raw"|tail -n1); body=$(printf '%s\n' "$raw"|sed '$d'); [[ "$code" == "$wanted" ]]||{ echo "FAIL: $label expected $wanted got $code" >&2; echo "$body" >&2; exit 1; }; printf '%s' "$body"; }
 field(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
+public_code(){ curl -sS -o /dev/null -w '%{http_code}' "$PUBLIC_BASE/$1"; }
 
 for _ in $(seq 1 60); do
   curl -fsS "$API_BASE/health" >/dev/null 2>&1 && curl -fsS "$PUBLIC_BASE/health" >/dev/null 2>&1 && break
@@ -55,11 +56,27 @@ image_path="$GENERATED_QR_ROOT/$image_name"
 decoded=$(zbarimg --quiet --raw "$image_path" | tr -d '\r\n')
 [[ "$decoded" == "$PUBLIC_BASE/$code?"*'_gojet_qr='* ]] || { echo "decoded QR target unexpected: $decoded" >&2; exit 1; }
 
+# Risk assessment is asynchronous by design. A fresh link may be fail-closed for
+# a short period; wait until operationsmonitor persists ALLOW and the redirect
+# data plane publishes the matching target-fingerprint decision before asserting
+# the real QR redirect. This preserves the security boundary instead of bypassing it.
+risk_decision=''
+redirect_code=''
+for i in $(seq 1 20); do
+  risk_decision=$(mysqlq "SELECT COALESCE(manual_decision,decision) FROM link_destination_risk WHERE link_id=$link_id LIMIT 1;" 2>/dev/null || true)
+  redirect_code=$(public_code "$code")
+  if [[ "$risk_decision" == allow && "$redirect_code" == 302 ]]; then
+    break
+  fi
+  sleep 1
+  [[ $i -lt 20 ]] || { echo "QR link risk approval did not converge: decision=${risk_decision:-missing} http=${redirect_code:-missing}" >&2; exit 1; }
+done
+
 headers=$(mktemp)
 cleanup(){ rm -f "$headers"; }
 trap cleanup EXIT
 curl -sS -D "$headers" -o /dev/null "$decoded"
-grep -Eq '^HTTP/[^ ]+ 302' "$headers" || { cat "$headers" >&2; echo 'decoded QR did not redirect' >&2; exit 1; }
+grep -Eq '^HTTP/[^ ]+ 302' "$headers" || { cat "$headers" >&2; echo 'decoded QR did not redirect after risk approval' >&2; exit 1; }
 location=$(tr -d '\r' < "$headers" | sed -n 's/^Location:[[:space:]]*//Ip' | head -n1)
 [[ "$location" == 'https://example.com/qr-real' ]] || { cat "$headers" >&2; printf 'decoded QR destination mismatch: %s\n' "$location" >&2; exit 1; }
 
@@ -74,4 +91,4 @@ done
 list=$(expect 200 "$(req GET "/api/workspaces/$wid/qr-codes" '' "$token")" list-qr)
 printf '%s' "$list" | python3 -c "import json,sys; d=json.load(sys.stdin); item=next(x for x in d['data'] if int(x['id'])==$qr_id); assert int(item['qr_visits']) >= 1, item; assert item['image_url'].startswith('/generated/qr/'), item"
 
-printf 'GoJet real QR decode -> redirect -> qr_visits acceptance: PASS\n'
+printf 'GoJet real QR decode -> risk approval -> redirect -> qr_visits acceptance: PASS\n'
