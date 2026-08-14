@@ -33,6 +33,12 @@ func (s *server) adminDestinationRisks(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	jsonResponse(w, http.StatusOK, map[string]any{"data": items, "total": total, "limit": limit, "offset": offset})
 }
 
@@ -58,10 +64,10 @@ func (s *server) adminDestinationRiskDetail(w http.ResponseWriter, r *http.Reque
 	}
 	currentFingerprint := destinationrisk.Fingerprint(targets)
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"risk": record,
-		"targets": targets,
+		"risk":                record,
+		"targets":             targets,
 		"current_fingerprint": currentFingerprint,
-		"stale": record.TargetFingerprint != "" && record.TargetFingerprint != currentFingerprint,
+		"stale":               record.TargetFingerprint != "" && record.TargetFingerprint != currentFingerprint,
 	})
 }
 
@@ -83,11 +89,15 @@ func (s *server) requireFreshRiskTarget(w http.ResponseWriter, r *http.Request, 
 			UPDATE link_destination_risk
 			SET next_scan_at=UTC_TIMESTAMP(),manual_decision=NULL,manual_reason=NULL,manual_administrator_id=NULL,manual_at=NULL
 			WHERE link_id=?`, linkID)
-		_ = s.rdb.Del(r.Context(), destinationrisk.RedisKey(linkID, targets)).Err()
+		_ = s.redis.Del(r.Context(), destinationrisk.RedisKey(linkID, targets)).Err()
 		jsonResponse(w, http.StatusConflict, map[string]string{"error": "目标地址已变化，旧审核结论不能继续使用；已安排重新扫描"})
 		return destinationrisk.Record{}, nil, false
 	}
 	return record, targets, true
+}
+
+func (s *server) failClosedRiskCache(r *http.Request, linkID int64, targets []string) error {
+	return s.redis.Del(r.Context(), destinationrisk.RedisKey(linkID, targets)).Err()
 }
 
 func (s *server) adminOverrideDestinationRisk(w http.ResponseWriter, r *http.Request) {
@@ -109,14 +119,20 @@ func (s *server) adminOverrideDestinationRisk(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
+	// Remove the currently-authorizing key before changing the authoritative DB
+	// decision. Any database/Redis failure from this point therefore fails closed.
+	if err = s.failClosedRiskCache(r, linkID, targets); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法进入安全审核状态，请稍后重试"})
+		return
+	}
 	admin := currentAdmin(r)
 	record, err := s.destinationRiskStore().Override(r.Context(), linkID, admin.ID, input.Decision, input.Reason)
 	if err != nil {
 		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
-	if err = destinationrisk.SyncDecision(r.Context(), s.rdb, linkID, targets, record.EffectiveDecision); err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "人工审核已保存，但跳转缓存同步失败；当前链接继续按安全失败策略处理，请重试"})
+	if err = destinationrisk.SyncDecision(r.Context(), s.redis, linkID, targets, record.EffectiveDecision); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "人工审核已保存，但跳转缓存同步失败；当前链接保持安全阻断，请重试"})
 		return
 	}
 	_, _ = s.db.ExecContext(r.Context(), `
@@ -136,13 +152,17 @@ func (s *server) adminClearDestinationRiskOverride(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
-	record, err := s.destinationRiskStore().ClearOverride(r.Context(), linkID)
-	if err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "清除人工审核失败"})
+	if err = s.failClosedRiskCache(r, linkID, targets); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法进入安全审核状态，请稍后重试"})
 		return
 	}
-	if err = destinationrisk.SyncDecision(r.Context(), s.rdb, linkID, targets, record.EffectiveDecision); err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "人工审核已清除，但跳转缓存同步失败；当前链接继续按安全失败策略处理，请重试"})
+	record, err := s.destinationRiskStore().ClearOverride(r.Context(), linkID)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "清除人工审核失败；当前链接保持安全阻断"})
+		return
+	}
+	if err = destinationrisk.SyncDecision(r.Context(), s.redis, linkID, targets, record.EffectiveDecision); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "人工审核已清除，但跳转缓存同步失败；当前链接保持安全阻断，请重试"})
 		return
 	}
 	_, _ = s.db.ExecContext(r.Context(), `
@@ -163,22 +183,22 @@ func (s *server) adminRescanDestinationRisk(w http.ResponseWriter, r *http.Reque
 		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "链接不存在或没有可扫描目标"})
 		return
 	}
+	if err = s.failClosedRiskCache(r, linkID, targets); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法进入重新扫描状态，请稍后重试"})
+		return
+	}
 	result, err := s.db.ExecContext(r.Context(), `
 		UPDATE link_destination_risk
 		SET next_scan_at=UTC_TIMESTAMP(),manual_decision=NULL,manual_reason=NULL,manual_administrator_id=NULL,manual_at=NULL
 		WHERE link_id=?`, linkID)
 	if err != nil {
-		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法安排重新扫描"})
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "无法安排重新扫描；当前链接保持安全阻断"})
 		return
 	}
 	if affected, _ := result.RowsAffected(); affected == 0 {
 		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "风险记录不存在"})
 		return
 	}
-	// Delete the current-fingerprint key first: the redirect plane becomes
-	// fail-closed immediately and remains so until operationsmonitor publishes the
-	// new automatic decision.
-	_ = s.rdb.Del(r.Context(), destinationrisk.RedisKey(linkID, targets)).Err()
 	_, _ = s.db.ExecContext(r.Context(), `
 		INSERT INTO audit_logs(action,target_type,target_id,metadata)
 		VALUES('admin.destination_risk_rescan','short_link',?,JSON_OBJECT('administrator_id',?,'target_fingerprint',?))`,
