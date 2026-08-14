@@ -37,6 +37,12 @@ func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/payments/paypal/return", s.paypalReturn)
 	mux.HandleFunc("POST /api/payments/stripe/webhook", s.observePaymentCallback("stripe", s.stripeWebhook))
 
+	mux.HandleFunc("GET /api/admin/destination-risks", s.admin("security.manage", s.adminDestinationRisks))
+	mux.HandleFunc("GET /api/admin/destination-risks/{id}", s.admin("security.manage", s.adminDestinationRiskDetail))
+	mux.HandleFunc("POST /api/admin/destination-risks/{id}/override", s.admin("security.manage", s.adminOverrideDestinationRisk))
+	mux.HandleFunc("DELETE /api/admin/destination-risks/{id}/override", s.admin("security.manage", s.adminClearDestinationRiskOverride))
+	mux.HandleFunc("POST /api/admin/destination-risks/{id}/rescan", s.admin("security.manage", s.adminRescanDestinationRisk))
+
 	s.registerSupportAndBotRoutes(mux)
 }
 
@@ -167,7 +173,7 @@ func (s *server) updateTag(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &input) != nil {
 		return
 	}
-	if e1 != nil || e2 != nil || s.organizer.UpdateTag(r.Context(), currentUser(r).ID, wid, id, input.Name, input.Color) != nil {
+	if e1 != nil || e2 != nil || s.organizer.UpdateTag(r.Context(), currentUser(r).ID, wid, id, input.Name, input.Status); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": "无法修改标签"})
 		return
 	}
