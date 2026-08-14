@@ -11,7 +11,7 @@ const viewToRoute={
   texts:'/app/text',bios:'/app/bio',files:'/app/files',qrs:'/app/qr',billing:'/app/billing',analytics:'/app/analytics',
   tickets:'/app/support',settings:'/app/settings'
 };
-const styleModules=['/assets/gojetdesignsystem.css','/app/shell.css','/app/links.css','/app/workflowpages.css','/app/bio.css','/app/domains.css','/app/analytics.css','/app/files.css','/app/team.css','/app/organization.css','/app/billing.css'];
+const styleModules=['/assets/gojetdesignsystem.css','/app/shell.css','/app/links.css','/app/workflowpages.css','/app/bio.css','/app/domains.css','/app/analytics.css','/app/files.css','/app/team.css','/app/organization.css','/app/billing.css','/app/supportux.css'];
 const scriptModules=['/app/dialogs.js','/app/links.js','/app/workflowpages.js','/app/bio.js','/app/domains.js','/app/analytics.js','/app/files.js','/app/team.js','/app/organization.js','/app/billing.js','/app/support.js'];
 let navigationToken=0;
 const overviewPage=typeof window.renderOverview==='function'?window.renderOverview:null;
