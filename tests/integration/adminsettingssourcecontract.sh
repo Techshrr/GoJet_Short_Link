@@ -8,12 +8,14 @@ index='frontend/adminconsole/index.html'
 mail='frontend/adminconsole/mailstatus.js'
 mail_templates='frontend/adminconsole/mailtemplates.js'
 bot='frontend/adminconsole/supportsecurity.js'
+social='frontend/adminconsole/socialauthsettings.js'
 browser_config='playwright.config.js'
 console_spec='tests/e2e/console.spec.js'
 product_spec='tests/e2e/productcore.spec.js'
 surface_spec='tests/e2e/fullsurfaceconsistency.spec.js'
+social_spec='tests/e2e/socialauthsettings.spec.js'
 
-for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$browser_config" "$console_spec" "$product_spec" "$surface_spec"; do
+for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$social" "$browser_config" "$console_spec" "$product_spec" "$surface_spec" "$social_spec"; do
   test -f "$file"
 done
 
@@ -38,6 +40,17 @@ grep -Fq 'async function renderMailInto(target=null,options={})' "$mail"
 grep -Fq 'activeMailMount=embedded?root:null' "$mail"
 grep -Fq 'window.refreshMailSettings=' "$mail"
 grep -Fq 'async function renderBotProtectionSettings(target=null,options={})' "$bot"
+
+# Social login is a managed nested System Settings surface. The canonical
+# settings renderer remains the owner of the shell; the social module extends
+# it without duplicating the base settings implementation.
+grep -Fq "const original=window.renderSettings;" "$social"
+grep -Fq "button.dataset.ahTab='socialauth'" "$social"
+grep -Fq "api('/api/admin/auth/providers')" "$social"
+grep -Fq "api('/api/admin/settings/socialauth',{method:'PUT'" "$social"
+grep -Fq "data-sensitive=\"1\"" "$social"
+grep -Fq "data-social-provider=\"" "$social"
+grep -Fq "socialauthsettings.spec.js" .github/workflows/productsurface.yml
 
 for broken in "$mail" "$mail_templates"; do
   if grep -Fq 'renderMail()' "$broken"; then
@@ -87,14 +100,28 @@ fi
 grep -Fq "page.locator('#nav [data-view=\"mail\"]')).toHaveCount(0)" "$surface_spec"
 grep -Fq "page.locator('#nav [data-view=\"botprotection\"]')).toHaveCount(0)" "$surface_spec"
 grep -Fq "[['邮件服务','邮件服务'],['人机验证','人机验证']]" "$surface_spec"
+grep -Fq "data-socialauth-tab" "$social_spec"
+grep -Fq "data-social-provider=\"github\"" "$social_spec"
+grep -Fq "data-social-provider=\"google\"" "$social_spec"
 
-app_line=$(grep -n '<script src="/admin/app.js"></script>' "$index" | cut -d: -f1)
-mail_line=$(grep -n '<script src="/admin/mailstatus.js"></script>' "$index" | cut -d: -f1)
-settings_line=$(grep -n '<script src="/admin/settings.js"></script>' "$index" | cut -d: -f1)
-bot_line=$(grep -n '<script src="/admin/supportsecurity.js"></script>' "$index" | cut -d: -f1)
-test -n "$app_line" -a -n "$mail_line" -a -n "$settings_line" -a -n "$bot_line"
-test "$app_line" -lt "$mail_line"
-test "$mail_line" -lt "$settings_line"
-test "$settings_line" -lt "$bot_line"
+# Script order is a semantic HTML contract, not a line-format contract. Keep
+# this valid when the administrator shell is minified onto one or a few lines.
+python3 - "$index" <<'PY'
+from pathlib import Path
+import sys
+html = Path(sys.argv[1]).read_text(encoding='utf-8')
+ordered = [
+    '<script src="/admin/app.js"></script>',
+    '<script src="/admin/mailstatus.js"></script>',
+    '<script src="/admin/settings.js"></script>',
+    '<script src="/admin/socialauthsettings.js"></script>',
+    '<script src="/admin/supportsecurity.js"></script>',
+]
+positions = [html.find(item) for item in ordered]
+if any(pos < 0 for pos in positions):
+    raise SystemExit(f'administrator settings script missing: {positions}')
+if positions != sorted(positions) or len(set(positions)) != len(positions):
+    raise SystemExit(f'administrator settings script order invalid: {positions}')
+PY
 
 printf 'administrator settings IA, unique ownership and browser source contract: PASS\n'
