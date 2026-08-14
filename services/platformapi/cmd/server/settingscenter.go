@@ -103,6 +103,17 @@ func (s *server) saveSettingsSection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if announcements := canonicalGroups["announcementbar"]; announcements != nil {
+		if err := validateAnnouncementSettings(announcements); err != nil {
+			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
+		// The validator normalizes IDs, tone and numeric fields. Persist the
+		// validated canonical values rather than the untrusted request shape.
+		for key, value := range announcements {
+			values[key] = value
+		}
+	}
 	for key, raw := range values {
 		encoded, err := encodeSetting(raw)
 		if err != nil {
