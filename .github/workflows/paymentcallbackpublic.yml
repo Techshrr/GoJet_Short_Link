@@ -16,6 +16,7 @@ on:
       - 'scripts/runmigrations.sh'
       - 'tests/integration/paymentcallbackpublic.sh'
       - '.github/workflows/paymentcallbackpublic.yml'
+      - '.github/workflows/paymentcallbackbrowser.yml'
   push:
     branches:
       - rebuild/v4-rc12-real-install-fixes
@@ -32,6 +33,7 @@ on:
       - 'scripts/runmigrations.sh'
       - 'tests/integration/paymentcallbackpublic.sh'
       - '.github/workflows/paymentcallbackpublic.yml'
+      - '.github/workflows/paymentcallbackbrowser.yml'
 
 concurrency:
   group: gojetpaymentcallbackpublic${{ github.ref }}
