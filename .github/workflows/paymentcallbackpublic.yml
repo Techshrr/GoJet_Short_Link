@@ -99,7 +99,11 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/runmigrations.sh
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 37
+          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 43
+          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 43
+          grep -Fxq 'paymentcallbackevents.sql' database/migrations/migrationcatalog.txt
+          grep -Fxq 'linkdestinationrisk.sql' database/migrations/migrationcatalog.txt
+          grep -Fxq 'socialauth.sql' database/migrations/migrationcatalog.txt
           MYSQL_PWD=root mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public -N -B -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_payment_public' AND TABLE_NAME='payment_callback_events';" | grep -Fxq 1
 
       - name: Build and start exact platform callback runtime
