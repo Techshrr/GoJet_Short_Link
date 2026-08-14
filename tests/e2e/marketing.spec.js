@@ -2,15 +2,26 @@ const{test,expect}=require('@playwright/test');
 const products=['urlshortener','biopages','textsharing','filesharing','analytics','qrcode','abtesting','customdomains','smartlinks','qrcampaigns'];
 const genericRoutes=['about','contact','resources','developers','blog','solutions/marketing','solutions/creators','solutions/teams','browserextension','apps','changelog'];
 const authRoutes=['login','register','forgotpassword','resetpassword?token=acceptancetoken','verifyemail?token=acceptancetoken'];
-test.beforeEach(async({page})=>page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'})));
+const publicPlans=[
+  {id:1,code:'starter',name:'基础版',description:'适合个人试用与轻量分享',currency:'CNY',monthly_price_cents:0,link_limit:100,analytics_retention_days:30,member_limit:3,file_storage_bytes:1073741824,features:['100 条短链接','30 天分析数据','3 位团队成员']},
+  {id:2,code:'pro',name:'专业版',description:'适合持续运营和专业使用',currency:'CNY',monthly_price_cents:5900,link_limit:5000,analytics_retention_days:180,member_limit:10,file_storage_bytes:10737418240,features:['100 条短链接','30 天分析数据','3 位团队成员','智能路由与 A/B 测试']},
+  {id:3,code:'business',name:'商业版',description:'适合多人团队与业务协作',currency:'CNY',monthly_price_cents:19900,link_limit:50000,analytics_retention_days:730,member_limit:50,file_storage_bytes:53687091200,features:['100 条短链接','30 天分析数据','3 位团队成员','智能路由与 A/B 测试','优先支持']}
+];
+test.beforeEach(async({page})=>{
+  await page.route('**/api/public/settings',route=>route.fulfill({contentType:'application/json',body:'{}'}));
+  await page.route('**/api/public/plans',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({data:publicPlans})}));
+  await page.route('**/api/public/announcement-bar',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({enabled:false})}));
+});
 
 for(const product of products)test(`${product} has complete product narrative`,async({page})=>{
   await page.goto(`/products/${product}`);
   await expect(page.locator('h1')).toBeVisible();
-  await expect(page.locator('.hero .uiPanel')).toBeVisible();
-  await expect(page.locator('.section .cards')).toHaveCount(2);
-  await expect(page.locator('.section .cards .card')).toHaveCount(6);
-  await expect(page.locator('.mk-faq details')).toHaveCount(2);
+  await expect(page.locator('.hero .productVisual')).toBeVisible();
+  await expect(page.locator('.productBenefits .productBenefit')).toHaveCount(3);
+  await expect(page.locator('.productFeatureGrid .productFeature')).toHaveCount(3);
+  await expect(page.locator('.productSteps .productStep')).toHaveCount(3);
+  await expect(page.locator('.mk-faq details')).toHaveCount(3);
+  await expect(page.getByRole('link',{name:'查看使用文档'})).toHaveAttribute('href','/docs/');
   await expect(page.locator('.ctaBox')).toBeVisible();
   await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
@@ -77,10 +88,15 @@ test('documentation center is searchable and task oriented',async({page})=>{
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
 });
 
-test('pricing public route is complete',async({page})=>{
+test('pricing public route is driven by the active plan catalog',async({page})=>{
   await page.goto('/pricing');
   await expect(page.getByRole('heading',{name:'从个人使用，到团队协作'})).toBeVisible();
-  await expect(page.locator('.pricing .price')).toHaveCount(3);
+  await expect(page.locator('.pricing .livePlanCard')).toHaveCount(3);
+  await expect(page.getByRole('heading',{name:'基础版'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'专业版'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'商业版'})).toBeVisible();
+  await expect(page.locator('.planCompareList').first()).toBeVisible();
+  await expect(page.locator('.planQuota').first()).toBeVisible();
   await expect(page.locator('footer[data-gojet-shell]')).toBeVisible();
 });
 
