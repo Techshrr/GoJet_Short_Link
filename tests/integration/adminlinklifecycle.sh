@@ -22,7 +22,18 @@ WID=$(printf '%s' "$WORKSPACES"|python3 -c 'import json,sys; d=json.load(sys.std
 expect 201 "$(req POST "/api/workspaces/$WID/links" '{"destination":"https://example.com/admin-lifecycle","code":"adminlife","redirect_status":302,"status":"active"}' "$USER")" create-link >/dev/null
 LINK_ID=$(mysqlq "SELECT id FROM short_links WHERE workspace_id=$WID AND code='adminlife' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1;")
 [[ -n "$LINK_ID" ]]||{ echo 'created link missing in MySQL' >&2; exit 1; }
-[[ "$(public_code adminlife)" == 302 ]] || { echo 'new link did not redirect publicly' >&2; exit 1; }
+
+# Destination risk is deliberately asynchronous and fail-closed. The link must
+# not be assumed public until operationsmonitor has persisted ALLOW and published
+# the matching target-fingerprint decision to Redis.
+RISK_DECISION=''
+for i in {1..20}; do
+  RISK_DECISION=$(mysqlq "SELECT COALESCE(manual_decision,decision) FROM link_destination_risk WHERE link_id=$LINK_ID LIMIT 1;" 2>/dev/null || true)
+  CODE=$(public_code adminlife)
+  if [[ "$RISK_DECISION" == allow && "$CODE" == 302 ]]; then break; fi
+  sleep 1
+  [[ $i -lt 20 ]] || { echo "link risk approval did not converge: decision=${RISK_DECISION:-missing} http=$CODE" >&2; exit 1; }
+done
 [[ "$(public_location adminlife)" == 'https://example.com/admin-lifecycle' ]] || { echo 'new link redirect destination mismatch' >&2; exit 1; }
 
 LIST=$(expect 200 "$(req GET /api/admin/links '' "$ADMIN")" admin-link-list)
@@ -43,4 +54,4 @@ STATE=$(mysqlq "SELECT CONCAT(status,':',IF(deleted_at IS NULL,'live','deleted')
 deleted_code=$(public_code adminlife)
 [[ "$deleted_code" != 301 && "$deleted_code" != 302 && "$deleted_code" != 307 && "$deleted_code" != 308 ]] || { echo "deleted link still redirects: HTTP $deleted_code" >&2; exit 1; }
 
-printf 'GoJet administrator link lifecycle + public invalidation acceptance: PASS\n'
+printf 'GoJet administrator link lifecycle + destination risk approval + public invalidation acceptance: PASS\n'
