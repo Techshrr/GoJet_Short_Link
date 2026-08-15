@@ -76,6 +76,9 @@ func (s *server) mySocialIdentities(w http.ResponseWriter, r *http.Request) {
 		linked[item.Provider] = true
 		definition, _ := socialProviderDefinitionByID(item.Provider)
 		label := definition.Label
+		if item.Provider == "rainbow" {
+			label = s.rainbowDisplayName(r.Context())
+		}
 		if label == "" {
 			label = item.Provider
 		}
@@ -95,9 +98,13 @@ func (s *server) mySocialIdentities(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法读取第三方登录配置"})
 			return
 		}
-		item := map[string]any{"id": definition.ID, "label": definition.Label, "configured": configured, "linked": linked[definition.ID]}
+		label := definition.Label
 		if definition.ID == "rainbow" {
-			item["login_types"] = rainbowPublicLoginTypes
+			label = s.rainbowDisplayName(r.Context())
+		}
+		item := map[string]any{"id": definition.ID, "label": label, "configured": configured, "linked": linked[definition.ID]}
+		if definition.ID == "rainbow" {
+			item["login_types"] = s.rainbowSelectedLoginTypes(r.Context())
 		}
 		providers = append(providers, item)
 	}
@@ -114,13 +121,16 @@ func (s *server) socialBindStart(w http.ResponseWriter, r *http.Request) {
 	attemptProvider := provider
 	if provider == "rainbow" {
 		loginType = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
-		// Existing account-setting clients did not have a type picker. Keep QQ as
-		// the compatibility default for binding while new UI can choose explicitly.
-		if loginType == "" {
-			loginType = "qq"
+		selected := s.rainbowSelectedLoginTypes(r.Context())
+		if loginType == "" && len(selected) == 1 {
+			loginType = selected[0]["id"]
 		}
 		if !validRainbowLoginType(loginType) {
-			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的彩虹聚合登录方式"})
+			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的聚合登录方式"})
+			return
+		}
+		if !s.rainbowLoginTypeExposed(r.Context(), loginType) {
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "该聚合登录方式当前未开放"})
 			return
 		}
 		attemptProvider = rainbowAttemptProvider(loginType)
@@ -181,7 +191,7 @@ func (s *server) socialBindStart(w http.ResponseWriter, r *http.Request) {
 		providerURL, authErr := rainbowAuthorizationURL(r.Context(), config, loginType, callback+"?state="+url.QueryEscape(state))
 		if authErr != nil {
 			clearSocialCookies(w)
-			jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "彩虹聚合登录暂时无法创建授权请求"})
+			jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "聚合登录暂时无法创建授权请求"})
 			return
 		}
 		ticket, ticketErr := s.createRainbowBindLaunch(r.Context(), state, providerURL)
