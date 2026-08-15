@@ -63,10 +63,11 @@ func main() {
 	}
 }
 
-// operationsHealthcheck validates the two dependencies that make the risk loop
-// authoritative: MySQL for pending/save state and Redis for redirect decisions.
-// Docker installation must not report this worker healthy when either side is
-// unavailable or Redis authentication is missing.
+// operationsHealthcheck validates the complete safety dependency chain: MySQL
+// is reachable, authenticated Redis is reachable, and the Redis risk cache has
+// completed an authoritative SQL backfill. A process is not considered healthy
+// merely because both sockets accept connections while redirect decisions are
+// still absent after a Redis restart or failed bootstrap.
 func operationsHealthcheck() bool {
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
@@ -84,7 +85,11 @@ func operationsHealthcheck() bool {
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Password: os.Getenv("REDIS_PASSWORD")})
 	defer rdb.Close()
-	return rdb.Ping(ctx).Err() == nil
+	if err = rdb.Ping(ctx).Err(); err != nil {
+		return false
+	}
+	ready, err := destinationrisk.RedisCacheReady(ctx, rdb)
+	return err == nil && ready
 }
 
 // newDestinationRiskScanner is deliberately small and directly tested. The
