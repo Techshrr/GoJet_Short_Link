@@ -31,6 +31,22 @@ test('public home uses Chinese taxonomy and readable navigation/footer',async({p
   await expect(footer.getByText('服务条款',{exact:true})).toHaveCount(1);
 });
 
+test('safety interstitial carries only safe resource context into the appeal flow',async({page})=>{
+  await page.goto('/link-unavailable?reason=blocked&kind=link&code=gj-safe-42&target=https%3A%2F%2Fshould-never-leak.example%2Fprivate');
+  await expect(page.getByRole('heading',{name:'此链接已被安全阻止'})).toBeVisible();
+  await expect(page.locator('#safetyCode')).toHaveText('gj-safe-42');
+  const appeal=page.locator('#safetyAppeal');
+  await expect(appeal).toBeVisible();
+  const href=await appeal.getAttribute('href');
+  expect(href).toContain('/app/support?');
+  expect(href).toContain('mode=appeal');
+  expect(href).toContain('resource_kind=link');
+  expect(href).toContain('resource_ref=gj-safe-42');
+  expect(href).toContain('safety_state=blocked');
+  expect(href).not.toContain('should-never-leak');
+  expect(href).not.toContain('target=');
+});
+
 for(const route of ['privacy','terms'])test(`${route} is a readable responsive legal document`,async({page})=>{
   await page.setViewportSize({width:1440,height:1000});
   await page.goto('/'+route);
