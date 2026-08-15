@@ -86,6 +86,11 @@ jobs:
           grep -Fq 'bash "$ROOT/scripts/installgeoip.sh"' scripts/installdocker.sh
           grep -Fq 'deploy/data/geoip/city.mmdb' deploy/.env.production.example
           test -z "$(grep -R -F 'GeoLite2-City.mmdb' deploy scripts install.sh 2>/dev/null || true)"
+          grep -Fq 'DESTINATION_RISK_SCAN_INTERVAL_SECONDS: ${DESTINATION_RISK_SCAN_INTERVAL_SECONDS:-3}' deploy/compose.production.yaml
+          grep -Fq 'DESTINATION_RISK_PROVIDER_URL: ${DESTINATION_RISK_PROVIDER_URL:-}' deploy/compose.production.yaml
+          grep -Fq 'DESTINATION_RISK_PROVIDER_TOKEN: ${DESTINATION_RISK_PROVIDER_TOKEN:-}' deploy/compose.production.yaml
+          grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/.env.production.example
+          grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/native/gojet.env.example
 
       - name: Validate canonical frontend and flat public build
         run: |
