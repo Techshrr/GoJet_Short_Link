@@ -22,6 +22,7 @@ func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/workspaces/{id}/folders/{folder}", s.user(s.deleteFolder))
 	mux.HandleFunc("PATCH /api/workspaces/{id}/tags/{tag}", s.user(s.updateTag))
 	mux.HandleFunc("DELETE /api/workspaces/{id}/tags/{tag}", s.user(s.deleteTag))
+	mux.HandleFunc("POST /api/workspaces/{id}/share-qr", s.user(s.createShareQR))
 
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payment-methods", s.user(s.paymentMethods))
 	mux.HandleFunc("GET /api/admin/payment-callbacks", s.admin("billing.manage", s.adminPaymentCallbacks))
