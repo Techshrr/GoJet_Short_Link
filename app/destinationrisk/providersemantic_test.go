@@ -50,6 +50,55 @@ func TestSemanticProviderBlocksGenericRandomHostAdultContent(t *testing.T) {
 	}
 }
 
+func TestProviderFromEnvironmentKeepsGenericSemanticDetectionWithoutExternalService(t *testing.T) {
+	t.Setenv("DESTINATION_RISK_PROVIDER_URL", "")
+	t.Setenv("DESTINATION_RISK_PROVIDER_TOKEN", "")
+	provider := ProviderFromEnvironment()
+	if provider == nil {
+		t.Fatal("production risk provider factory returned nil")
+	}
+	if provider.Name() != "semantic" {
+		t.Fatalf("expected production fallback provider to keep semantic detection, got %q", provider.Name())
+	}
+	result, err := provider.Assess(context.Background(), Snapshot{
+		URL:         "https://opaque-generated-host.example/entry",
+		FinalURL:    "https://opaque-generated-host.example/entry",
+		StatusCode:  200,
+		ContentType: "text/html; charset=utf-8",
+		Title:       "真人娱乐",
+		Body:        `<html><body><h1>真人娱乐城</h1><p>百家乐、老虎机、体育投注。</p><p>注册送送彩金，充值提现后可查看赔率并在线下注。</p></body></html>`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Decision != Block || result.Score < 90 {
+		t.Fatalf("production provider factory must block generic gambling semantics, got %#v", result)
+	}
+}
+
+func TestProviderFromEnvironmentInvalidExternalURLStillFailsIntoSemanticReview(t *testing.T) {
+	t.Setenv("DESTINATION_RISK_PROVIDER_URL", "http://127.0.0.1:9999/not-allowed")
+	t.Setenv("DESTINATION_RISK_PROVIDER_TOKEN", "ignored")
+	provider := ProviderFromEnvironment()
+	if provider == nil || provider.Name() != "semantic" {
+		t.Fatalf("invalid external provider configuration must retain semantic provider, got %#v", provider)
+	}
+	result, err := provider.Assess(context.Background(), Snapshot{
+		URL:         "https://opaque-generated-host.example/",
+		FinalURL:    "https://opaque-generated-host.example/",
+		StatusCode:  403,
+		ContentType: "text/html",
+		Title:       "Just a moment...",
+		Body:        `<html><body>Checking your browser before accessing the site.</body></html>`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Decision != Review || result.Score < 45 {
+		t.Fatalf("invalid external configuration must fail closed through semantic review, got %#v", result)
+	}
+}
+
 func TestSemanticProviderReviewsUnverifiableChallenge(t *testing.T) {
 	provider := newSemanticProvider(nil)
 	result, err := provider.Assess(context.Background(), Snapshot{
