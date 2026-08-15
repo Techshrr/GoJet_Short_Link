@@ -36,7 +36,7 @@ test('link management stays synchronized with target-risk decisions by link id',
   await page.route(`**/api/workspaces/${user.workspace}/link-risks`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:Object.values(state)})}));
   await page.addInitScript(token=>localStorage.setItem('gojet_token',token),user.token);
   await page.goto(base+'/app/links');
-  await expect(page.getByRole('heading',{name:'短链接'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'短链接',exact:true})).toBeVisible();
   const firstCard=page.locator('#lhLinks .shareCard').filter({hasText:code(first)});
   const secondCard=page.locator('#lhLinks .shareCard').filter({hasText:code(second)});
   await expect(firstCard.locator('.productStatus')).toHaveText('安全阻止');
