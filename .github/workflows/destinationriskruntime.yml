@@ -8,6 +8,7 @@ on:
     paths:
       - 'app/destinationrisk/**'
       - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'services/redirectengine/internal/store/**'
       - 'deploy/compose.production.yaml'
       - 'deploy/native/gojet@.service'
       - 'scripts/lib.sh'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'app/destinationrisk/**'
       - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'services/redirectengine/internal/store/**'
       - 'deploy/compose.production.yaml'
       - 'deploy/native/gojet@.service'
       - 'scripts/lib.sh'
@@ -37,8 +39,15 @@ jobs:
       - name: Test risk runtime packages
         run: |
           set -euo pipefail
-          go test ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor
-          go vet ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor
+          go test ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/internal/store
+          go vet ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/internal/store
+      - name: Validate redirect fail-closed contract
+        run: |
+          set -euo pipefail
+          grep -Fq 'Only an exact ALLOW decision bound to the current target fingerprint' services/redirectengine/internal/store/redis.go
+          grep -Fq 'enforceRiskDecision(&l, risk)' services/redirectengine/internal/store/redis.go
+          grep -Fq '"missing", nil, "reason=review"' services/redirectengine/internal/store/risk_test.go
+          grep -Fq 'TestRiskDecisionWithoutPublicBaseStillFailsClosed' services/redirectengine/internal/store/risk_test.go
       - name: Validate Docker risk worker contract
         run: |
           set -euo pipefail
@@ -54,10 +63,12 @@ jobs:
           grep -Fq 'compose exec -T operationsmonitor /operationsmonitor healthcheck' scripts/lib.sh
           grep -Fq 'ExecStartPost=/bin/sh -c' deploy/native/gojet@.service
           grep -Fq 'operationsmonitor healthcheck' deploy/native/gojet@.service
+          grep -Fq 'EnsureRedisCache' services/platformapi/cmd/operationsmonitor/main.go
+          grep -Fq 'redisCacheReadyKey' app/destinationrisk/runtime.go
       - name: Reject named-site risk exceptions
         run: |
           set -euo pipefail
-          if grep -R -I -n -E 'missav|ybqefs|xp9wq9pq' app/destinationrisk services/platformapi/cmd/operationsmonitor; then
+          if grep -R -I -n -E 'missav|ybqefs|xp9wq9pq' app/destinationrisk services/platformapi/cmd/operationsmonitor services/redirectengine/internal/store; then
             echo 'named-site destination-risk exception detected' >&2
             exit 1
           fi
