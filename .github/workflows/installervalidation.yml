@@ -57,18 +57,21 @@ jobs:
           grep -Fq '自动重连' public/install/install.js
           grep -Fq '请勿重复提交' public/install/install.js
           test -z "$(grep -R -F 'catch(e){}' public/install 2>/dev/null || true)"
-          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh; do bash -n "$script"; done
+          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh; do bash -n "$script"; done
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
           python3 -m py_compile scripts/buildpublicsite.py scripts/checknames.py scripts/checkschema.py
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
           test -f database/migrations/migrationcatalog.txt
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 44
-          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 44
+          sql_count="$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d '[:space:]')"
+          catalog_count="$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt | tr -d '[:space:]')"
+          test "$sql_count" -gt 0
+          test "$sql_count" -eq "$catalog_count"
           grep -Fxq 'linkdestinationrisk.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'socialauth.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'socialsubjectwidth.sql' database/migrations/migrationcatalog.txt
+          grep -Fxq 'billingcycles.sql' database/migrations/migrationcatalog.txt
           test -z "$(find database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | grep -E '^[0-9]' || true)"
           MIGRATION_GLOB='database/migrations/'
           MIGRATION_GLOB+='*.sql'
@@ -76,6 +79,9 @@ jobs:
             echo 'migration glob execution is forbidden; use migrationcatalog.txt through scripts/runmigrations.sh' >&2
             exit 1
           fi
+          grep -Fq 'scripts/installgeoip.sh' install.sh
+          grep -Fq 'GEOIP_MMDB=__GOJET_ROOT__/deploy/data/geoip/city.mmdb' deploy/native/gojet@.service
+          grep -Fq 'test -s __GOJET_ROOT__/deploy/data/geoip/city.mmdb' deploy/native/gojet@.service
 
       - name: Validate canonical frontend and flat public build
         run: |
@@ -116,7 +122,7 @@ jobs:
       - name: Reject retired engineering contracts
         run: |
           set -euo pipefail
-          PATHS='installer public/install deploy scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh'
+          PATHS='installer public/install deploy scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh'
           if grep -R -I -n -E '\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release|SYSTEM_IMAGE_PATH|/system-images/|frontend/marketingsite' $PATHS; then
             echo 'retired engineering or runtime contract detected in installer sources' >&2
             exit 1
