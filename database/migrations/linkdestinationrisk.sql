@@ -22,21 +22,23 @@ CREATE TABLE link_destination_risk (
     KEY link_destination_risk_manual_idx(manual_decision,manual_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Existing links enter REVIEW and are scanned immediately. A migration baseline
+-- is not a safety assessment and must never grant a temporary ALLOW window.
 INSERT INTO link_destination_risk(
     link_id,decision,score,categories,evidence,provider,target_fingerprint,scanned_url,final_url,scanned_at,next_scan_at
 )
 SELECT
     id,
-    'allow',
+    'review',
     0,
     JSON_ARRAY(),
-    JSON_OBJECT('reason','legacy migration baseline; queued for scheduled rescan'),
+    JSON_OBJECT('reason','legacy migration baseline; review until first destination scan completes'),
     'migration_legacy',
     '',
     destination,
     destination,
-    UTC_TIMESTAMP(),
-    DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 DAY)
+    NULL,
+    UTC_TIMESTAMP()
 FROM short_links
 WHERE deleted_at IS NULL;
 
