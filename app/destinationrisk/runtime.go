@@ -27,6 +27,17 @@ func SyncDecision(ctx context.Context, client *redis.Client, linkID int64, targe
 	return err
 }
 
+func RedisCacheReady(ctx context.Context, client *redis.Client) (bool, error) {
+	if client == nil {
+		return false, fmt.Errorf("risk cache redis client is required")
+	}
+	exists, err := client.Exists(ctx, redisCacheReadyKey).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
 // EnsureRedisCache makes the SQL risk table authoritative after Redis restarts
 // or is flushed. The marker is stored in Redis itself, so loss of volatile cache
 // state automatically causes a complete exact-fingerprint republish on the next
@@ -35,11 +46,11 @@ func EnsureRedisCache(ctx context.Context, db *sql.DB, client *redis.Client) err
 	if db == nil || client == nil {
 		return fmt.Errorf("risk cache dependencies are required")
 	}
-	exists, err := client.Exists(ctx, redisCacheReadyKey).Result()
+	ready, err := RedisCacheReady(ctx, client)
 	if err != nil {
 		return err
 	}
-	if exists > 0 {
+	if ready {
 		return nil
 	}
 	return BackfillRedis(ctx, db, client)
