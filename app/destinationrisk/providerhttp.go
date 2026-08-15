@@ -22,17 +22,18 @@ type HTTPProvider struct {
 func ProviderFromEnvironment() Provider {
 	endpoint := strings.TrimSpace(os.Getenv("DESTINATION_RISK_PROVIDER_URL"))
 	if endpoint == "" {
-		return nil
+		return newSemanticProvider(nil)
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return nil
+		return newSemanticProvider(nil)
 	}
-	return &HTTPProvider{
+	external := &HTTPProvider{
 		endpoint: endpoint,
 		token:    strings.TrimSpace(os.Getenv("DESTINATION_RISK_PROVIDER_TOKEN")),
 		client:   &http.Client{Timeout: 4 * time.Second},
 	}
+	return newSemanticProvider(external)
 }
 
 func (p *HTTPProvider) Name() string { return "external_reputation" }
