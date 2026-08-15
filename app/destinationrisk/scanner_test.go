@@ -3,7 +3,9 @@ package destinationrisk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -86,6 +88,29 @@ func TestClassifyReviewCategories(t *testing.T) {
 				t.Fatalf("risk signal should not remain allow: score=%d", score)
 			}
 		})
+	}
+}
+
+func TestClassifyExplicitAdultHostBlocksBeforeBodyFetch(t *testing.T) {
+	score, categories, signals := classify(Snapshot{FinalURL: "https://missav.ws/dm84/jul-343", Headers: map[string]string{}})
+	if score < 90 || decisionForScore(score) != Block {
+		t.Fatalf("explicit adult host must block without fetched body: score=%d signals=%v", score, signals)
+	}
+	if !hasCategory(categories, CategoryAdult) {
+		t.Fatalf("adult host must include adult category: %v", categories)
+	}
+}
+
+func TestPublicFetchErrorNeverLeaksSocketAddresses(t *testing.T) {
+	raw := errors.New(`Get "https://missav.ws/dm84/jul-343": read tcp 110.42.32.62:31186->104.20.31.186:443: read: connection reset by peer`)
+	message := publicFetchError(raw)
+	for _, secret := range []string{"110.42.32.62", "104.20.31.186", "31186", "443"} {
+		if strings.Contains(message, secret) {
+			t.Fatalf("public transport error leaked socket detail %q in %q", secret, message)
+		}
+	}
+	if message == "" {
+		t.Fatal("public transport error must retain a safe diagnostic message")
 	}
 }
 
