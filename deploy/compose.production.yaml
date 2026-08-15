@@ -208,6 +208,11 @@ services:
       DESTINATION_RISK_PROVIDER_TOKEN: ${DESTINATION_RISK_PROVIDER_TOKEN:-}
       LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
+    healthcheck:
+      test: ["CMD", "/operationsmonitor", "healthcheck"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
     depends_on:
       mysql:
         condition: service_healthy
