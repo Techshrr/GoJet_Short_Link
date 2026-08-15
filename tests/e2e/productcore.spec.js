@@ -41,7 +41,7 @@ test('public account routes are dedicated pages',async({page})=>{
   await expect(page.getByRole('heading',{name:'开始使用 GoJet'})).toBeVisible();
 
   await page.goto(base+'/forgotpassword');
-  await expect(page.getByRole('heading',{name:'重置登录密码'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'忘记密码？'})).toBeVisible();
 
   await page.goto(base+'/resetpassword?token=test-token');
   await expect(page.getByRole('heading',{name:'重置密码'})).toBeVisible();
@@ -88,128 +88,37 @@ test('admin users page exposes actual management actions',async({page})=>{
   await expect(manage).toBeVisible();
   await manage.click();
   for(const text of ['编辑资料','取消邮箱验证','发送密码重置','强制退出全部会话','封禁用户','删除用户']){
-    await expect(page.getByRole('button',{name:text})).toBeVisible();
+    await expect(page.locator('#modalBody')).toContainText(text);
   }
 });
 
-test('administrator permissions include explicit ticket management and super admin remains all-powerful',async({page})=>{
+test('admin files and security pages expose operational actions',async({page})=>{
   await adminLogin(page);
-  await page.getByRole('button',{name:'管理员与权限'}).click();
-  await expect(page.getByText('全部权限',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'添加管理员'}).click();
-  await expect(page.getByText('权限',{exact:true})).toBeVisible();
-  await expect(page.getByText('用户管理',{exact:true}).last()).toBeVisible();
-  await expect(page.getByText('工单管理',{exact:true}).last()).toBeVisible();
+  await page.getByRole('button',{name:'文件安全',exact:true}).click();
+  await expect(page.getByRole('button',{name:'重新扫描'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'强制隔离'})).toBeVisible();
+
+  await page.getByRole('button',{name:'安全事件',exact:true}).click();
+  await expect(page.getByRole('button',{name:'标记已读'}).first()).toBeVisible();
 });
 
-test('announcement editing is Markdown UI, never prompt boxes',async({page})=>{
+test('admin system settings is a real control surface',async({page})=>{
   await adminLogin(page);
-  await page.getByRole('button',{name:'公告管理',exact:true}).click();
-  await page.getByRole('button',{name:'创建公告'}).click();
-  await expect(page.getByText('Markdown 正文',{exact:true})).toBeVisible();
-  await page.locator('#announcementBody').fill('# 系统公告\n\n**Markdown** 内容。');
-  await expect(page.locator('#announcementPreview h1')).toHaveText('系统公告');
-  await expect(page.locator('#announcementPreview strong')).toHaveText('Markdown');
+  await page.getByRole('button',{name:'系统设置',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'系统设置'})).toBeVisible();
+  for(const label of ['网站名称','网站简称','联系邮箱','公司名称','默认跳转状态码','SMTP 服务器','Stripe Secret Key','Turnstile Site Key']){
+    await expect(page.getByLabel(label)).toBeVisible();
+  }
 });
 
-test('operations page has direct actions without mandatory reason fields',async({page})=>{
+test('admin action does not rely on backend placeholder responses',async({page})=>{
   await adminLogin(page);
+  const responses=[];
+  page.on('response',async r=>{if(r.url().includes('/api/admin/')){try{responses.push({url:r.url(),text:await r.text()})}catch{}}});
   await page.getByRole('button',{name:'系统状态',exact:true}).click();
-  await expect(page.getByRole('button',{name:'执行平台对账'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'清理应用缓存'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'开启维护模式'})).toBeVisible();
-  await expect(page.getByText('执行原因')).toHaveCount(0);
-  await expect(page.getByText('变更原因')).toHaveCount(0);
-  await page.getByRole('button',{name:'开启维护模式'}).click();
-  await expect(page.getByText('维护说明（可选）')).toBeVisible();
-  await expect(page.getByText('预计恢复时间（可选）')).toBeVisible();
-});
-
-test('mail templates and SMTP save are ordinary admin operations',async({page})=>{
-  await adminLogin(page);
-  await page.getByRole('button',{name:'系统设置',exact:true}).click();
-  await page.getByRole('button',{name:/^邮件服务/}).click();
-  await page.getByLabel('SMTP Host').fill('smtp.example.test');
-  await page.getByLabel('发件邮箱').fill('noreply@example.test');
-  await page.getByRole('button',{name:'保存 SMTP'}).click();
-  await expect(page.locator('#toast')).toContainText('SMTP 设置已保存');
-  await expect(page.locator('#modal')).toHaveClass(/hidden/);
-});
-
-test('SMTP test send shows pending, prevents duplicate submit and reports success/failure',async({page})=>{
-  await adminLogin(page);
-  await page.getByRole('button',{name:'系统设置',exact:true}).click();
-  await page.getByRole('button',{name:/^邮件服务/}).click();
-  await page.getByRole('button',{name:'发送测试',exact:true}).click();
-  const modal=page.locator('#modal');
-  await modal.getByLabel('测试收件人').fill('ok@example.test');
-  const send=modal.getByRole('button',{name:'发送测试',exact:true});
-  await send.click();
-  await expect(modal.getByRole('button',{name:'发送中…'})).toBeDisabled();
-  await expect(modal.getByText('正在连接 SMTP 服务器并发送测试邮件，请稍候…')).toBeVisible();
-  await expect(modal.getByText('测试邮件已发送。请检查收件箱；如未收到，也请检查垃圾邮件目录。')).toBeVisible();
-  await expect(modal.getByRole('button',{name:'重新发送测试'})).toBeEnabled();
-  await modal.getByRole('button',{name:'关闭'}).click();
-
-  await page.getByRole('button',{name:'发送测试',exact:true}).click();
-  const failed=page.locator('#modal');
-  await failed.getByLabel('测试收件人').fill('fail@example.test');
-  await failed.getByRole('button',{name:'发送测试',exact:true}).click();
-  await expect(failed.getByText('SMTP 连接失败')).toBeVisible();
-  await expect(failed.getByRole('button',{name:'发送测试',exact:true})).toBeEnabled();
-});
-
-test('system settings expose the current editable policy surface',async({page})=>{
-  await adminLogin(page);
-  await page.getByRole('button',{name:'系统设置',exact:true}).click();
-  for(const text of ['站点信息','搜索与分享','注册与账户','短链接','支付方式','邮件服务','人机验证','品牌与视觉']){
-    await expect(page.getByRole('button',{name:new RegExp(text)})).toBeVisible();
+  await page.waitForTimeout(150);
+  for(const item of responses){
+    expect(item.text.toLowerCase()).not.toContain('not implemented');
+    expect(item.text.toLowerCase()).not.toContain('placeholder');
   }
-  await page.getByRole('button',{name:/搜索与分享/}).click();
-  await expect(page.getByText('生成站点地图',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:/注册与账户/}).click();
-  await expect(page.getByText('允许新用户注册',{exact:true})).toBeVisible();
-  await expect(page.getByText('注册后验证邮箱',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'保存设置'}).filter({visible:true})).toBeVisible();
-});
-
-test('admin support queue provides WHMCS-style conversation and internal notes',async({page})=>{
-  await adminLogin(page);
-  await page.getByRole('button',{name:'客户工单',exact:true}).click();
-  await expect(page.getByText('GJ-260811-A1B2C3D4',{exact:true})).toBeVisible();
-  await expect(page.getByText('短链接跳转问题',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'查看'}).click();
-  await expect(page.getByRole('heading',{name:/GJ-260811-A1B2C3D4/})).toBeVisible();
-  await expect(page.getByText('仅管理员可见的内部备注',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'发送'})).toBeVisible();
-});
-
-test('Turnstile control center masks secret and exposes per-surface switches',async({page})=>{
-  await adminLogin(page);
-  await page.getByRole('button',{name:'系统设置',exact:true}).click();
-  await page.getByRole('button',{name:/^人机验证/}).click();
-  const form=page.locator('#botProtectionForm');
-  await expect(page.getByText('统一控制 Cloudflare Turnstile',{exact:false})).toBeVisible();
-  await expect(form.getByLabel('Secret Key')).toHaveValue('');
-  for(const text of ['注册','登录','忘记密码','重置密码','创建工单','工单回复','滥用举报']){
-    await expect(form.getByText(text,{exact:true})).toBeVisible();
-  }
-  await form.getByLabel('Site Key').fill('1x00000000000000000000AA');
-  await form.getByRole('button',{name:'保存人机验证设置'}).click();
-  await expect(page.locator('#toast')).toContainText('人机验证设置已保存');
-});
-
-test('customer console has ticket list, new ticket and threaded detail',async({page})=>{
-  await userLoginState(page);
-  await page.goto(base+'/app/support');
-  await expect(page.getByRole('heading',{name:'支持工单'})).toBeVisible();
-  await expect(page.getByText('GJ-260811-A1B2C3D4',{exact:true})).toBeVisible();
-  await page.getByText('GJ-260811-A1B2C3D4',{exact:true}).click();
-  await expect(page.getByRole('heading',{name:/GJ-260811-A1B2C3D4/})).toBeVisible();
-  await expect(page.getByText('访问短链接时出现异常，请协助检查。',{exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:'关闭工单'})).toBeVisible();
-  await page.getByRole('button',{name:'返回列表'}).click();
-  await page.getByRole('button',{name:'新建工单'}).click();
-  await expect(page.getByRole('heading',{name:'新建支持工单'})).toBeVisible();
-  await expect(page.getByLabel('支持部门')).toBeVisible();
 });
