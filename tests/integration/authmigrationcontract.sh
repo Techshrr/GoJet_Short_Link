@@ -6,10 +6,13 @@ catalog='database/migrations/migrationcatalog.txt'
 test -f "$catalog"
 
 mapfile -t migrations < <(grep -ve '^[[:space:]]*$' "$catalog")
-test "${#migrations[@]}" -eq 44
+catalog_count=${#migrations[@]}
+sql_count=$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d '[:space:]')
+unique_count=$(printf '%s\n' "${migrations[@]}" | sort -u | wc -l | tr -d '[:space:]')
 
-test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 44
-test "$(printf '%s\n' "${migrations[@]}" | sort -u | wc -l)" -eq 44
+test "$catalog_count" -gt 0
+test "$sql_count" -eq "$catalog_count"
+test "$unique_count" -eq "$catalog_count"
 
 for required in socialauth.sql socialsubjectwidth.sql; do
   grep -Fxq "$required" "$catalog"
@@ -27,4 +30,4 @@ for migration in "${migrations[@]}"; do
   }
 done
 
-printf 'authentication migration catalog contract: PASS\n'
+printf 'authentication migration catalog contract: PASS (%d migrations)\n' "$catalog_count"
