@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 
-const escapeValue=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
+const escapeValue=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const idFromHandler=(element,name)=>{
   const source=element?.getAttribute('onclick')||'';
   const match=source.match(new RegExp(`${name}\\((\\d+)\\)`));
