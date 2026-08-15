@@ -14,8 +14,9 @@ console_spec='tests/e2e/console.spec.js'
 product_spec='tests/e2e/productcore.spec.js'
 surface_spec='tests/e2e/fullsurfaceconsistency.spec.js'
 social_spec='tests/e2e/socialauthsettings.spec.js'
+auth_surface_spec='tests/e2e/authentrysurface.spec.js'
 
-for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$social" "$browser_config" "$console_spec" "$product_spec" "$surface_spec" "$social_spec"; do
+for file in "$canonical" "$core" "$index" "$mail" "$mail_templates" "$bot" "$social" "$browser_config" "$console_spec" "$product_spec" "$surface_spec" "$social_spec" "$auth_surface_spec"; do
   test -f "$file"
 done
 
@@ -41,14 +42,17 @@ grep -Fq 'activeMailMount=embedded?root:null' "$mail"
 grep -Fq 'window.refreshMailSettings=' "$mail"
 grep -Fq 'async function renderBotProtectionSettings(target=null,options={})' "$bot"
 
-# Social login is a managed nested System Settings surface. The canonical
-# settings renderer remains the owner of the shell; the social module extends
-# it without duplicating the base settings implementation.
+# Customer social login is configured inside System Settings, but it is never
+# an administrator authentication method. The settings extension owns only the
+# customer provider configuration and compact multi-select picker.
 grep -Fq "const original=window.renderSettings;" "$social"
 grep -Fq "button.dataset.ahTab='socialauth'" "$social"
+grep -Fq '<b>客户快捷登录</b>' "$social"
+grep -Fq '管理后台不会使用这些快捷登录方式' "$social"
 grep -Fq "api('/api/admin/auth/providers')" "$social"
 grep -Fq "api('/api/admin/settings/socialauth',{method:'PUT'" "$social"
 grep -Fq "data-sensitive=\"1\"" "$social"
+grep -Fq "data-social-enable=\"" "$social"
 grep -Fq "data-social-provider=\"" "$social"
 grep -Fq "socialauthsettings.spec.js" .github/workflows/productsurface.yml
 
@@ -100,9 +104,15 @@ fi
 grep -Fq "page.locator('#nav [data-view=\"mail\"]')).toHaveCount(0)" "$surface_spec"
 grep -Fq "page.locator('#nav [data-view=\"botprotection\"]')).toHaveCount(0)" "$surface_spec"
 grep -Fq "[['邮件服务','邮件服务'],['人机验证','人机验证']]" "$surface_spec"
-grep -Fq "data-socialauth-tab" "$social_spec"
-grep -Fq "data-social-provider=\"github\"" "$social_spec"
-grep -Fq "data-social-provider=\"google\"" "$social_spec"
+
+# Customer social login contract: all six planned providers are controlled by
+# the picker, while the administrator login page explicitly proves that no
+# customer social-login surface exists there.
+grep -Fq "for(const id of ['google','facebook','github','qq','wechat','rainbow'])" "$social_spec"
+grep -Fq 'data-social-enable=' "$social_spec"
+grep -Fq "toHaveText('客户快捷登录')" "$social_spec"
+grep -Fq "administrator sign-in never exposes customer social login" "$auth_surface_spec"
+grep -Fq "page.locator('.social-provider')).toHaveCount(0)" "$auth_surface_spec"
 
 # Script order is a semantic HTML contract, not a line-format contract. Keep
 # this valid when the administrator shell is minified onto one or a few lines.
@@ -124,4 +134,4 @@ if positions != sorted(positions) or len(set(positions)) != len(positions):
     raise SystemExit(f'administrator settings script order invalid: {positions}')
 PY
 
-printf 'administrator settings IA, unique ownership and browser source contract: PASS\n'
+printf 'administrator settings IA, unique ownership and customer social-login boundary contract: PASS\n'
