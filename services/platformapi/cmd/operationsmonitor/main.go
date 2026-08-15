@@ -194,21 +194,21 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 						time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
 					}
 					if invalidateErr != nil {
-						if dirty != nil {
-							dirty.Store(true)
-						}
+						// SQL is deliberately untouched. Replaying the old SQL decision into
+						// Redis here could restore a stale ALLOW, so wait for the next scan.
 						log.Printf("destination risk fail-closed invalidate link=%d: %v", item.LinkID, invalidateErr)
 						continue
 					}
 
 					if err := store.Save(ctx, item.LinkID, targets, assessment); err != nil {
-						if dirty != nil {
-							dirty.Store(true)
-						}
+						// The cache key was already removed. Keep it missing (= REVIEW) and
+						// let the still-due SQL row retry instead of backfilling old state.
 						log.Printf("destination risk save link=%d: %v", item.LinkID, err)
 						continue
 					}
 					if err := destinationrisk.SyncDecision(ctx, rdb, item.LinkID, targets, assessment.Decision); err != nil {
+						// SQL now contains the new authoritative decision, so recovery may
+						// safely republish from SQL even if the Redis ready marker survived.
 						if dirty != nil {
 							dirty.Store(true)
 						}
