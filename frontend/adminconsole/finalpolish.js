@@ -19,10 +19,23 @@ document.addEventListener('keydown',event=>{
   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
 },true);
 const sync=()=>{
-  const now=!modal.classList.contains('hidden');document.body.style.overflow=now?'hidden':'';
-  if(now&&!opened){returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;panel().setAttribute('role','dialog');panel().setAttribute('aria-modal','true');requestAnimationFrame(()=>panel().querySelector('[autofocus],input,textarea,select,button,a[href]')?.focus?.({preventScroll:true}))}
-  if(!now&&opened&&returnFocus?.isConnected){try{returnFocus.focus({preventScroll:true})}catch{}returnFocus=null}
+  const now=!modal.classList.contains('hidden');
+  document.body.style.overflow=now?'hidden':'';
+  if(now&&!opened){
+    returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    panel().setAttribute('role','dialog');
+    panel().setAttribute('aria-modal','true');
+    requestAnimationFrame(()=>panel().querySelector('[autofocus],input,textarea,select,button,a[href]')?.focus?.({preventScroll:true}));
+  }
+  if(!now&&opened&&returnFocus?.isConnected){
+    try{returnFocus.focus({preventScroll:true})}catch{}
+    returnFocus=null;
+  }
+  // Persist the transition state. Without this assignment every subsequent
+  // modal attribute mutation is treated as a fresh open, which breaks focus
+  // return semantics and can repeatedly steal focus while a dialog is active.
   opened=now;
 };
-new MutationObserver(sync).observe(modal,{attributes:true,attributeFilter:['class','aria-hidden'],subtree:false});sync();
+new MutationObserver(sync).observe(modal,{attributes:true,attributeFilter:['class','aria-hidden'],subtree:false});
+sync();
 })();
