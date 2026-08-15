@@ -24,7 +24,50 @@ func (s *server) currentDestinationRiskTargets(r *http.Request, linkID int64) ([
 	return destinationrisk.Targets(destination, json.RawMessage(routingRules), json.RawMessage(abDestinations)), nil
 }
 
+func parseDestinationRiskLinkIDs(raw string) ([]int64, error) {
+	parts := strings.Split(raw, ",")
+	if len(parts) > 100 {
+		return nil, strconv.ErrRange
+	}
+	ids := make([]int64, 0, len(parts))
+	seen := map[int64]bool{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil || id < 1 {
+			return nil, strconv.ErrSyntax
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, strconv.ErrSyntax
+	}
+	return ids, nil
+}
+
 func (s *server) adminDestinationRisks(w http.ResponseWriter, r *http.Request) {
+	linkIDs := strings.TrimSpace(r.URL.Query().Get("link_ids"))
+	if linkIDs != "" {
+		ids, err := parseDestinationRiskLinkIDs(linkIDs)
+		if err != nil {
+			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "链接编号列表无效"})
+			return
+		}
+		items, err := s.destinationRiskStore().ListByLinkIDs(r.Context(), ids)
+		if err != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "风险状态暂时不可用"})
+			return
+		}
+		jsonResponse(w, http.StatusOK, map[string]any{"data": items, "total": len(items), "requested": len(ids)})
+		return
+	}
+
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	decision := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("decision")))
