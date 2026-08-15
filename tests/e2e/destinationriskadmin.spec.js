@@ -1,5 +1,5 @@
 const {test,expect}=require('@playwright/test');
-const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
+const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4173';
 
 async function createReviewLink(request){
   const suffix=Date.now();
@@ -76,7 +76,7 @@ test('destination risk review is a dedicated workflow and admin link management 
   // non-redirecting closed response, never the original target.
   if([301,302,307,308].includes(blocked.status())){
     const location=blocked.headers().location||'';
-    expect(location).toContain('/link-unavailable');
+    expect(location).toContain('/linkunavailable');
     expect(location).not.toContain('risk-ui.invalid');
 
     // The public result is a branded safety surface, not raw JSON. Its appeal
