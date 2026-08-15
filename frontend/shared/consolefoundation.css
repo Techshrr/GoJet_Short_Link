@@ -139,7 +139,9 @@
   .admin-shell .sidebar{width:208px!important}
 }
 @media (max-width:760px){
-  .shell,.admin-shell{display:block!important}
+  /* Preserve auth/session visibility semantics. The shared responsive display
+     rule must never outrank a shell's .hidden state before authentication. */
+  .shell:not(.hidden),.admin-shell:not(.hidden){display:block!important}
   .shell aside,.admin-shell .sidebar{
     position:static!important;
     width:100%!important;
