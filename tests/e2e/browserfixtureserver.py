@@ -16,6 +16,8 @@ PERMISSIONS=['platform.read','users.manage','workspaces.manage','links.manage','
 TICKET={'id':1,'ticket_number':'GJ-260811-A1B2C3D4','user_id':1,'user_email':'user@example.test','workspace_id':1,'department_id':1,'department_name':'技术支持','subject':'短链接跳转问题','priority':'normal','status':'customer_reply','last_reply_at':'2026-08-11T01:20:00Z','last_reply_by':'customer','closed_at':None,'created_at':'2026-08-11T01:00:00Z'}
 TICKET_MESSAGES=[{'id':1,'author_type':'customer','author_user_id':1,'author_name':'Browser User','body':'访问短链接时出现异常，请协助检查。','internal':False,'created_at':'2026-08-11T01:00:00Z'},{'id':2,'author_type':'administrator','author_administrator_id':1,'author_name':'Owner','body':'已收到，我们正在检查。','internal':False,'created_at':'2026-08-11T01:10:00Z'}]
 BOT={'turnstile.enabled':False,'turnstile.site_key':'','turnstile.fail_open':False,'turnstile.allowed_hostnames':['gojet.cc','app.gojet.cc'],'turnstile.registration':True,'turnstile.login':True,'turnstile.forgot_password':True,'turnstile.reset_password':True,'turnstile.ticket_create':True,'turnstile.ticket_reply':True,'turnstile.abuse_report':True,'turnstile.secret_configured':True}
+BIO_PAGES=[]
+QR_PIXEL='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z7e0AAAAASUVORK5CYII='
 
 EMPTY_PAGE={'data':[],'total':0,'limit':50,'offset':0}
 PUBLIC_ACCOUNT_POLICY={'registration_enabled':True,'email_verification_required':False,'password_login_enabled':True}
@@ -110,7 +112,7 @@ class H(BaseHTTPRequestHandler):
         if p=='/api/workspaces/1/link-domains': return self.send_json({'data':[]})
         if p=='/api/workspaces/1/domains': return self.send_json({'data':[]})
         if p=='/api/workspaces/1/text-shares': return self.send_json({'data':[]})
-        if p=='/api/workspaces/1/bio-pages': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/bio-pages': return self.send_json({'data':BIO_PAGES})
         if p=='/api/workspaces/1/fileshares': return self.send_json({'data':[]})
         if p=='/api/workspaces/1/qr-codes': return self.send_json({'data':[]})
         if p=='/api/workspaces/1/organization': return self.send_json({'campaigns':[],'folders':[],'tags':[]})
@@ -140,6 +142,32 @@ class H(BaseHTTPRequestHandler):
         if p=='/api/auth/register': return self.send_json({'user':{'id':2},'token':'r'*64},201)
         if p=='/api/auth/forgotpassword': return self.send_json({'queued':True},202)
         if p=='/api/auth/resetpassword': return self.send_json({'reset':True})
+        if p=='/api/workspaces/1/bio-pages':
+            body=self.body()
+            status=body.get('status') if body.get('status') in ('draft','published') else 'draft'
+            item={
+                'id':len(BIO_PAGES)+1,
+                'workspace_id':1,
+                'slug':body.get('slug') or f'bio-{len(BIO_PAGES)+1}',
+                'title':body.get('title') or 'Browser Bio',
+                'bio':body.get('bio') or '',
+                'status':status,
+                'theme':body.get('theme') or {},
+                'blocks':body.get('blocks') or [],
+                'views':0,
+                'created_at':'2026-08-15T21:00:00Z'
+            }
+            BIO_PAGES.append(item)
+            return self.send_json(item,201)
+        if p=='/api/workspaces/1/share-qr':
+            body=self.body()
+            kind=str(body.get('kind') or '')
+            resource_id=int(body.get('resource_id') or 0)
+            if kind!='bio': return self.send_json({'error':'fixture share kind not found'},404)
+            item=next((value for value in BIO_PAGES if int(value.get('id') or 0)==resource_id and value.get('status')=='published'),None)
+            if not item: return self.send_json({'error':'fixture bio share not found'},404)
+            origin=f"http://{self.headers.get('Host','127.0.0.1:4173')}"
+            return self.send_json({'kind':'bio','resource_id':resource_id,'target':f"{origin}/p/{item['slug']}",'image_data_url':QR_PIXEL})
         if p.startswith('/api/'): return self.send_json({'ok':True})
         self.send_error(404)
     def do_PATCH(self):
