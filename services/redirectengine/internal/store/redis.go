@@ -202,12 +202,6 @@ return redis.call('XADD',KEYS[3],'*','link_id',ARGV[1],'destination_id',ARGV[2],
 func (s *RedisStore) RecordVisit(ctx context.Context, v domain.Visit) error {
 	day := v.Timestamp.UTC().Format("2006-01-02")
 	month := v.Timestamp.UTC().Format("2006-01")
-	args := []string{"EVAL", recordScript, "10", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", "gojet:rate:" + v.LinkID + ":" + v.VisitorHash, "gojet:daily:" + v.LinkID + ":" + day, "gojet:bots:" + v.LinkID, "gojet:source:" + v.LinkID + ":" + v.SourceType, "gojet:device:" + v.LinkID + ":" + v.Device, "gojet:browser:" + v.LinkID + ":" + v.Browser, "gojet:visitors-month:" + l.ID + ":" + month}
-	_ = args
-	return s.recordVisit(ctx, v, day, month)
-}
-
-func (s *RedisStore) recordVisit(ctx context.Context, v domain.Visit, day, month string) error {
 	args := []string{"EVAL", recordScript, "10", "gojet:clicks:" + v.LinkID, "gojet:visitors:" + v.LinkID, "gojet:analytics:events", "gojet:rate:" + v.LinkID + ":" + v.VisitorHash, "gojet:daily:" + v.LinkID + ":" + day, "gojet:bots:" + v.LinkID, "gojet:source:" + v.LinkID + ":" + v.SourceType, "gojet:device:" + v.LinkID + ":" + v.Device, "gojet:browser:" + v.LinkID + ":" + v.Browser, "gojet:visitors-month:" + v.LinkID + ":" + month, v.LinkID, v.DestinationID, v.VisitorHash, v.Timestamp.UTC().Format(time.RFC3339Nano), v.RefererURL, v.RefererHost, v.SourceType, v.Country, v.Region, v.City, v.Device, v.Browser, v.OS, v.Language, v.UTMSource, v.UTMMedium, v.UTMCampaign, v.UTMContent, v.UTMTerm, v.VisitType, strconv.FormatBool(v.IsBot), strconv.Itoa(s.limit), strconv.FormatInt(v.MaxClicks, 10), strconv.FormatBool(v.OneTime), v.RequestID}
 	_, e := s.command(ctx, args...)
 	if e != nil && strings.Contains(e.Error(), "RATE_LIMITED") {
