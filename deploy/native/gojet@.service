@@ -20,7 +20,7 @@ ExecStartPre=/usr/bin/test -s __GOJET_ROOT__/resources/fonts/NotoSansSCRegular.t
 ExecStartPre=/usr/bin/test -s __GOJET_ROOT__/deploy/data/geoip/city.mmdb
 ExecStartPre=/usr/bin/chmod 0755 __GOJET_ROOT__/deploy/data/brand __GOJET_ROOT__/deploy/data/generated/qr __GOJET_ROOT__/deploy/data/geoip
 ExecStart=__GOJET_ROOT__/bin/%i
-ExecStartPost=/bin/sh -c 'if [ "%i" = "operationsmonitor" ]; then __GOJET_ROOT__/bin/operationsmonitor healthcheck; fi'
+ExecStartPost=/bin/sh -c 'if [ "%i" = "operationsmonitor" ]; then n=0; until __GOJET_ROOT__/bin/operationsmonitor healthcheck; do n=$((n+1)); [ "$n" -lt 30 ] || exit 1; sleep 1; done; fi'
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
