@@ -139,7 +139,9 @@
   .admin-shell .sidebar{width:208px!important}
 }
 @media (max-width:760px){
-  .shell,.admin-shell{display:block!important}
+  /* Preserve auth/session visibility semantics. The shared responsive display
+     rule must never outrank a shell's .hidden state before authentication. */
+  .shell:not(.hidden),.admin-shell:not(.hidden){display:block!important}
   .shell aside,.admin-shell .sidebar{
     position:static!important;
     width:100%!important;
@@ -170,3 +172,8 @@
   .shell main>header,.admin-shell .topbar{position:sticky!important;top:0!important;z-index:20!important}
   .page-actions,.row-actions,.riskReviewActions{justify-content:flex-start!important}
 }
+
+/* Visibility is application state, not presentation. Keep this last so older
+   product-specific responsive !important display rules cannot reveal a shell,
+   modal, error or control that JavaScript has explicitly hidden. */
+[hidden],.hidden{display:none!important}
