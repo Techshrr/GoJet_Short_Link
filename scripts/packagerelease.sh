@@ -13,7 +13,7 @@ python3 "$ROOT/scripts/checknames.py"
 python3 "$ROOT/scripts/checkschema.py"
 "$ROOT/scripts/preparepdffonts.sh"
 python3 "$ROOT/scripts/buildpublicsite.py" --output "$PUBLIC_BUILD"
-mkdir -p "$TARGET/bin" "$TARGET/installer" "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/deploy/docker" "$TARGET/scripts" "$TARGET/docs" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/public/assets/images" "$TARGET/public/generated/qr" "$TARGET/storage/installer" "$TARGET/resources/fonts"
+mkdir -p "$TARGET/bin" "$TARGET/installer" "$TARGET/database/migrations" "$TARGET/deploy/nginx" "$TARGET/deploy/native" "$TARGET/deploy/docker" "$TARGET/deploy/data/geoip" "$TARGET/scripts" "$TARGET/docs" "$TARGET/public/app" "$TARGET/public/admin" "$TARGET/public/install" "$TARGET/public/assets/images" "$TARGET/public/generated/qr" "$TARGET/storage/installer" "$TARGET/resources/fonts"
 build() { (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "$TARGET/bin/$1" "$2"); }
 build redirectengine ./services/redirectengine/cmd/server
 build analyticsworker ./services/analyticsworker/cmd/worker
@@ -55,17 +55,20 @@ cp "$ROOT/deploy/nginx/gojethost.conf" "$TARGET/deploy/nginx/gojethost.conf"
 cp "$ROOT/deploy/nginx/gojetnative.conf" "$TARGET/deploy/nginx/gojetnative.conf"
 cp "$ROOT/deploy/nginx/gojetbtrewrite.conf" "$TARGET/deploy/nginx/gojetbtrewrite.conf"
 cp "$ROOT/deploy/native/gojet.env.example" "$ROOT/deploy/native/gojet@.service" "$ROOT/deploy/native/gojetinstaller.service" "$ROOT/deploy/native/gojetinstaller.path" "$TARGET/deploy/native/"
-cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/checkschema.py" "$ROOT/scripts/runmigrations.sh" "$ROOT/scripts/verifyrelease.sh" "$ROOT/scripts/verifypublishedrelease.sh" "$ROOT/scripts/nativeinstallerrun.sh" "$ROOT/scripts/nativeinstallerapply.sh" "$ROOT/scripts/installdocker.sh" "$TARGET/scripts/"
+cp "$ROOT/deploy/data/geoip/README.md" "$TARGET/deploy/data/geoip/README.md"
+cp "$ROOT/scripts/lib.sh" "$ROOT/scripts/checkschema.py" "$ROOT/scripts/runmigrations.sh" "$ROOT/scripts/verifyrelease.sh" "$ROOT/scripts/verifypublishedrelease.sh" "$ROOT/scripts/nativeinstallerrun.sh" "$ROOT/scripts/nativeinstallerapply.sh" "$ROOT/scripts/installdocker.sh" "$ROOT/scripts/installgeoip.sh" "$TARGET/scripts/"
 cp "$ROOT/docs/deployment.zhCN.md" "$ROOT/docs/architecture.md" "$ROOT/docs/objectstorage.zhCN.md" "$ROOT/docs/operationsalerting.zhCN.md" "$TARGET/docs/"
 cp "$ROOT/install.sh" "$ROOT/installhostnginx.sh" "$ROOT/installnativelemp.sh" "$ROOT/launchwebinstaller.sh" "$ROOT/LICENSE" "$TARGET/"
 cp "$ROOT/deploy/INSTALL.zhCN.md" "$TARGET/INSTALL.md"
 printf '%s\n' "$VERSION" > "$TARGET/VERSION"
 printf '%s\n' 'FRESHINSTALLONLY=1' > "$TARGET/FRESHINSTALLONLY"
-chmod 0755 "$TARGET/install.sh" "$TARGET/installhostnginx.sh" "$TARGET/installnativelemp.sh" "$TARGET/launchwebinstaller.sh" "$TARGET/scripts/runmigrations.sh" "$TARGET/scripts/verifyrelease.sh" "$TARGET/scripts/verifypublishedrelease.sh" "$TARGET/scripts/nativeinstallerrun.sh" "$TARGET/scripts/nativeinstallerapply.sh" "$TARGET/scripts/installdocker.sh" "$TARGET"/bin/*
+chmod 0755 "$TARGET/install.sh" "$TARGET/installhostnginx.sh" "$TARGET/installnativelemp.sh" "$TARGET/launchwebinstaller.sh" "$TARGET/scripts/runmigrations.sh" "$TARGET/scripts/verifyrelease.sh" "$TARGET/scripts/verifypublishedrelease.sh" "$TARGET/scripts/nativeinstallerrun.sh" "$TARGET/scripts/nativeinstallerapply.sh" "$TARGET/scripts/installdocker.sh" "$TARGET/scripts/installgeoip.sh" "$TARGET"/bin/*
 find "$TARGET" -type f \( -name '.env' -o -name '.env.production' -o -name '*.log' -o -name '*.tmp' \) -delete
 find "$TARGET" -type d \( -name '.git' -o -name 'node_modules' -o -name 'testresults' -o -name 'tests' -o -name '__pycache__' \) -prune -exec rm -rf {} +
 test -s "$TARGET/resources/fonts/NotoSansSCRegular.ttf" || { echo 'PDF Unicode Regular font missing from production package' >&2; exit 1; }
 test -s "$TARGET/resources/fonts/OFL.txt" || { echo 'PDF font license missing from production package' >&2; exit 1; }
+test -s "$TARGET/scripts/installgeoip.sh" || { echo 'mandatory GeoIP installer missing from production package' >&2; exit 1; }
+test -s "$TARGET/deploy/data/geoip/README.md" || { echo 'GeoIP source/license documentation missing from production package' >&2; exit 1; }
 for forbidden in app frontend services go.mod go.sum Dockerfile tests .github; do [ ! -e "$TARGET/$forbidden" ] || { echo "development artifact must not ship: $forbidden" >&2; exit 1; }; done
 if find "$TARGET" -iname '*hardening*' -o -iname '*rc12*' | grep -q .; then echo 'engineering-stage filename leaked into production package' >&2; exit 1; fi
 if find "$TARGET" -mindepth 1 -printf '%f\n' | grep -E '[-_]' | grep -q .; then
