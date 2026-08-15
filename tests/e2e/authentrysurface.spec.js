@@ -53,6 +53,32 @@ test.describe('customer account entry surface',()=>{
     await noOverflow(page);
   });
 
+  test('split entry keeps the branded left zone and return-link ownership on tablet',async({page})=>{
+    await page.setViewportSize({width:1024,height:820});
+    await page.goto(base+'/login');
+    await expect(page.locator('.auth-showcase')).toBeVisible();
+    await expect(page.locator('.auth-form-panel')).toBeVisible();
+    const geometry=await page.evaluate(()=>{
+      const showcase=document.querySelector('.auth-showcase').getBoundingClientRect();
+      const form=document.querySelector('.auth-form-panel').getBoundingClientRect();
+      const panel=document.querySelector('.auth-panel').getBoundingClientRect();
+      const back=document.querySelector('.auth-return').getBoundingClientRect();
+      const art=document.querySelector('.auth-art').getBoundingClientRect();
+      return{showcase:{left:showcase.left,right:showcase.right,width:showcase.width},form:{left:form.left,right:form.right,width:form.width},panel:{width:panel.width},back:{left:back.left,right:back.right,top:back.top},art:{left:art.left,right:art.right,width:art.width}};
+    });
+    expect(geometry.showcase.width).toBeGreaterThan(410);
+    expect(geometry.form.width).toBeGreaterThan(520);
+    expect(geometry.form.left).toBeGreaterThanOrEqual(geometry.showcase.right-2);
+    expect(geometry.back.right).toBeLessThanOrEqual(geometry.showcase.right-18);
+    expect(geometry.back.left).toBeGreaterThan(geometry.showcase.left+100);
+    expect(geometry.back.top).toBeGreaterThanOrEqual(18);
+    expect(geometry.back.top).toBeLessThanOrEqual(55);
+    expect(geometry.art.left).toBeGreaterThanOrEqual(geometry.showcase.left+20);
+    expect(geometry.art.right).toBeLessThanOrEqual(geometry.showcase.right-20);
+    expect(geometry.panel.width).toBeGreaterThan(400);
+    await noOverflow(page);
+  });
+
   test('split entry layout collapses cleanly on mobile',async({page})=>{
     await page.setViewportSize({width:390,height:844});
     await page.goto(base+'/login');
