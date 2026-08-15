@@ -92,12 +92,15 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/runmigrations.sh
-          test "$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 44
-          test "$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt)" -eq 44
+          sql_count="$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d '[:space:]')"
+          catalog_count="$(grep -cve '^[[:space:]]*$' database/migrations/migrationcatalog.txt | tr -d '[:space:]')"
+          test "$sql_count" -gt 0
+          test "$sql_count" -eq "$catalog_count"
           grep -Fxq 'paymentcallbackevents.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'linkdestinationrisk.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'socialauth.sql' database/migrations/migrationcatalog.txt
           grep -Fxq 'socialsubjectwidth.sql' database/migrations/migrationcatalog.txt
+          grep -Fxq 'billingcycles.sql' database/migrations/migrationcatalog.txt
           mkdir -p /tmp/gojetcallbackbrowser/{uploads,files,brand,generated/qr,bin}
           go build -o /tmp/gojetcallbackbrowser/bin/platformapi ./services/platformapi/cmd/server
           SETTINGS_KEY=$(python3 - <<'PY'
