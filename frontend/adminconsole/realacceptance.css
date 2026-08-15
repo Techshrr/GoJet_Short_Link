@@ -1,0 +1,12 @@
+/* Real-install acceptance corrections. Keep this sheet last in the admin cascade. */
+@media (min-width:821px){
+  .content{max-width:none!important;margin:0!important;width:100%!important;padding:28px 30px!important}
+}
+.socialAuthCallbackInfo{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #e3eae6;border-radius:10px;background:#f8faf9;padding:12px 14px;min-width:0}
+.socialAuthCallbackInfo>div{min-width:0;display:grid;gap:4px}
+.socialAuthCallbackInfo b{font-size:11px;color:#344054}
+.socialAuthCallbackInfo small{font-size:10px;color:#7d8a83;line-height:1.5}
+.socialAuthCallbackInfo code{display:block;max-width:100%;overflow:auto;white-space:nowrap;background:transparent;color:#355148;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;padding:0}
+.socialAuthCallbackInfo .btn{flex:0 0 auto}
+.socialAuthProviderBody label{min-width:0}
+@media(max-width:700px){.socialAuthCallbackInfo{align-items:stretch;flex-direction:column}.socialAuthCallbackInfo .btn{align-self:flex-start}}
