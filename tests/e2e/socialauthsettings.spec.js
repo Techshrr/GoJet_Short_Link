@@ -3,7 +3,25 @@ const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
 
 async function adminLogin(page){await page.goto(base+'/admin/');await page.getByLabel('管理员邮箱').fill('owner@example.test');await page.getByLabel('密码').fill('OwnerPassword!2026');await expect(page.locator('.social-provider')).toHaveCount(0);await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.locator('#adminView')).toBeVisible();}
 async function openSocialSettings(page){await page.locator('#nav [data-view="settings"]').click();const tab=page.locator('[data-socialauth-tab]');await expect(tab).toContainText('客户快捷登录');await tab.click();await expect(page.locator('[data-socialauth-form]')).toBeVisible();await expect(page.locator('[data-socialauth-pane]')).toContainText('管理后台不会使用这些快捷登录方式');}
-async function choose(page,id,enabled=true){const picker=page.locator('[data-socialauth-picker]');if(!(await picker.evaluate(el=>el.open)))await picker.locator('summary').click();const input=picker.locator(`[data-social-enable="${id}"]`);if(enabled)await input.check();else await input.uncheck();const card=page.locator(`[data-social-provider="${id}"]`);if(enabled)await expect(card).toBeVisible();else await expect(card).toBeHidden();}
+async function choose(page,id,enabled=true){
+  for(let attempt=0;attempt<4;attempt++){
+    const picker=page.locator('[data-socialauth-picker]');
+    await expect(picker).toBeVisible();
+    if(!(await picker.evaluate(el=>el.open).catch(()=>false)))await picker.locator('summary').click();
+    const input=picker.locator(`[data-social-enable="${id}"]`);
+    try{
+      await expect(input).toBeVisible({timeout:3000});
+      if(enabled)await input.check({timeout:3000});else await input.uncheck({timeout:3000});
+      await expect(input).toBeChecked({checked:enabled,timeout:3000});
+      const card=page.locator(`[data-social-provider="${id}"]`);
+      if(enabled)await expect(card).toBeVisible();else await expect(card).toBeHidden();
+      return;
+    }catch(err){
+      if(attempt===3)throw err;
+      await page.waitForTimeout(100);
+    }
+  }
+}
 async function configure(page,id,{clientID,secret,baseURL,loginType}={}){const card=page.locator(`[data-social-provider="${id}"]`);if(!(await card.evaluate(el=>el.open)))await card.locator('summary').click();if(clientID!==undefined)await card.locator('input[name$="client_id"]').fill(clientID);if(secret!==undefined)await card.locator('input[name$="client_secret"]').fill(secret);if(baseURL!==undefined)await card.locator('input[name$="base_url"]').fill(baseURL);if(loginType!==undefined)await card.locator('select[name$="login_type"]').selectOption(loginType);}
 async function saveSettings(page){const response=page.waitForResponse(res=>res.request().method()==='PUT'&&res.url().endsWith('/api/admin/settings/socialauth'));await page.getByRole('button',{name:'保存设置',exact:true}).click();expect((await response).status()).toBe(200);await expect(page.locator('[data-socialauth-form]')).toBeVisible();}
 
