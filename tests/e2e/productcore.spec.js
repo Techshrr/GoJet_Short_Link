@@ -102,13 +102,29 @@ test('admin files and security pages expose operational actions',async({page})=>
   await expect(page.getByRole('button',{name:'标记已读'}).first()).toBeVisible();
 });
 
-test('admin system settings is a real control surface',async({page})=>{
+test('admin system settings follows the final nested information architecture',async({page})=>{
   await adminLogin(page);
   await page.getByRole('button',{name:'系统设置',exact:true}).click();
   await expect(page.getByRole('heading',{name:'系统设置'})).toBeVisible();
-  for(const label of ['网站名称','网站简称','联系邮箱','公司名称','默认跳转状态码','SMTP 服务器','Stripe Secret Key','Turnstile Site Key']){
+
+  for(const label of ['网站名称','网站简称','联系邮箱','公司名称']){
     await expect(page.getByLabel(label)).toBeVisible();
   }
+
+  await page.getByRole('button',{name:/^短链接/}).click();
+  await expect(page.getByLabel('默认跳转方式')).toBeVisible();
+
+  await page.getByRole('button',{name:/^支付方式/}).click();
+  await expect(page.getByText('Stripe',{exact:true})).toBeVisible();
+
+  await page.getByRole('button',{name:/^邮件服务/}).click();
+  await expect(page.getByRole('heading',{name:'邮件服务',exact:true})).toBeVisible();
+  await expect(page.getByLabel('SMTP Host')).toBeVisible();
+
+  await page.getByRole('button',{name:/^人机验证/}).click();
+  await expect(page.getByRole('heading',{name:'人机验证',exact:true})).toBeVisible();
+  await expect(page.getByLabel('Site Key')).toBeVisible();
+  await expect(page.getByLabel('Secret Key')).toBeVisible();
 });
 
 test('admin action does not rely on backend placeholder responses',async({page})=>{
