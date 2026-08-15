@@ -74,14 +74,14 @@ func TestGitHubOAuthExchangeAndProfile(t *testing.T) {
 }
 
 func TestSocialAuthSafetyHelpers(t *testing.T) {
-	for _, provider := range []string{"github", "google"} {
+	for _, provider := range []string{"google", "facebook", "github", "qq", "wechat", "rainbow"} {
 		if !socialProviderImplemented(provider) {
-			t.Fatalf("%s adapter must be implemented", provider)
+			t.Fatalf("%s adapter must be implemented before customer login can expose it", provider)
 		}
 	}
-	for _, provider := range []string{"facebook", "qq", "wechat", "rainbow"} {
+	for _, provider := range []string{"admin", "unknown", ""} {
 		if socialProviderImplemented(provider) {
-			t.Fatalf("%s must not be exposed before its adapter exists", provider)
+			t.Fatalf("unsupported provider %q must never be exposed", provider)
 		}
 	}
 	for input, want := range map[string]string{
