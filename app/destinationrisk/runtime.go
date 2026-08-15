@@ -42,10 +42,7 @@ func EnsureRedisCache(ctx context.Context, db *sql.DB, client *redis.Client) err
 	if exists > 0 {
 		return nil
 	}
-	if err = BackfillRedis(ctx, db, client); err != nil {
-		return err
-	}
-	return client.Set(ctx, redisCacheReadyKey, "1", 0).Err()
+	return BackfillRedis(ctx, db, client)
 }
 
 // BackfillRedis only republishes a decision when it belongs to the exact current
@@ -108,8 +105,10 @@ func BackfillRedis(ctx context.Context, db *sql.DB, client *redis.Client) error 
 			return err
 		}
 	}
-	_, err = pipe.Exec(ctx)
-	return err
+	if _, err = pipe.Exec(ctx); err != nil {
+		return err
+	}
+	return client.Set(ctx, redisCacheReadyKey, "1", 0).Err()
 }
 
 // Pending includes newly-created links and all due rescans. Target edits are made
