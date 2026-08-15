@@ -110,7 +110,7 @@ grep -Fq "[['邮件服务','邮件服务'],['人机验证','人机验证']]" "$s
 # customer social-login surface exists there.
 grep -Fq "for(const id of ['google','facebook','github','qq','wechat','rainbow'])" "$social_spec"
 grep -Fq 'data-social-enable=' "$social_spec"
-grep -Fq "toHaveText('客户快捷登录')" "$social_spec"
+grep -Fq "toContainText('客户快捷登录')" "$social_spec"
 grep -Fq "administrator sign-in never exposes customer social login" "$auth_surface_spec"
 grep -Fq "page.locator('.social-provider')).toHaveCount(0)" "$auth_surface_spec"
 
