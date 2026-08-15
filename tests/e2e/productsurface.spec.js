@@ -24,6 +24,14 @@ async function bootstrapUser(request){
 async function createLink(request,user){
   return json(request,'POST',`/api/workspaces/${user.workspace}/links`,{destination:'https://example.com/product',title:'Surface Link',code:'surface'+String(Date.now()).slice(-6),domain:'',redirect_status:302,status:'active',one_time:false,expires_at:null,max_clicks:null,password:''},user.token);
 }
+async function waitForLinkAllow(request,user,link){
+  const id=Number(link.ID??link.id);
+  await expect.poll(async()=>{
+    const data=await json(request,'GET',`/api/workspaces/${user.workspace}/link-risks`,undefined,user.token);
+    const risk=(data.data||[]).find(item=>Number(item.link_id)===id);
+    return risk?`${risk.effective_decision}|${Boolean(risk.pending)}`:'missing';
+  },{timeout:30000,message:'destination risk must reach ALLOW before QR creation'}).toBe('allow|false');
+}
 async function setUserSession(page,token){
   await page.addInitScript(t=>localStorage.setItem('gojet_token',t),token);
 }
@@ -101,6 +109,7 @@ test.describe.serial('real product surface',()=>{
   test('generated QR is visible in the customer console and downloadable from public storage',async({page,request})=>{
     if(!user)user=await bootstrapUser(request);
     link=await createLink(request,user);
+    await waitForLinkAllow(request,user,link);
     const qr=await json(request,'POST',`/api/workspaces/${user.workspace}/qr-codes`,{name:'Surface QR',link_id:Number(link.ID??link.id),foreground:'#101828',background:'#ffffff',size:512},user.token);
     expect(qr.image_url).toMatch(/^\/generated\/qr\//);
     const image=await request.get(base+qr.image_url);

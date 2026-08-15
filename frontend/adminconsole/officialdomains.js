@@ -2,13 +2,14 @@
 'use strict';
 const nav=document.querySelector('#nav');
 if(!nav)return;
-const riskDomains=nav.querySelector('[data-view="domains"]');
+const domainView=nav.querySelector('[data-view="domains"]');
 if(!nav.querySelector('[data-view="shortdomains"]')){
   const button=document.createElement('button');
   button.dataset.view='shortdomains';
   button.dataset.permission='domains.manage';
   button.textContent='短链域名';
-  nav.insertBefore(button,riskDomains||nav.querySelector('[data-view="settings"]')||null);
+  if(domainView?.parentElement)domainView.parentElement.insertBefore(button,domainView.nextSibling);
+  else nav.appendChild(button);
 }
 titles.shortdomains='短链域名';
 permissionNames['domains.manage']='域名管理';
@@ -45,7 +46,7 @@ async function renderOfficialDomains(){
 }
 
 function officialDomainModal(item=null){
-  openModal(`<div class="modal-head"><div><h2>${item?'编辑短链域名':'添加短链域名'}</h2><p>${item?'修改显示名称、排序和默认状态。域名本身不可直接改名。':'域名需要已经解析到当前 GoJet 站点并具备有效 HTTPS。'}</p></div><button class="btn" data-modal-close>关闭</button></div><form id="officialDomainForm"><div class="modal-body form-grid">${item?`<label class="full"><span>域名</span><input value="${esc(item.hostname)}" disabled></label>`:`<label class="full"><span>域名</span><input name="hostname" placeholder="例如 go.example.com" required autocomplete="off"></label>`}<label><span>显示备注</span><input name="label" value="${esc(item?.label||'')}" maxlength="120" placeholder="例如：主短链域名"></label><label><span>排序</span><input name="sort_order" type="number" min="-10000" max="10000" value="${Number(item?.sort_order||0)}"></label><label class="check full"><input name="is_default" type="checkbox" ${item?.is_default?'checked':''}> 设为客户创建短链接时的默认官方域名</label><div id="officialDomainError" class="alert hidden full"></div></div><div class="modal-foot"><button type="button" class="btn" data-modal-close>取消</button><button class="btn blue">保存</button></div></form>`);
+  openModal(`<div class="modal-head"><div><h2>${item?'编辑短链域名':'添加短链域名'}</h2><p>${item?'修改显示名称、排序和默认状态。域名本身不可直接改名。':'域名需要已经解析到当前 GoJet 站点并具备有效 HTTPS。'}</p></div><button type="button" class="gojetDialogClose" data-modal-close aria-label="关闭" title="关闭">×</button></div><form id="officialDomainForm"><div class="modal-body form-grid">${item?`<label class="full"><span>域名</span><input value="${esc(item.hostname)}" disabled></label>`:`<label class="full"><span>域名</span><input name="hostname" placeholder="例如 go.example.com" required autocomplete="off"></label>`}<label><span>显示备注</span><input name="label" value="${esc(item?.label||'')}" maxlength="120" placeholder="例如：主短链域名"></label><label><span>排序</span><input name="sort_order" type="number" min="-10000" max="10000" value="${Number(item?.sort_order||0)}"></label><label class="check full"><input name="is_default" type="checkbox" ${item?.is_default?'checked':''}> 设为客户创建短链接时的默认官方域名</label><div id="officialDomainError" class="alert hidden full"></div></div><div class="modal-foot"><button type="button" class="btn" data-modal-close>取消</button><button class="btn blue">保存</button></div></form>`);
   const form=document.querySelector('#officialDomainForm');
   form.onsubmit=async event=>{
     event.preventDefault();
@@ -59,6 +60,11 @@ function officialDomainModal(item=null){
   };
 }
 
+async function confirmDomainDelete(){
+  if(typeof window.gojetAdminConfirm==='function')return window.gojetAdminConfirm('删除短链域名','删除后不能再作为官方域名创建新短链；已经被短链接使用的域名不会被强制删除。','确认删除','danger');
+  return window.confirm('确认删除这个官方短链域名？已经被短链接使用的域名不能删除。');
+}
+
 document.querySelector('#content').addEventListener('click',async event=>{
   const edit=event.target.closest('[data-domain-edit]');
   const status=event.target.closest('[data-domain-status]');
@@ -68,7 +74,7 @@ document.querySelector('#content').addEventListener('click',async event=>{
     if(edit){const list=(await api('/api/admin/official-domains')).data||[];const item=list.find(x=>Number(x.id)===Number(edit.dataset.domainEdit));if(item)officialDomainModal(item);return}
     if(status){await api(`/api/admin/official-domains/${status.dataset.domainStatus}`,{method:'PATCH',body:JSON.stringify({status:status.dataset.next})});toast(status.dataset.next==='active'?'域名已启用':'域名已停用');return renderOfficialDomains()}
     if(makeDefault){await api(`/api/admin/official-domains/${makeDefault.dataset.domainDefault}`,{method:'PATCH',body:JSON.stringify({is_default:true})});toast('默认短链域名已更新');return renderOfficialDomains()}
-    if(remove){if(!confirm('确认删除这个官方短链域名？已经被短链接使用的域名不能删除。'))return;await api(`/api/admin/official-domains/${remove.dataset.domainDelete}`,{method:'DELETE'});toast('短链域名已删除');return renderOfficialDomains()}
+    if(remove){if(!await confirmDomainDelete())return;await api(`/api/admin/official-domains/${remove.dataset.domainDelete}`,{method:'DELETE'});toast('短链域名已删除');return renderOfficialDomains()}
   }catch(err){fail(err.message)}
 });
 })();

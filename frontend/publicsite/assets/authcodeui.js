@@ -1,7 +1,9 @@
 (()=>{
 'use strict';
 const page=document.body.dataset.authPage||'';
-const form=document.querySelector(page==='login'?'#loginForm':page==='register'?'#registerForm':'');
+const formSelector={login:'#loginForm',register:'#registerForm'}[page]||'';
+if(!formSelector)return;
+const form=document.querySelector(formSelector);
 if(!form)return;
 const message=document.querySelector('#message');
 const show=(text,type='error')=>{if(!message)return;message.className=`message${text?' show':''} ${type}`;message.textContent=text};

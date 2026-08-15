@@ -23,6 +23,14 @@ async function adminLogin(page){
   await expect(page.locator('#adminView')).toBeVisible();
 }
 
+async function confirmRiskAction(page,button,confirmation){
+  await button.click();
+  const modal=page.locator('#modal');
+  await expect(modal).not.toHaveClass(/hidden/);
+  await modal.getByRole('button',{name:confirmation,exact:true}).click();
+  await expect(modal).toHaveClass(/hidden/,{timeout:10000});
+}
+
 test('destination risk review is a dedicated page workflow with real override and rescan',async({page,request})=>{
   const {code}=await createReviewLink(request);
   await adminLogin(page);
@@ -42,18 +50,15 @@ test('destination risk review is a dedicated page workflow with real override an
   await expect(page.locator('[data-risk-detail]')).toContainText('risk-ui.invalid');
 
   await page.locator('[data-risk-review-form] textarea').fill('Browser gate reviewed current target and evidence');
-  page.once('dialog',dialog=>dialog.accept());
-  await page.locator('[data-decision="block"]').click();
-  await expect(page.locator('[data-risk-detail]')).toContainText('人工结论：阻止',{timeout:5000});
+  await confirmRiskAction(page,page.locator('[data-decision="block"]'),'确认阻止');
+  await expect(page.locator('[data-risk-detail]')).toContainText('人工结论：阻止',{timeout:10000});
   const blocked=await request.get(base+'/'+code,{maxRedirects:0});
   expect([301,302,307,308]).not.toContain(blocked.status());
 
-  page.once('dialog',dialog=>dialog.accept());
-  await page.locator('[data-clear-override]').click();
-  await expect(page.locator('[data-risk-detail]')).toContainText('待审核',{timeout:5000});
+  await confirmRiskAction(page,page.locator('[data-clear-override]'),'恢复自动判断');
+  await expect(page.locator('[data-risk-detail]')).toContainText('待审核',{timeout:10000});
 
-  page.once('dialog',dialog=>dialog.accept());
-  await page.locator('[data-risk-rescan]').click();
-  await expect(page.locator('[data-risk-detail]')).toContainText('待审核',{timeout:5000});
+  await confirmRiskAction(page,page.locator('[data-risk-rescan]'),'开始扫描');
+  await expect(page.locator('[data-risk-detail]')).toContainText('待审核',{timeout:15000});
   await expect(page.locator('#modal')).toHaveClass(/hidden/);
 });
