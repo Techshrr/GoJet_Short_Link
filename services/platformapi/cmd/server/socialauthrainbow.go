@@ -80,7 +80,11 @@ func (s *server) rainbowAuthStart(w http.ResponseWriter, r *http.Request) {
 	const provider = "rainbow"
 	loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
 	if !validRainbowLoginType(loginType) {
-		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的彩虹聚合登录方式"})
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的聚合登录方式"})
+		return
+	}
+	if !s.rainbowLoginTypeExposed(r.Context(), loginType) {
+		jsonResponse(w, http.StatusForbidden, map[string]string{"error": "该聚合登录方式当前未开放"})
 		return
 	}
 	config, configured, err := s.socialProviderConfiguration(r.Context(), provider)
@@ -128,7 +132,7 @@ func (s *server) rainbowAuthStart(w http.ResponseWriter, r *http.Request) {
 	authorizeURL, err := rainbowAuthorizationURL(r.Context(), config, loginType, callback)
 	if err != nil {
 		clearSocialCookies(w)
-		jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "彩虹聚合登录暂时无法创建授权请求"})
+		jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "聚合登录暂时无法创建授权请求"})
 		return
 	}
 	http.Redirect(w, r, authorizeURL, http.StatusFound)
