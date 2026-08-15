@@ -60,6 +60,10 @@ function appendQRButton(host,kind,id,label){
   button.type='button';
   button.dataset.shareQr=`${kind}:${id}`;
   button.textContent='二维码';
+  // The visible compact label stays “二维码”, but its accessible name describes
+  // the resource action so it cannot collide with the primary “二维码” navigation
+  // item and screen-reader users know what will happen before activating it.
+  button.setAttribute('aria-label',`生成${label||'分享内容'}二维码`);
   button.title='生成二维码分享';
   button.onclick=()=>window.gojetShareQR(kind,id,label);
   host.appendChild(button);
