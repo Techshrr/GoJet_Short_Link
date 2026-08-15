@@ -17,6 +17,12 @@ TICKET={'id':1,'ticket_number':'GJ-260811-A1B2C3D4','user_id':1,'user_email':'us
 TICKET_MESSAGES=[{'id':1,'author_type':'customer','author_user_id':1,'author_name':'Browser User','body':'访问短链接时出现异常，请协助检查。','internal':False,'created_at':'2026-08-11T01:00:00Z'},{'id':2,'author_type':'administrator','author_administrator_id':1,'author_name':'Owner','body':'已收到，我们正在检查。','internal':False,'created_at':'2026-08-11T01:10:00Z'}]
 BOT={'turnstile.enabled':False,'turnstile.site_key':'','turnstile.fail_open':False,'turnstile.allowed_hostnames':['gojet.cc','app.gojet.cc'],'turnstile.registration':True,'turnstile.login':True,'turnstile.forgot_password':True,'turnstile.reset_password':True,'turnstile.ticket_create':True,'turnstile.ticket_reply':True,'turnstile.abuse_report':True,'turnstile.secret_configured':True}
 
+EMPTY_PAGE={'data':[],'total':0,'limit':50,'offset':0}
+PUBLIC_ACCOUNT_POLICY={'registration_enabled':True,'email_verification_required':False,'password_login_enabled':True}
+WORKSPACE_OVERVIEW={'today_clicks':0,'month_clicks':0,'unique_visitors':0,'active_links':0,'usage':{'plan_name':'基础版','links':0,'link_limit':100,'qr_codes':0,'qr_limit':25,'members':1,'member_limit':3,'file_bytes':0,'file_storage_bytes':1073741824},'trend':[],'recent':[],'anomalies':[],'generated_at':'2026-08-12T10:00:00Z'}
+ADMIN_ANALYTICS={'today_clicks':0,'month_clicks':0,'unique_visitors':0,'active_links':0,'countries':[],'sources':[],'trend':[],'generated_at':'2026-08-12T10:00:00Z'}
+
+
 def ensure_public_build():
     if (PUBLIC/'index.html').is_file():
         return
@@ -52,17 +58,31 @@ class H(BaseHTTPRequestHandler):
         return None
     def do_GET(self):
         p=urlparse(self.path).path
+        # Public account-entry surfaces. These are requested by the real auth
+        # bundle, so the browser fixture must implement the same read contract
+        # instead of leaking expected product requests into 404 console noise.
         if p=='/api/public/settings': return self.send_json({'registration.enabled':True,'site.name':'GoJet','site.support_email':'support@example.test','brand.primary_color':'#16A66A'})
         if p=='/api/public/turnstile': return self.send_json({'enabled':False,'site_key':'','surfaces':{'registration':False,'login':False,'forgot_password':False,'reset_password':False,'ticket_create':False,'ticket_reply':False,'abuse_report':False}})
+        if p=='/api/public/auth/providers': return self.send_json({'data':[]})
+        if p=='/api/public/account-policy': return self.send_json(PUBLIC_ACCOUNT_POLICY)
         if p=='/api/public/announcements': return self.send_json({'data':[]})
+        if p=='/api/public/announcement-bar': return self.send_json({'data':[]})
+        if p=='/api/public/plans': return self.send_json({'data':[]})
+        if p=='/api/public/status': return self.send_json({'status':'operational','components':[]})
+
+        # Administrator shell and nested settings/risk modules.
         if p=='/api/admin/auth/me': return self.send_json(ADMINISTRATORS[0])
         if p=='/api/admin/overview': return self.send_json({'users':1,'workspaces':1,'active_links':4,'today_clicks':42,'mail_failures':0,'abuse_reports':0,'domain_errors':0,'security_events':0,'file_scan_backlog':0,'file_scan_failures':0})
+        if p=='/api/admin/analytics/overview': return self.send_json(ADMIN_ANALYTICS)
         if p=='/api/admin/users': return self.send_json({'data':USERS,'total':1,'limit':50,'offset':0})
         if p=='/api/admin/users/1': return self.send_json(USER_DETAIL)
         if p=='/api/admin/administrators': return self.send_json({'data':ADMINISTRATORS,'permission_catalog':PERMISSIONS,'role_templates':{'super_admin':['*'],'operator':['platform.read','users.manage','workspaces.manage','links.manage','content.manage','mail.manage','operations.manage','tickets.manage'],'security':['platform.read','users.manage','files.manage','domains.manage','security.manage'],'support':['platform.read','users.manage','mail.manage','tickets.manage'],'analyst':['platform.read'],'custom':[]}})
         if p=='/api/admin/announcements': return self.send_json({'data':[{'id':1,'title':'Browser Announcement','body':'# Hello\n\n**World**','status':'draft','created_at':'2026-08-10T00:00:00Z'}]})
         if p=='/api/admin/diagnostics': return self.send_json({'database':{'status':'operational'},'redis':{'status':'operational','stream_events':0},'maintenance_mode':False,'alerts':[]})
         if p=='/api/admin/settings': return self.send_json({'basic':{},'seo':{},'registration':{},'links':{},'runtime':{},'brand':{},'payments':{},'mail':{'port':587,'password_configured':False}})
+        if p=='/api/admin/auth/providers': return self.send_json({'data':[]})
+        if p=='/api/admin/destination-risks': return self.send_json({'data':[],'total':0,'limit':50,'offset':0})
+        if p=='/api/admin/payment-callbacks': return self.send_json({'data':[]})
         if p=='/api/admin/bot-protection': return self.send_json(BOT)
         if p=='/api/admin/support/tickets': return self.send_json({'data':[TICKET]})
         if p=='/api/admin/support/tickets/1': return self.send_json({'ticket':TICKET,'messages':TICKET_MESSAGES})
@@ -78,9 +98,25 @@ class H(BaseHTTPRequestHandler):
         if p=='/api/admin/audit': return self.send_json({'data':[]})
         if p=='/api/admin/plans': return self.send_json({'data':[]})
         if p.startswith('/api/admin/invoices'): return self.send_json({'data':[]})
+
+        # Customer console read surfaces used by the responsive/browser smoke
+        # pass. Empty collections intentionally model a fresh workspace while
+        # preserving the real response shape each page expects.
         if p=='/api/me': return self.send_json({'id':1,'email':'user@example.test','display_name':'Browser User','status':'active','email_verified':True})
         if p=='/api/workspaces': return self.send_json({'data':[{'id':1,'name':'Browser Workspace','type':'personal','role':'owner'}]})
+        if p=='/api/workspaces/1/overview': return self.send_json(WORKSPACE_OVERVIEW)
         if p=='/api/workspaces/1/links': return self.send_json({'data':[],'total':0})
+        if p=='/api/workspaces/1/link-risks': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/link-domains': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/domains': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/text-shares': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/bio-pages': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/fileshares': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/qr-codes': return self.send_json({'data':[]})
+        if p=='/api/workspaces/1/organization': return self.send_json({'campaigns':[],'folders':[],'tags':[]})
+        if p=='/api/workspaces/1/billing': return self.send_json({'subscription':None,'plans':[],'invoices':[]})
+        if p=='/api/workspaces/1/billing/payment-methods': return self.send_json({'data':[]})
+        if p=='/api/me/social-identities': return self.send_json({'data':[],'password_login_enabled':True})
         if p=='/api/support/departments': return self.send_json({'data':[{'id':1,'name':'技术支持','slug':'technical','description':'网站功能、短链接、域名、API 与文件服务问题'},{'id':2,'name':'账户与账单','slug':'billing','description':'账户、套餐、账单与支付相关问题'}]})
         if p=='/api/support/tickets': return self.send_json({'data':[TICKET]})
         if p=='/api/support/tickets/1': return self.send_json({'ticket':TICKET,'messages':TICKET_MESSAGES})
