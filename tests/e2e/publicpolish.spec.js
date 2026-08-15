@@ -32,7 +32,7 @@ test('public home uses Chinese taxonomy and readable navigation/footer',async({p
 });
 
 test('safety interstitial carries only safe resource context into the appeal flow',async({page})=>{
-  await page.goto('/link-unavailable?reason=blocked&kind=link&code=gj-safe-42&target=https%3A%2F%2Fshould-never-leak.example%2Fprivate');
+  await page.goto('/linkunavailable?reason=blocked&kind=link&code=gj-safe-42&target=https%3A%2F%2Fshould-never-leak.example%2Fprivate');
   await expect(page.getByRole('heading',{name:'此链接已被安全阻止'})).toBeVisible();
   await expect(page.locator('#safetyCode')).toHaveText('gj-safe-42');
   const appeal=page.locator('#safetyAppeal');
