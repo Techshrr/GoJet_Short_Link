@@ -16,6 +16,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		if operationsHealthcheck() {
+			return
+		}
+		os.Exit(1)
+	}
+
 	db, err := sql.Open("mysql", required("MYSQL_DSN"))
 	if err != nil {
 		log.Fatal(err)
@@ -53,6 +60,30 @@ func main() {
 		}
 		time.Sleep(time.Duration(interval) * time.Second)
 	}
+}
+
+// operationsHealthcheck validates the two dependencies that make the risk loop
+// authoritative: MySQL for pending/save state and Redis for redirect decisions.
+// Docker installation must not report this worker healthy when either side is
+// unavailable or Redis authentication is missing.
+func operationsHealthcheck() bool {
+	dsn := os.Getenv("MYSQL_DSN")
+	if dsn == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return false
+	}
+	defer db.Close()
+	if err = db.PingContext(ctx); err != nil {
+		return false
+	}
+	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Password: os.Getenv("REDIS_PASSWORD")})
+	defer rdb.Close()
+	return rdb.Ping(ctx).Err() == nil
 }
 
 // newDestinationRiskScanner is deliberately small and directly tested. The
