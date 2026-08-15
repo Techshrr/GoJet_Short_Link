@@ -83,7 +83,7 @@ var fileShareTemplate = template.Must(template.New("fileshare").Funcs(template.F
 func (s *server) serveFileSharePage(w http.ResponseWriter, r *http.Request) {
 	item, err := s.resources.PublicFileMetadata(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		http.Error(w, "文件不存在、尚未开放下载、已过期或达到下载次数上限", http.StatusNotFound)
+		redirectPublicUnavailable(w, r, "file", r.PathValue("slug"))
 		return
 	}
 	view := struct {
@@ -102,7 +102,7 @@ func (s *server) streamFileShare(w http.ResponseWriter, r *http.Request, passwor
 	download, err := s.resources.OpenDownloadWithPassword(r.Context(), r.PathValue("slug"), password)
 	if err != nil {
 		status := http.StatusNotFound
-		message := "文件不存在、尚未开放下载、已过期或达到下载次数上限"
+		message := "文件暂不可下载"
 		if err == appresources.ErrFilePassword {
 			status = http.StatusForbidden
 			message = "访问密码错误"
