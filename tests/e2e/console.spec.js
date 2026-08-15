@@ -137,13 +137,13 @@ test('link creator sends structured routing rules and stable A/B weights',async(
   ]);
 });
 
-test('customer billing continues a plan upgrade directly into payment choice',async({page})=>{
+test('customer billing can choose annual cycle before continuing into payment choice',async({page})=>{
   let requested;
   await seedUser(page);
   await page.route('**/api/**',route=>{
     const request=route.request(),path=new URL(request.url()).pathname,method=request.method();
-    if(path.endsWith('/billing')&&method==='GET')return json(route,{subscription:{workspace_id:7,plan_code:'starter',plan_name:'基础版',status:'active',cancel_at_period_end:false},plans:[{id:1,code:'starter',name:'基础版',monthly_price_cents:0,currency:'CNY',description:'轻量项目',features:['100 条短链接']},{id:2,code:'pro',name:'专业版',monthly_price_cents:6900,currency:'CNY',description:'增长团队',features:['5,000 条短链接','180 天分析']}],invoices:[{id:9,invoice_number:'GJ-20260812-ABCDEF012345',plan_name:'专业版',invoice_type:'upgrade',amount_cents:6900,currency:'CNY',status:'pending',created_at:'2026-08-12T10:00:00Z',due_at:'2026-08-15T10:00:00Z'}]});
-    if(path.endsWith('/billing/invoices')&&method==='POST'){requested=request.postDataJSON();return json(route,{id:10,invoice_number:'GJ-NEW',amount_cents:6900,currency:'CNY',status:'pending'},201)}
+    if(path.endsWith('/billing')&&method==='GET')return json(route,{subscription:{workspace_id:7,plan_code:'starter',plan_name:'基础版',status:'active',cancel_at_period_end:false},plans:[{id:1,code:'starter',name:'基础版',monthly_price_cents:0,currency:'CNY',description:'轻量项目',features:['100 条短链接']},{id:2,code:'pro',name:'专业版',monthly_price_cents:6900,currency:'CNY',description:'增长团队',features:['5,000 条短链接','180 天分析']}],invoices:[{id:9,invoice_number:'GJ-20260812-ABCDEF012345',plan_name:'专业版',invoice_type:'upgrade',billing_cycle:'monthly',period_months:1,amount_cents:6900,currency:'CNY',status:'pending',created_at:'2026-08-12T10:00:00Z',due_at:'2026-08-15T10:00:00Z'}]});
+    if(path.endsWith('/billing/invoices')&&method==='POST'){requested=request.postDataJSON();return json(route,{id:10,invoice_number:'GJ-NEW',billing_cycle:'annual',period_months:12,amount_cents:82800,currency:'CNY',status:'pending'},201)}
     if(path.endsWith('/billing/payment-methods')&&method==='GET')return json(route,{data:[{code:'epay',name:'易支付',mode:'redirect'}]});
     return json(route,commonUser(path));
   });
@@ -152,8 +152,10 @@ test('customer billing continues a plan upgrade directly into payment choice',as
   await expect(page.getByRole('heading',{name:'专业版'})).toBeVisible();
   await expect(page.getByText('GJ-20260812-ABCDEF012345')).toBeVisible();
   await page.getByRole('button',{name:'选择套餐'}).click();
+  await page.locator('input[name="billing_cycle"][value="annual"]').check();
+  await expect(page.locator('[data-cycle-total]')).toContainText('828');
   await page.getByRole('button',{name:'继续支付'}).click();
-  await expect.poll(()=>requested).toEqual({plan_code:'pro',type:'upgrade'});
+  await expect.poll(()=>requested).toEqual({plan_code:'pro',type:'upgrade',billing_cycle:'annual'});
   await expect(page.getByRole('heading',{name:'选择支付方式'})).toBeVisible();
   await expect(page.getByRole('button',{name:/易支付/})).toBeVisible();
 });
