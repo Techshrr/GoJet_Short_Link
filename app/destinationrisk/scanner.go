@@ -169,9 +169,8 @@ func applyRisk(out *Assessment, seenCategories map[Category]bool, raw, finalURL 
 
 // publicFetchError deliberately converts transport failures into stable public
 // messages. net/http errors frequently contain the local socket address and the
-// remote peer (for example "read tcp 10.0.0.2:1234->203.0.113.2:443"). Those
-// implementation details are useful in private service logs, but must never be
-// persisted as risk evidence or shown in the administrator UI.
+// remote peer. Those implementation details must never be persisted as risk
+// evidence or shown in the administrator UI.
 func publicFetchError(err error) string {
 	if err == nil {
 		return ""
@@ -216,9 +215,10 @@ func (s *Scanner) Assess(ctx context.Context, targets []string) Assessment {
 			out.ScannedURL = raw
 		}
 
-		// URL/host signals are evaluated before DNS and HTTP. A destination that
-		// is unambiguously prohibited must not become merely "review" because its
-		// CDN resets the scanner connection or otherwise refuses automated fetches.
+		// URL semantics are evaluated before DNS and HTTP. This does not rely on
+		// a blacklist of named sites: only generic policy terms are considered.
+		// It ensures clearly descriptive prohibited destinations cannot evade the
+		// policy merely by refusing the scanner connection.
 		preScore, preCategories, preSignals := classify(Snapshot{URL: raw, FinalURL: raw, Headers: map[string]string{}})
 		preDecision := decisionForScore(preScore)
 		evidence := Evidence{URL: raw}
@@ -442,7 +442,7 @@ func (s *Scanner) fetch(ctx context.Context, raw string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	req.Header.Set("User-Agent", "GoJet-Destination-Risk/1.2")
+	req.Header.Set("User-Agent", "GoJet-Destination-Risk/1.3")
 	req.Header.Set("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1")
 	response, err := client.Do(req)
 	if err != nil {
@@ -493,8 +493,12 @@ func extractTitle(body string) string {
 }
 
 func classify(snapshot Snapshot) (int, []Category, []string) {
-	finalURL := strings.ToLower(snapshot.FinalURL)
+	finalURL := strings.ToLower(strings.TrimSpace(snapshot.FinalURL))
+	if finalURL == "" {
+		finalURL = strings.ToLower(strings.TrimSpace(snapshot.URL))
+	}
 	text := strings.ToLower(finalURL + "\n" + snapshot.Title + "\n" + snapshot.Body)
+	urlText := normalizedURLText(finalURL)
 	score := 0
 	categories := []Category{}
 	signals := []string{}
@@ -528,36 +532,67 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 		}
 		return count
 	}
-
-	adultHost := false
-	gamblingHost := false
-	if parsed, err := url.Parse(snapshot.FinalURL); err == nil {
-		host := strings.ToLower(parsed.Hostname())
-		adultHost = containsHostLabel(host, "missav", "pornhub", "xvideos", "xnxx", "redtube", "brazzers", "javdb", "javbus", "avgle")
-		gamblingHost = containsHostLabel(host, "bet365", "1xbet")
+	urlGroups := func(groups ...[]string) int {
+		count := 0
+		for _, group := range groups {
+			if containsURLLexeme(urlText, group...) {
+				count++
+			}
+		}
+		return count
 	}
-	adultExplicit := containsAny(
-		"porn video", "porn videos", "xxx video", "adult video", "adult cam", "sex video", "uncensored porn",
-		"成人视频", "成人视频", "色情视频", "色情直播", "AV无码", "无码AV", "无码av", "无码成人视频", "成人影片",
+
+	// Adult content: use generic URL semantics plus page evidence. Never rely on
+	// a list of known adult domains. A single generic URL lexeme is review-level;
+	// corroboration from independent URL/content groups elevates to block.
+	adultURLGroups := urlGroups(
+		[]string{"adult", "porn", "porno", "pornographic", "nsfw", "xxx"},
+		[]string{"hentai", "uncensored", "hardcore", "nude", "nudity", "sexcam", "sexvideo"},
+		[]string{"jav", "avideo"},
 	)
-	adultSecondary := containsAny("nsfw videos", "nude videos", "国产自拍", "成人内容", "情色影片", "jav porn")
-	if adultHost {
-		add(CategoryAdult, 95, "adult_host_signal")
+	adultContentGroups := countGroups(
+		[]string{"porn video", "porn videos", "pornography", "adult video", "adult videos", "成人视频", "色情视频", "成人影片", "成人内容"},
+		[]string{"uncensored", "hardcore sex", "xxx video", "sex video", "nude video", "hentai video", "乱子伦AV片", "无码AV", "无码av", "无码AV", "情色影片"},
+		[]string{"adult cam", "live sex cam", "18+ only", "adults only", "色情直播", "成人直播", "裸聊"},
+	)
+	contextualAdultReference := containsAny("academic research", "research paper", "news report", "content moderation policy", "sexual health education", "学术研究", "新闻报道", "内容审核政策", "性健康教育")
+	if adultURLGroups >= 2 {
+		add(CategoryAdult, 95, "adult_url_semantic_combination")
+	} else if adultURLGroups == 1 {
+		add(CategoryAdult, 50, "adult_url_semantic_signal")
 	}
-	if adultExplicit {
-		add(CategoryAdult, 55, "adult_explicit_content_signal")
-	} else if adultSecondary {
-		add(CategoryAdult, 45, "adult_content_signal")
+	if adultContentGroups >= 2 && !contextualAdultReference {
+		add(CategoryAdult, 95, "adult_content_combination")
+	} else if adultContentGroups >= 1 {
+		add(CategoryAdult, 55, "adult_content_signal")
+	}
+	if adultURLGroups >= 1 && adultContentGroups >= 1 && !contextualAdultReference {
+		add(CategoryAdult, 40, "adult_url_content_corroboration")
 	}
 
-	if gamblingHost {
-		add(CategoryGambling, 90, "gambling_host_signal")
+	// Gambling uses the same generic multi-signal model.
+	gamblingURLGroups := urlGroups(
+		[]string{"casino", "betting", "sportsbook", "bookmaker", "wager"},
+		[]string{"slots", "baccarat", "roulette", "poker", "lottery"},
+		[]string{"jackpot", "odds", "cashout"},
+	)
+	gamblingContentGroups := countGroups(
+		[]string{"online casino", "live casino", "sports betting", "place a bet", "博彩", "赌场", "体育投注", "在线下注"},
+		[]string{"casino deposit", "bet deposit", "cashout casino", "withdraw winnings", "赌资充值", "赌场充值", "博彩提现"},
+		[]string{"casino bonus", "betting odds", "free spins", "jackpot", "下注送彩金", "赔率", "首存彩金"},
+	)
+	if gamblingURLGroups >= 2 {
+		add(CategoryGambling, 95, "gambling_url_semantic_combination")
+	} else if gamblingURLGroups == 1 {
+		add(CategoryGambling, 50, "gambling_url_semantic_signal")
 	}
-	if containsAny("online casino", "sports betting", "casino bonus", "betting odds", "博彩", "赌场", "下注送彩金", "体育投注") {
-		add(CategoryGambling, 65, "gambling_signal")
+	if gamblingContentGroups >= 2 {
+		add(CategoryGambling, 95, "gambling_content_combination")
+	} else if gamblingContentGroups == 1 {
+		add(CategoryGambling, 60, "gambling_content_signal")
 	}
-	if containsAny("casino deposit", "cashout casino", "赌资充值", "赌场充值") {
-		add(CategoryGambling, 30, "gambling_transaction_signal")
+	if gamblingURLGroups >= 1 && gamblingContentGroups >= 1 {
+		add(CategoryGambling, 40, "gambling_url_content_corroboration")
 	}
 
 	criticalCredential := containsAny(
@@ -591,55 +626,108 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 		if authCredential && fraudGroups >= 2 {
 			add(CategoryFraud, 95, "credential_deception_combination")
 		} else if authCredential && (accountThreat || (impersonation && deceptiveLure)) {
-			add(CategoryFraud, 65, "credential_account_threat_combination")
+			add(CategoryFraud, 70, "credential_account_threat_combination")
 		}
 	}
 
-	malwareLanguage := containsAny("ransomware", "trojan download", "keylogger", "botnet", "spyware download", "木马下载", "勒索软件", "盗号木马", "间谍软件下载")
+	malwareGroups := countGroups(
+		[]string{"ransomware", "trojan", "keylogger", "botnet malware", "spyware", "木马", "勒索软件", "盗号木马", "间谍软件"},
+		[]string{"payload.exe", "dropper.exe", "download payload", "execute powershell", "disable antivirus", "绕过杀毒", "下载载荷", "执行木马"},
+		[]string{"steal cookies", "token stealer", "browser stealer", "remote access trojan", "窃取 cookie", "盗取 token", "远控木马"},
+	)
 	suspiciousPayload := containsAny(".scr", ".ps1", ".bat", ".cmd", "payload.exe", "dropper.exe") || strings.Contains(strings.ToLower(snapshot.Headers["content-disposition"]), ".exe")
-	if malwareLanguage {
-		add(CategoryMalware, 80, "malware_language")
+	if malwareGroups >= 2 {
+		add(CategoryMalware, 95, "malware_content_combination")
+	} else if malwareGroups == 1 {
+		add(CategoryMalware, 70, "malware_content_signal")
 	}
-	if malwareLanguage && suspiciousPayload {
-		add(CategoryMalware, 20, "malware_payload_combination")
+	if malwareGroups >= 1 && suspiciousPayload {
+		add(CategoryMalware, 30, "malware_payload_corroboration")
 	}
 
-	if containsAny("terrorist propaganda", "join the caliphate", "extremist manifesto", "coordinated disinformation campaign", "恐怖主义宣传", "极端主义宣言", "有组织虚假信息") {
-		add(CategoryExtremism, 65, "extremism_disinformation_signal")
+	extremismGroups := countGroups(
+		[]string{"terrorist propaganda", "extremist propaganda", "extremist manifesto", "恐怖主义宣传", "极端主义宣言"},
+		[]string{"join our extremist movement", "join the caliphate", "recruit fighters", "加入极端组织", "招募武装人员"},
+		[]string{"coordinated disinformation campaign", "fabricated influence operation", "有组织虚假信息", "操纵舆论行动"},
+	)
+	if extremismGroups >= 2 {
+		add(CategoryExtremism, 95, "extremism_combination")
+	} else if extremismGroups == 1 {
+		add(CategoryExtremism, 60, "extremism_disinformation_signal")
 	}
-	if containsAny("kill all ", "racial extermination", "hate group recruitment", "terror attack instructions", "恐怖袭击教程", "种族灭绝", "仇恨组织招募") {
-		add(CategoryViolenceHate, 80, "violence_hate_signal")
+	violenceGroups := countGroups(
+		[]string{"terror attack instructions", "bomb attack instructions", "mass casualty instructions", "恐怖袭击教程", "爆炸袭击教程"},
+		[]string{"racial extermination", "kill all ", "genocide advocacy", "种族灭绝", "杀光"},
+		[]string{"hate group recruitment", "terror recruitment", "仇恨组织招募", "恐怖组织招募"},
+	)
+	if violenceGroups >= 2 {
+		add(CategoryViolenceHate, 95, "violence_hate_combination")
+	} else if violenceGroups == 1 {
+		add(CategoryViolenceHate, 75, "violence_hate_signal")
 	}
-	if containsAny("pirated download", "cracked software", "warez", "torrent piracy", "盗版下载", "破解软件", "未经授权转载", "未授权影视下载") {
+
+	copyrightGroups := countGroups(
+		[]string{"pirated download", "piracy download", "warez", "盗版下载", "未授权影视下载", "盗版影视"},
+		[]string{"cracked software", "software crack", "serial key generator", "keygen", "破解软件", "免激活破解"},
+		[]string{"torrent piracy", "download full movie free", "watch paid movie free", "电影磁力下载", "会员影视免费下载"},
+	)
+	if copyrightGroups >= 2 {
+		add(CategoryCopyright, 95, "copyright_redistribution_combination")
+	} else if copyrightGroups == 1 {
 		add(CategoryCopyright, 60, "copyright_redistribution_signal")
 	}
-	if containsAny("pyramid scheme", "recruit downline", "guaranteed returns by recruiting", "传销", "发展下线", "拉人头返利", "层级返佣") {
-		add(CategoryPyramidMarketing, 70, "pyramid_marketing_signal")
+
+	pyramidGroups := countGroups(
+		[]string{"pyramid scheme", "recruit downline", "multi level recruitment", "传销", "发展下线", "拉人头"},
+		[]string{"guaranteed returns by recruiting", "risk free guaranteed return", "稳赚不赔", "保本高收益", "静态收益"},
+		[]string{"tier commission", "multi-level commission", "层级返佣", "团队计酬", "下线返利"},
+	)
+	if pyramidGroups >= 2 {
+		add(CategoryPyramidMarketing, 95, "pyramid_marketing_combination")
+	} else if pyramidGroups == 1 {
+		add(CategoryPyramidMarketing, 65, "pyramid_marketing_signal")
 	}
-	if containsAny("verified account for sale", "sell accounts", "rent verified account", "account marketplace", "账号出售", "实名账号出租", "平台账户转售", "成品号出售") {
+
+	resaleGroups := countGroups(
+		[]string{"verified account for sale", "sell accounts", "account marketplace", "账号出售", "成品号出售", "平台账户转售"},
+		[]string{"rent verified account", "real-name account rental", "实名账号出租", "实名账户出租"},
+		[]string{"bulk accounts", "aged accounts", "批发账号", "批量账号", "老号批发"},
+	)
+	if resaleGroups >= 2 {
+		add(CategoryAccountResale, 95, "account_resale_combination")
+	} else if resaleGroups == 1 {
 		add(CategoryAccountResale, 60, "account_resale_signal")
 	}
 
 	ddos := containsAny("ddos", "layer 7 attack", "http flood", "cc attack", "拒绝服务攻击", "洪水攻击")
 	booter := containsAny("booter", "stresser", "attack panel", "压力攻击平台", "代打流量", "攻击面板")
-	if ddos || booter {
+	abuseService := containsAny("attack for hire", "stress any website", "take website offline", "代打网站", "网站打死", "攻击租用")
+	if (ddos && booter) || (ddos && abuseService) || (booter && abuseService) {
+		add(CategoryHarmfulAutomation, 95, "harmful_automation_combination")
+		add(CategoryPlatformSecurity, 20, "platform_security_corroboration")
+	} else if ddos || booter || abuseService {
 		add(CategoryHarmfulAutomation, 60, "harmful_automation_signal")
-	}
-	if ddos && booter {
-		add(CategoryPlatformSecurity, 40, "ddos_service_combination")
 	}
 
 	bulk := containsAny("bulk sms", "mass dm", "email blaster", "bulk email sender", "群发短信", "批量私信", "邮件群发器", "批量群发")
 	unsolicited := containsAny("scraped leads", "no opt-in", "without consent", "无需授权", "免同意群发", "采集号码", "撞库号码")
-	if bulk {
+	evasion := containsAny("bypass spam filter", "rotate sender accounts", "avoid anti-spam", "绕过反垃圾", "轮换发信账号")
+	if bulk && (unsolicited || evasion) {
+		add(CategorySpam, 95, "unsolicited_bulk_combination")
+	} else if bulk {
 		add(CategorySpam, 55, "bulk_messaging_signal")
 	}
-	if bulk && unsolicited {
-		add(CategorySpam, 25, "unsolicited_bulk_combination")
-	}
 
-	if containsAny("credential stuffing", "account checker", "carding panel", "token grabber", "撞库平台", "账号检测器", "盗取 token") {
-		add(CategoryPlatformSecurity, 80, "platform_abuse_signal")
+	platformAbuseGroups := countGroups(
+		[]string{"credential stuffing", "account checker", "撞库平台", "账号检测器"},
+		[]string{"carding panel", "stolen card checker", "盗刷平台", "黑卡检测"},
+		[]string{"token grabber", "cookie stealer", "session hijacker", "盗取 token", "会话劫持"},
+		[]string{"exploit kit", "zero-day sale", "漏洞利用包", "0day 出售"},
+	)
+	if platformAbuseGroups >= 2 {
+		add(CategoryPlatformSecurity, 95, "platform_abuse_combination")
+	} else if platformAbuseGroups == 1 {
+		add(CategoryPlatformSecurity, 75, "platform_abuse_signal")
 	}
 
 	if score > 100 {
@@ -648,12 +736,45 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 	return score, categories, signals
 }
 
-func containsHostLabel(host string, labels ...string) bool {
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	parts := strings.Split(host, ".")
-	for _, part := range parts {
-		for _, label := range labels {
-			if part == label || strings.HasPrefix(part, label+"-") || strings.HasSuffix(part, "-"+label) {
+func normalizedURLText(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return strings.ToLower(raw)
+	}
+	joined := strings.ToLower(parsed.Hostname() + " " + parsed.EscapedPath() + " " + parsed.RawQuery)
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '.', '-', '_', '/', '\\', '?', '&', '=', '+', ':', '%':
+			return ' '
+		default:
+			return r
+		}
+	}, joined)
+}
+
+// containsURLLexeme recognises policy semantics without embedding any known
+// destination brands. Exact tokens are accepted; longer generic terms may also
+// appear as a prefix/suffix in a domain label such as "adultvideos" or
+// "casino-bonus". Three-character terms remain exact to avoid "jav" matching
+// "javascript" and similar false positives.
+func containsURLLexeme(normalized string, values ...string) bool {
+	fields := strings.Fields(strings.ToLower(normalized))
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if strings.Contains(value, " ") {
+			if strings.Contains(" "+normalized+" ", " "+value+" ") {
+				return true
+			}
+			continue
+		}
+		for _, field := range fields {
+			if field == value {
+				return true
+			}
+			if len(value) >= 4 && (strings.HasPrefix(field, value) || strings.HasSuffix(field, value)) {
 				return true
 			}
 		}
