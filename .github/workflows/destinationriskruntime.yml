@@ -1,0 +1,63 @@
+name: GoJet Destination Risk Runtime Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rebuild/v4-rc12-real-install-fixes
+    paths:
+      - 'app/destinationrisk/**'
+      - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'deploy/compose.production.yaml'
+      - 'deploy/native/gojet@.service'
+      - 'scripts/lib.sh'
+      - '.github/workflows/destinationriskruntime.yml'
+  pull_request:
+    paths:
+      - 'app/destinationrisk/**'
+      - 'services/platformapi/cmd/operationsmonitor/**'
+      - 'deploy/compose.production.yaml'
+      - 'deploy/native/gojet@.service'
+      - 'scripts/lib.sh'
+      - '.github/workflows/destinationriskruntime.yml'
+
+concurrency:
+  group: destination-risk-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Test risk runtime packages
+        run: |
+          set -euo pipefail
+          go test ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor
+          go vet ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor
+      - name: Validate Docker risk worker contract
+        run: |
+          set -euo pipefail
+          block="$(sed -n '/^  operationsmonitor:/,/^  clamav:/p' deploy/compose.production.yaml)"
+          printf '%s\n' "$block" | grep -Fq 'REDIS_ADDRESS: redis:6379'
+          printf '%s\n' "$block" | grep -Fq 'REDIS_PASSWORD:'
+          printf '%s\n' "$block" | grep -Fq 'test: ["CMD", "/operationsmonitor", "healthcheck"]'
+          printf '%s\n' "$block" | grep -Fq 'condition: service_healthy'
+      - name: Validate installer and Native recovery contract
+        run: |
+          set -euo pipefail
+          sh -n scripts/lib.sh
+          grep -Fq 'compose exec -T operationsmonitor /operationsmonitor healthcheck' scripts/lib.sh
+          grep -Fq 'ExecStartPost=/bin/sh -c' deploy/native/gojet@.service
+          grep -Fq 'operationsmonitor healthcheck' deploy/native/gojet@.service
+      - name: Reject named-site risk exceptions
+        run: |
+          set -euo pipefail
+          if grep -R -I -n -E 'missav|ybqefs|xp9wq9pq' app/destinationrisk services/platformapi/cmd/operationsmonitor; then
+            echo 'named-site destination-risk exception detected' >&2
+            exit 1
+          fi
