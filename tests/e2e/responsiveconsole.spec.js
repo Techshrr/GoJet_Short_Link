@@ -79,7 +79,7 @@ for(const viewport of viewports){
 
     const token=await createUser(request,viewport.name);
     await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
-    for(const route of ['/app/dashboard','/app/links','/app/text','/app/bio','/app/files','/app/qr','/app/campaigns','/app/analytics']){
+    for(const route of ['/app/dashboard','/app/links','/app/text','/app/bio','/app/files','/app/qr','/app/organization','/app/analytics']){
       const response=await page.goto(base+route,{waitUntil:'networkidle'});
       expect(response&&response.status(),`${viewport.name} ${route}`).toBeLessThan(400);
       await expect(page.locator('#shell')).toBeVisible({timeout:10000});
