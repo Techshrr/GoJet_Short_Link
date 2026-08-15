@@ -61,7 +61,7 @@ var bioPageTemplate = template.Must(template.New("bio").Parse(`<!doctype html>
 <body>
 <main class="resourcePage">
   <div class="bioResource">
-    <section class="bioSurface" style="--bio-primary:{{.Primary}};--bio-background:{{.Background}}">
+    <section class="bioSurface" style="--bio-primary:{{.Primary}};--bio-background:{{.Background}};--bio-ink:{{.Ink}};--bio-muted:{{.Muted}};--bio-surface:{{.Surface}}">
       <div class="bioAvatar">{{.Initial}}</div>
       <h1>{{.Title}}</h1>
       <p class="bioCopy">{{.Bio}}</p>
@@ -75,7 +75,7 @@ var bioPageTemplate = template.Must(template.New("bio").Parse(`<!doctype html>
 func (s *server) publicTextPage(w http.ResponseWriter, r *http.Request) {
 	metadata, err := s.resources.TextMetadata(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		http.Error(w, "文本不存在、已过期或已读取", http.StatusNotFound)
+		redirectPublicUnavailable(w, r, "text", r.PathValue("slug"))
 		return
 	}
 	formatName := map[string]string{"plain": "纯文本", "markdown": "Markdown 格式", "code": "代码与日志"}[metadata.Format]
@@ -112,16 +112,26 @@ func (s *server) publicTextPage(w http.ResponseWriter, r *http.Request) {
 func (s *server) publicBioPage(w http.ResponseWriter, r *http.Request) {
 	item, err := s.resources.ReadBio(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		http.Error(w, "个人主页不存在或尚未发布", http.StatusNotFound)
+		redirectPublicUnavailable(w, r, "bio", r.PathValue("slug"))
 		return
 	}
-	theme := struct{ Primary, Background string }{Primary: "#16a66a", Background: "#f5faf7"}
+	theme := struct{ Primary, Background, Ink, Muted, Surface string }{Primary: "#16a66a", Background: "#f5faf7", Ink: "#14231d", Muted: "#66766f", Surface: "#ffffff"}
 	_ = json.Unmarshal(item.Theme, &theme)
-	if !regexp.MustCompile(`^#[0-9a-fA-F]{6}$`).MatchString(theme.Primary) {
+	validHex := regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	if !validHex.MatchString(theme.Primary) {
 		theme.Primary = "#16a66a"
 	}
-	if !regexp.MustCompile(`^#[0-9a-fA-F]{6}$`).MatchString(theme.Background) {
+	if !validHex.MatchString(theme.Background) {
 		theme.Background = "#f5faf7"
+	}
+	if !validHex.MatchString(theme.Ink) {
+		theme.Ink = "#14231d"
+	}
+	if !validHex.MatchString(theme.Muted) {
+		theme.Muted = "#66766f"
+	}
+	if !validHex.MatchString(theme.Surface) {
+		theme.Surface = "#ffffff"
 	}
 	var rawLinks []struct{ Label, URL string }
 	_ = json.Unmarshal(item.Blocks, &rawLinks)
@@ -137,10 +147,10 @@ func (s *server) publicBioPage(w http.ResponseWriter, r *http.Request) {
 		initial = string(runes[0])
 	}
 	view := struct {
-		Title, Bio, Initial, SiteName string
-		Primary, Background           template.CSS
-		Links                         []struct{ Label, URL string }
-	}{item.Title, item.Bio, initial, s.stringSetting(r.Context(), "site.name", "GoJet"), template.CSS(theme.Primary), template.CSS(theme.Background), links}
+		Title, Bio, Initial, SiteName        string
+		Primary, Background, Ink, Muted, Surface template.CSS
+		Links                                []struct{ Label, URL string }
+	}{item.Title, item.Bio, initial, s.stringSetting(r.Context(), "site.name", "GoJet"), template.CSS(theme.Primary), template.CSS(theme.Background), template.CSS(theme.Ink), template.CSS(theme.Muted), template.CSS(theme.Surface), links}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
