@@ -5,8 +5,12 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 require docker
 require curl
 require openssl
+require bash
+require gzip
 validate_env
 printf 'Installing GoJet %s with Docker...\n' "$(cat "$ROOT/VERSION" 2>/dev/null || echo development)"
+printf 'Preparing GeoIP City database...\n'
+bash "$ROOT/scripts/installgeoip.sh"
 prepare_storage
 compose build --pull
 compose up -d redis mysql
