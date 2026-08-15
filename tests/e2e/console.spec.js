@@ -94,7 +94,7 @@ test('organization, text, bio and QR product surfaces use live API data',async({
     return json(route,commonUser(path));
   });
   await openUser(page);
-  await page.getByRole('button',{name:'活动与组织'}).click();
+  await page.getByRole('button',{name:'推广与组织'}).click();
   await expect(page.locator('#organizationWorkspace').getByText('夏季投放',{exact:true})).toBeVisible();
   await expect(page.getByText(/41 次转化/)).toBeVisible();
   await page.getByRole('button',{name:'文本分享'}).click();
