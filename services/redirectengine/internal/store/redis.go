@@ -143,11 +143,7 @@ func enforceRiskDecision(l *domain.Link, raw any) {
 		return
 	}
 	if target := riskInterstitialURL(*l, decision); target != "" {
-		l.Destination = target
-		l.StatusCode = 302
-		l.RoutingRules = nil
-		l.Destinations = nil
-		l.UTM = nil
+		l.SafetyRedirect = target
 		return
 	}
 	// A missing PUBLIC_BASE_URL still fails closed. The branded interstitial is
@@ -181,8 +177,8 @@ func (s *RedisStore) FindLink(ctx context.Context, host, code string) (domain.Li
 	}
 	// Missing, REVIEW, BLOCK, malformed or unknown risk state all fail closed.
 	// Only an exact ALLOW decision bound to the current target fingerprint can
-	// preserve the destination. REVIEW/BLOCK are redirected to the branded
-	// GoJet safety interstitial instead of masquerading as a missing short link.
+	// preserve the destination. REVIEW/BLOCK use a separate safety redirect so
+	// they never enter password, smart-routing, analytics or visit-limit logic.
 	enforceRiskDecision(&l, risk)
 	return l, nil
 }
