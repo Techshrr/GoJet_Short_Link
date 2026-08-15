@@ -11,7 +11,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var ErrFilePassword = errors.New("file password required or invalid")
+var (
+	ErrFilePassword      = errors.New("file password required or invalid")
+	ErrFileNotFound      = errors.New("file not found")
+	ErrFileExpired       = errors.New("file expired")
+	ErrFileDownloadLimit = errors.New("download limit reached")
+	ErrFileSafetyReview  = errors.New("file safety review required")
+)
 
 type PublicFileMetadata struct {
 	Slug         string     `json:"slug"`
@@ -65,16 +71,38 @@ func (s *Service) SetFilePassword(ctx context.Context, user, workspaceID, id int
 func (s *Service) PublicFileMetadata(ctx context.Context, slug string) (PublicFileMetadata, error) {
 	var item PublicFileMetadata
 	var protected bool
-	err := s.db.QueryRowContext(ctx, `SELECT slug,original_name,mime_type,size_bytes,expires_at,max_downloads,downloads,(password_hash IS NOT NULL) FROM file_shares WHERE slug=? AND deleted_at IS NULL AND scan_status='clean' AND status='active'`, slug).Scan(&item.Slug, &item.OriginalName, &item.MIMEType, &item.SizeBytes, &item.ExpiresAt, &item.MaxDownloads, &item.Downloads, &protected)
+	var scanStatus, status string
+	var deletedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, `
+		SELECT slug,original_name,mime_type,size_bytes,expires_at,max_downloads,downloads,(password_hash IS NOT NULL),scan_status,status,deleted_at
+		FROM file_shares WHERE slug=?`, slug).Scan(
+		&item.Slug, &item.OriginalName, &item.MIMEType, &item.SizeBytes, &item.ExpiresAt, &item.MaxDownloads, &item.Downloads, &protected,
+		&scanStatus, &status, &deletedAt,
+	)
 	if err != nil {
-		return item, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return PublicFileMetadata{}, ErrFileNotFound
+		}
+		return PublicFileMetadata{}, err
+	}
+	if deletedAt.Valid {
+		return PublicFileMetadata{}, ErrFileNotFound
 	}
 	if item.ExpiresAt != nil && time.Now().After(*item.ExpiresAt) {
 		_, _ = s.db.ExecContext(ctx, `UPDATE file_shares SET status='expired' WHERE slug=? AND status='active'`, slug)
-		return PublicFileMetadata{}, errors.New("file expired")
+		return PublicFileMetadata{}, ErrFileExpired
+	}
+	if status == "expired" {
+		return PublicFileMetadata{}, ErrFileExpired
+	}
+	if status != "active" {
+		return PublicFileMetadata{}, ErrFileNotFound
+	}
+	if scanStatus != "clean" {
+		return PublicFileMetadata{}, ErrFileSafetyReview
 	}
 	if item.MaxDownloads != nil && item.Downloads >= *item.MaxDownloads {
-		return PublicFileMetadata{}, errors.New("download limit reached")
+		return PublicFileMetadata{}, ErrFileDownloadLimit
 	}
 	item.Protected = protected
 	return item, nil
@@ -90,18 +118,27 @@ func (s *Service) OpenDownloadWithPassword(ctx context.Context, slug, password s
 	var passwordHash sql.NullString
 	err = tx.QueryRowContext(ctx, `SELECT id,slug,original_name,storage_name,mime_type,size_bytes,scan_status,status,expires_at,max_downloads,downloads,password_hash FROM file_shares WHERE slug=? AND deleted_at IS NULL FOR UPDATE`, slug).Scan(&item.ID, &item.Slug, &item.OriginalName, &item.StorageName, &item.MIMEType, &item.SizeBytes, &item.ScanStatus, &item.Status, &item.ExpiresAt, &item.MaxDownloads, &item.Downloads, &passwordHash)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Download{}, ErrFileNotFound
+		}
 		return Download{}, err
 	}
-	if item.ScanStatus != "clean" || item.Status != "active" {
-		return Download{}, errors.New("file unavailable")
+	if item.Status == "expired" {
+		return Download{}, ErrFileExpired
+	}
+	if item.Status != "active" {
+		return Download{}, ErrFileNotFound
+	}
+	if item.ScanStatus != "clean" {
+		return Download{}, ErrFileSafetyReview
 	}
 	if item.ExpiresAt != nil && time.Now().After(*item.ExpiresAt) {
 		_, _ = tx.ExecContext(ctx, `UPDATE file_shares SET status='expired' WHERE id=?`, item.ID)
 		_ = tx.Commit()
-		return Download{}, errors.New("file expired")
+		return Download{}, ErrFileExpired
 	}
 	if item.MaxDownloads != nil && item.Downloads >= *item.MaxDownloads {
-		return Download{}, errors.New("download limit reached")
+		return Download{}, ErrFileDownloadLimit
 	}
 	if passwordHash.Valid && bcrypt.CompareHashAndPassword([]byte(passwordHash.String), []byte(password)) != nil {
 		return Download{}, ErrFilePassword
