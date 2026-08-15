@@ -32,13 +32,13 @@ func TestRainbowLoginAndProfileExchangeKeepSecretServerSide(t *testing.T) {
 			t.Fatalf("unexpected Rainbow act: %s", q.Get("act"))
 		}
 	})
-	ts := httptest.NewServer(mux)
+	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
-	oldBase, oldClient := rainbowOfficialBaseURL, socialOAuthHTTPClient
-	rainbowOfficialBaseURL, socialOAuthHTTPClient = ts.URL, ts.Client()
-	defer func() { rainbowOfficialBaseURL, socialOAuthHTTPClient = oldBase, oldClient }()
-	config := socialProviderConfig{ClientID: "rainbow-app", ClientSecret: "rainbow-secret", BaseURL: ts.URL, LoginType: "qq"}
-	authorize, err := rainbowAuthorizationURL(context.Background(), config, "https://gojet.test/api/public/auth/rainbow/callback?state=state-value")
+	oldClient := socialOAuthHTTPClient
+	socialOAuthHTTPClient = ts.Client()
+	defer func() { socialOAuthHTTPClient = oldClient }()
+	config := socialProviderConfig{ClientID: "rainbow-app", ClientSecret: "rainbow-secret", BaseURL: ts.URL + "/connect.php"}
+	authorize, err := rainbowAuthorizationURL(context.Background(), config, "qq", "https://gojet.test/api/public/auth/rainbow/callback?state=state-value")
 	if err != nil || authorize != "https://graph.qq.com/oauth2.0/authorize?from=rainbow" {
 		t.Fatalf("authorize=%q err=%v", authorize, err)
 	}
@@ -54,15 +54,17 @@ func TestRainbowLoginAndProfileExchangeKeepSecretServerSide(t *testing.T) {
 	}
 }
 
-func TestRainbowConfigurationRejectsArbitraryOriginsAndUnsafeRedirects(t *testing.T) {
-	oldBase := rainbowOfficialBaseURL
-	rainbowOfficialBaseURL = "https://u.cccyun.cc"
-	defer func() { rainbowOfficialBaseURL = oldBase }()
-	if _, err := normalizeRainbowBaseURL("https://127.0.0.1"); err == nil {
-		t.Fatal("arbitrary Rainbow base URL was accepted")
+func TestRainbowConfigurationAcceptsOperatorInterfaceAndRejectsUnsafeOrigins(t *testing.T) {
+	if got, err := normalizeRainbowBaseURL("https://login.example.com"); err != nil || got != "https://login.example.com/connect.php" {
+		t.Fatalf("base interface normalization got=%q err=%v", got, err)
 	}
-	if _, err := normalizeRainbowBaseURL("https://u.cccyun.cc.evil.example"); err == nil {
-		t.Fatal("lookalike Rainbow host was accepted")
+	if got, err := normalizeRainbowBaseURL("https://login.example.com/api/connect.php"); err != nil || got != "https://login.example.com/api/connect.php" {
+		t.Fatalf("explicit interface normalization got=%q err=%v", got, err)
+	}
+	for _, unsafe := range []string{"http://login.example.com/connect.php", "https://127.0.0.1/connect.php", "https://10.0.0.1/connect.php", "https://localhost/connect.php", "https://user:pass@login.example.com/connect.php"} {
+		if _, err := normalizeRainbowBaseURL(unsafe); err == nil {
+			t.Fatalf("unsafe Rainbow interface was accepted: %s", unsafe)
+		}
 	}
 	if _, err := rainbowProviderRedirect("http://graph.qq.com/oauth2.0/authorize"); err == nil {
 		t.Fatal("insecure provider redirect was accepted")
