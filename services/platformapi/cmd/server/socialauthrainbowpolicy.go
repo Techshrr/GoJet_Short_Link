@@ -24,13 +24,17 @@ func (s *server) rainbowLoginTypeExposed(ctx context.Context, value string) bool
 // page is still open; pending login/bind attempts must not outlive that policy
 // change merely because they were valid when the flow started.
 func (s *server) rainbowCallbackPolicy(next http.HandlerFunc) http.HandlerFunc {
+	return rainbowCallbackPolicyHandler(s.rainbowLoginTypeExposed, next)
+}
+
+func rainbowCallbackPolicyHandler(allowed func(context.Context, string) bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
 		if !validRainbowLoginType(loginType) {
 			jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "聚合登录回调方式无效"})
 			return
 		}
-		if !s.rainbowLoginTypeExposed(r.Context(), loginType) {
+		if allowed == nil || !allowed(r.Context(), loginType) {
 			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "该聚合登录方式当前未开放"})
 			return
 		}
