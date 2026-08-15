@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -83,7 +84,14 @@ var fileShareTemplate = template.Must(template.New("fileshare").Funcs(template.F
 func (s *server) serveFileSharePage(w http.ResponseWriter, r *http.Request) {
 	item, err := s.resources.PublicFileMetadata(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		redirectPublicUnavailable(w, r, "file", r.PathValue("slug"))
+		switch {
+		case errors.Is(err, appresources.ErrFileNotFound),
+			errors.Is(err, appresources.ErrFileExpired),
+			errors.Is(err, appresources.ErrFileDownloadLimit):
+			jsonResponse(w, http.StatusNotFound, map[string]string{"error": "文件分享不存在或已经失效"})
+		default:
+			redirectPublicUnavailable(w, r, "file", r.PathValue("slug"))
+		}
 		return
 	}
 	view := struct {
