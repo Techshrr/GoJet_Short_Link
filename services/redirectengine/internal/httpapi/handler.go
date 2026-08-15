@@ -323,8 +323,10 @@ func clientIP(r *http.Request) string {
 	}
 	peer := net.ParseIP(host)
 	if peer != nil && (peer.IsPrivate() || peer.IsLoopback()) {
-		if forwarded := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); forwarded != nil {
-			return forwarded.String()
+		for _, header := range []string{"CF-Connecting-IP", "True-Client-IP", "X-Real-IP"} {
+			if forwarded := net.ParseIP(strings.TrimSpace(r.Header.Get(header))); forwarded != nil {
+				return forwarded.String()
+			}
 		}
 	}
 	return host
