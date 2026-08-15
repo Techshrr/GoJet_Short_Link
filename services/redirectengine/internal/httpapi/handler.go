@@ -199,7 +199,7 @@ func (h *Handler) destination(r *http.Request, l domain.Link) (string, string) {
 		device = "tablet"
 	}
 	language := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Accept-Language"), ",")[0]))
-	country := strings.ToLower(r.Header.Get("CF-IPCountry"))
+	country := strings.ToLower(requestGeography(r).Country)
 	source := "direct"
 	if r.Referer() != "" {
 		source = "unknown"
@@ -312,7 +312,8 @@ func (h *Handler) visit(r *http.Request, l domain.Link, destinationID, destinati
 	if signatureErr == nil && hmac.Equal(provided, mac.Sum(nil)) {
 		visitType = "qr"
 	}
-	return domain.Visit{RequestID: r.Header.Get("X-Request-ID"), LinkID: l.ID, DestinationID: destinationID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: r.Header.Get("CF-IPCountry"), Region: r.Header.Get("X-GoJet-Region"), City: r.Header.Get("X-GoJet-City"), Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: visitType, IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
+	geo := requestGeography(r)
+	return domain.Visit{RequestID: r.Header.Get("X-Request-ID"), LinkID: l.ID, DestinationID: destinationID, Timestamp: time.Now(), VisitorHash: hex.EncodeToString(sum[:]), RefererURL: refURL, RefererHost: refHost, SourceType: source, Country: geo.Country, Region: geo.Region, City: geo.City, Device: device, Browser: browser, OS: os, Language: lang, UTMSource: q.Get("utm_source"), UTMMedium: q.Get("utm_medium"), UTMCampaign: q.Get("utm_campaign"), UTMContent: q.Get("utm_content"), UTMTerm: q.Get("utm_term"), VisitType: visitType, IsBot: bot, MaxClicks: l.MaxClicks, OneTime: l.OneTime}
 }
 
 func clientIP(r *http.Request) string {
