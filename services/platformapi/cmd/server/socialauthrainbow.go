@@ -7,14 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 )
-
-var rainbowOfficialBaseURL = "https://u.cccyun.cc"
 
 var rainbowLoginTypes = map[string]bool{
 	"qq": true, "wx": true, "alipay": true, "sina": true, "baidu": true,
@@ -26,23 +26,46 @@ type rainbowBindLaunchPayload struct {
 	URL   string `json:"url"`
 }
 
+// normalizeRainbowBaseURL accepts either a complete Rainbow-compatible
+// interface URL (for example https://login.example/connect.php) or a service
+// base URL. Admins configure the service they actually use; GoJet no longer
+// hard-codes a third-party Rainbow host.
 func normalizeRainbowBaseURL(raw string) (string, error) {
 	candidate, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || candidate.Scheme == "" || candidate.Host == "" || candidate.User != nil || candidate.RawQuery != "" || candidate.Fragment != "" || (candidate.Path != "" && candidate.Path != "/") {
-		return "", errors.New("invalid rainbow service base url")
+	if err != nil || candidate.Scheme != "https" || candidate.Host == "" || candidate.User != nil || candidate.RawQuery != "" || candidate.Fragment != "" {
+		return "", errors.New("invalid rainbow interface url")
 	}
-	official, err := url.Parse(rainbowOfficialBaseURL)
-	if err != nil || official.Scheme == "" || official.Host == "" {
-		return "", errors.New("invalid rainbow official base url")
+	host := strings.ToLower(strings.TrimSuffix(candidate.Hostname(), "."))
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return "", errors.New("rainbow interface must use a public host")
 	}
-	if !strings.EqualFold(candidate.Scheme, official.Scheme) || !strings.EqualFold(candidate.Host, official.Host) {
-		return "", errors.New("rainbow service base url must use the supported official origin")
+	if parsed := net.ParseIP(host); parsed != nil {
+		addr, ok := netip.AddrFromSlice(parsed)
+		if !ok {
+			return "", errors.New("rainbow interface host is invalid")
+		}
+		addr = addr.Unmap()
+		if addr.IsPrivate() || addr.IsLoopback() || addr.IsUnspecified() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsMulticast() {
+			return "", errors.New("rainbow interface must use a public host")
+		}
 	}
-	return strings.TrimSuffix(official.String(), "/"), nil
+	path := strings.TrimSpace(candidate.EscapedPath())
+	if path == "" || path == "/" {
+		candidate.Path = "/connect.php"
+		candidate.RawPath = ""
+	} else if strings.HasSuffix(candidate.Path, "/") {
+		candidate.Path += "connect.php"
+		candidate.RawPath = ""
+	}
+	return candidate.String(), nil
 }
 
 func validRainbowLoginType(value string) bool {
 	return rainbowLoginTypes[strings.ToLower(strings.TrimSpace(value))]
+}
+
+func rainbowAttemptProvider(loginType string) string {
+	return "rainbow:" + strings.ToLower(strings.TrimSpace(loginType))
 }
 
 func rainbowProviderRedirect(raw string) (string, error) {
@@ -55,6 +78,11 @@ func rainbowProviderRedirect(raw string) (string, error) {
 
 func (s *server) rainbowAuthStart(w http.ResponseWriter, r *http.Request) {
 	const provider = "rainbow"
+	loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if !validRainbowLoginType(loginType) {
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的彩虹聚合登录方式"})
+		return
+	}
 	config, configured, err := s.socialProviderConfiguration(r.Context(), provider)
 	if err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置暂时不可用"})
@@ -89,7 +117,7 @@ func (s *server) rainbowAuthStart(w http.ResponseWriter, r *http.Request) {
 	if ip == "" {
 		ip = "0.0.0.0"
 	}
-	if _, err = s.db.ExecContext(r.Context(), `INSERT INTO social_auth_attempts(state_hash,nonce_hash,pkce_verifier_hash,provider,return_to,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))`, hashText(state), hashText(nonce), hashText(browserSecret), provider, returnTo, ip, limitText(r.UserAgent(), 512)); err != nil {
+	if _, err = s.db.ExecContext(r.Context(), `INSERT INTO social_auth_attempts(state_hash,nonce_hash,pkce_verifier_hash,provider,return_to,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))`, hashText(state), hashText(nonce), hashText(browserSecret), rainbowAttemptProvider(loginType), returnTo, ip, limitText(r.UserAgent(), 512)); err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法保存登录请求"})
 		return
 	}
@@ -97,7 +125,7 @@ func (s *server) rainbowAuthStart(w http.ResponseWriter, r *http.Request) {
 	setSocialCookie(w, socialNonceCookie, nonce, secure)
 	setSocialCookie(w, socialPKCECookie, browserSecret, secure)
 	callback := base + "/api/public/auth/rainbow/callback?state=" + url.QueryEscape(state)
-	authorizeURL, err := rainbowAuthorizationURL(r.Context(), config, callback)
+	authorizeURL, err := rainbowAuthorizationURL(r.Context(), config, loginType, callback)
 	if err != nil {
 		clearSocialCookies(w)
 		jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "彩虹聚合登录暂时无法创建授权请求"})
@@ -118,8 +146,9 @@ func (s *server) rainbowAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
-	if state == "" {
-		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方登录回调缺少状态参数"})
+	loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if state == "" || !validRainbowLoginType(loginType) {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方登录回调缺少有效状态或登录方式"})
 		return
 	}
 	stateCookie, stateErr := r.Cookie(socialStateCookie)
@@ -129,20 +158,15 @@ func (s *server) rainbowAuthCallback(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方登录状态验证失败"})
 		return
 	}
-	returnTo, err := s.consumeSocialAttempt(r.Context(), provider, state, nonceCookie.Value, secretCookie.Value)
+	returnTo, err := s.consumeSocialAttempt(r.Context(), rainbowAttemptProvider(loginType), state, nonceCookie.Value, secretCookie.Value)
 	if err != nil {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方登录请求无效、已过期或已经使用"})
 		return
 	}
 	clearSocialCookies(w)
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
-	loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
 	if code == "" {
 		redirectSocialError(w, r, "cancelled")
-		return
-	}
-	if loginType != config.LoginType {
-		redirectSocialError(w, r, "provider_failed")
 		return
 	}
 	profile, err := fetchRainbowSocialProfile(r.Context(), config, loginType, code)
@@ -173,16 +197,20 @@ func (s *server) rainbowAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func rainbowAuthorizationURL(ctx context.Context, config socialProviderConfig, redirectURI string) (string, error) {
-	base, err := normalizeRainbowBaseURL(config.BaseURL)
+func rainbowAuthorizationURL(ctx context.Context, config socialProviderConfig, loginType, redirectURI string) (string, error) {
+	endpoint, err := normalizeRainbowBaseURL(config.BaseURL)
 	if err != nil {
 		return "", err
+	}
+	loginType = strings.ToLower(strings.TrimSpace(loginType))
+	if !validRainbowLoginType(loginType) {
+		return "", errors.New("invalid rainbow login type")
 	}
 	values := url.Values{}
 	values.Set("act", "login")
 	values.Set("appid", config.ClientID)
 	values.Set("appkey", config.ClientSecret)
-	values.Set("type", config.LoginType)
+	values.Set("type", loginType)
 	values.Set("redirect_uri", redirectURI)
 	var out struct {
 		Code int    `json:"code"`
@@ -190,23 +218,23 @@ func rainbowAuthorizationURL(ctx context.Context, config socialProviderConfig, r
 		Type string `json:"type"`
 		URL  string `json:"url"`
 	}
-	if err = rainbowGetJSON(ctx, base+"/connect.php?"+values.Encode(), &out); err != nil {
+	if err = rainbowGetJSON(ctx, endpoint+"?"+values.Encode(), &out); err != nil {
 		return "", err
 	}
-	if out.Code != 0 || strings.ToLower(strings.TrimSpace(out.Type)) != config.LoginType {
+	if out.Code != 0 || strings.ToLower(strings.TrimSpace(out.Type)) != loginType {
 		return "", fmt.Errorf("rainbow login request failed: %d %s", out.Code, out.Msg)
 	}
 	return rainbowProviderRedirect(out.URL)
 }
 
 func fetchRainbowSocialProfile(ctx context.Context, config socialProviderConfig, loginType, code string) (identity.SocialProfile, error) {
-	base, err := normalizeRainbowBaseURL(config.BaseURL)
+	endpoint, err := normalizeRainbowBaseURL(config.BaseURL)
 	if err != nil {
 		return identity.SocialProfile{}, err
 	}
 	loginType = strings.ToLower(strings.TrimSpace(loginType))
-	if loginType != config.LoginType || !validRainbowLoginType(loginType) {
-		return identity.SocialProfile{}, errors.New("rainbow callback type mismatch")
+	if !validRainbowLoginType(loginType) {
+		return identity.SocialProfile{}, errors.New("invalid rainbow callback type")
 	}
 	values := url.Values{}
 	values.Set("act", "callback")
@@ -215,15 +243,15 @@ func fetchRainbowSocialProfile(ctx context.Context, config socialProviderConfig,
 	values.Set("type", loginType)
 	values.Set("code", code)
 	var out struct {
-		Code       int    `json:"code"`
-		Msg        string `json:"msg"`
-		Type       string `json:"type"`
-		SocialUID  string `json:"social_uid"`
-		Nickname   string `json:"nickname"`
-		FaceImg    string `json:"faceimg"`
+		Code        int    `json:"code"`
+		Msg         string `json:"msg"`
+		Type        string `json:"type"`
+		SocialUID   string `json:"social_uid"`
+		Nickname    string `json:"nickname"`
+		FaceImg     string `json:"faceimg"`
 		AccessToken string `json:"access_token"`
 	}
-	if err = rainbowGetJSON(ctx, base+"/connect.php?"+values.Encode(), &out); err != nil {
+	if err = rainbowGetJSON(ctx, endpoint+"?"+values.Encode(), &out); err != nil {
 		return identity.SocialProfile{}, err
 	}
 	out.AccessToken = ""
