@@ -116,3 +116,82 @@ for(const viewport of viewports){
     expect(problems,`${viewport.name} browser console/network problems`).toEqual([]);
   });
 }
+
+test('desktop Bio editor exposes theme state, live preview, prominent add-link CTA and QR sharing',async({page,request})=>{
+  await page.setViewportSize({width:1440,height:1000});
+  const problems=observeBrowserProblems(page);
+  const token=await createUser(request,'bio-polish');
+  await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
+  await page.goto(base+'/app/bio',{waitUntil:'networkidle'});
+
+  await expect(page.getByRole('heading',{name:'个人主页'})).toBeVisible();
+  await page.getByRole('button',{name:'创建主页',exact:true}).first().click();
+
+  const editor=page.locator('#bioEditor .bioEditor');
+  await expect(editor).toBeVisible();
+  const themes=editor.locator('.bioThemes [data-theme]');
+  await expect(themes).toHaveCount(4);
+
+  const green=editor.locator('[data-theme="green"]');
+  const warm=editor.locator('[data-theme="warm"]');
+  await expect(green).toHaveAttribute('aria-pressed','true');
+  await expect(green).toHaveClass(/active/);
+  await expect(warm).toHaveAttribute('aria-pressed','false');
+
+  const phone=editor.locator('#bioPhone');
+  await expect(phone).toBeVisible();
+  await warm.click();
+  await expect(warm).toHaveAttribute('aria-pressed','true');
+  await expect(warm).toHaveClass(/active/);
+  await expect(green).toHaveAttribute('aria-pressed','false');
+  await expect.poll(()=>phone.evaluate(node=>node.style.getPropertyValue('--bio-bg').trim())).toBe('#fff6e9');
+  await expect.poll(()=>phone.evaluate(node=>node.style.getPropertyValue('--bio-primary').trim())).toBe('#b45f17');
+
+  await editor.locator('#bioTitle').fill('GoJet Bio 验收');
+  await editor.locator('#bioIntro').fill('主题与内容应当同步到实时手机预览。');
+  await expect(phone.getByRole('heading',{name:'GoJet Bio 验收'})).toBeVisible();
+  await expect(phone.getByText('主题与内容应当同步到实时手机预览。')).toBeVisible();
+
+  const addLink=editor.getByRole('button',{name:/添加链接/});
+  await expect(addLink).toBeVisible();
+  const addStyle=await addLink.evaluate(node=>{
+    const style=getComputedStyle(node);
+    return{background:style.backgroundColor,color:style.color};
+  });
+  expect(addStyle.background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(addStyle.background).not.toBe('rgb(255, 255, 255)');
+  expect(addStyle.color).not.toBe(addStyle.background);
+
+  await addLink.click();
+  const label=editor.getByLabel('链接 1 名称');
+  const target=editor.getByLabel('链接 1 地址');
+  await expect(label).toBeFocused();
+  await label.fill('GoJet 官网');
+  await target.fill('https://example.com');
+  await expect(phone.getByText('GoJet 官网',{exact:true})).toBeVisible();
+
+  const slug=`bio-${String(Date.now()).slice(-10)}`;
+  await editor.locator('input[name="slug"]').fill(slug);
+  await editor.locator('select[name="status"]').selectOption('published');
+  await editor.locator('#bioEditorForm > button.primary').click();
+
+  const created=page.locator('#bioEditor .shareCreated');
+  await expect(created).toContainText('主页已经发布',{timeout:10000});
+  await expect(created.locator(`a[href$="/p/${slug}"]`).first()).toBeVisible();
+
+  const qrButton=created.locator('[data-share-qr^="bio:"]');
+  await expect(qrButton).toBeVisible({timeout:10000});
+  await expect(qrButton).toHaveAttribute('aria-label',/生成.*分享码/);
+  await qrButton.click();
+
+  const dialog=page.locator('dialog[data-gojet-share-qr-dialog]');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('二维码分享',{exact:true})).toBeVisible();
+  const image=dialog.locator('img');
+  await expect(image).toBeVisible();
+  await expect.poll(()=>image.evaluate(node=>node.naturalWidth)).toBeGreaterThan(0);
+  await expect(dialog.getByRole('link',{name:'打开分享页'})).toHaveAttribute('href',new RegExp(`/p/${slug}$`));
+
+  await assertViewportHealthy(page,'desktop Bio editor and share QR');
+  expect(problems,'desktop Bio browser console/network problems').toEqual([]);
+});
