@@ -41,6 +41,18 @@ expect 201 "$(req POST "/api/workspaces/$wid/links" "{\"destination\":\"https://
 link_id=$(mysqlq "SELECT id FROM short_links WHERE workspace_id=$wid AND code='$code' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1;")
 [[ -n "$link_id" ]] || { echo 'created link missing' >&2; exit 1; }
 
+# QR creation is deliberately fail-closed until the destination scan reaches ALLOW.
+# Wait through the same authenticated customer contract used by the console rather
+# than racing the operations worker or bypassing the safety boundary in SQL.
+risk_state=''
+for i in $(seq 1 30); do
+  risks=$(expect 200 "$(req GET "/api/workspaces/$wid/link-risks" '' "$token")" link-risks)
+  risk_state=$(printf '%s' "$risks" | python3 -c "import json,sys; d=json.load(sys.stdin); item=next((x for x in d.get('data',[]) if int(x.get('link_id',0))==$link_id),{}); print((str(item.get('effective_decision',''))+'|'+str(bool(item.get('pending',True))).lower()))")
+  [[ "$risk_state" == 'allow|false' ]] && break
+  sleep 1
+  [[ $i -lt 30 ]] || { echo "QR link was not approved before QR creation: state=${risk_state:-missing}" >&2; exit 1; }
+done
+
 qr_body=$(expect 201 "$(req POST "/api/workspaces/$wid/qr-codes" "{\"link_id\":$link_id,\"name\":\"真实扫码验收\",\"foreground\":\"#0B1220\",\"background\":\"#FFFFFF\",\"size\":512}" "$token")" create-qr)
 qr_id=$(printf '%s' "$qr_body"|field "['id']")
 image_url=$(printf '%s' "$qr_body"|field "['image_url']")
@@ -56,10 +68,9 @@ image_path="$GENERATED_QR_ROOT/$image_name"
 decoded=$(zbarimg --quiet --raw "$image_path" | tr -d '\r\n')
 [[ "$decoded" == "$PUBLIC_BASE/$code?"*'_gojet_qr='* ]] || { echo "decoded QR target unexpected: $decoded" >&2; exit 1; }
 
-# Risk assessment is asynchronous by design. A fresh link may be fail-closed for
-# a short period; wait until operationsmonitor persists ALLOW and the redirect
-# data plane publishes the matching target-fingerprint decision before asserting
-# the real QR redirect. This preserves the security boundary instead of bypassing it.
+# Risk assessment and redirect publication are asynchronous by design. The API
+# gate above proves QR creation waited for ALLOW; this second wait proves that the
+# redirect data plane has published the matching decision before real navigation.
 risk_decision=''
 redirect_code=''
 for i in $(seq 1 20); do
