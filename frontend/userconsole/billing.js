@@ -11,6 +11,13 @@ let returnPoll=null;
 const statusName={active:'使用中',past_due:'待处理',cancelled:'已取消',pending:'待支付',paid:'已支付',void:'已作废',overdue:'已逾期'};
 const typeName={purchase:'购买套餐',upgrade:'变更套餐',renewal:'续费'};
 const providerName={alipay:'支付宝',wechat:'微信支付',epay:'易支付',paypal:'PayPal',stripe:'Stripe'};
+const billingCycles=[
+  {id:'monthly',label:'月付',months:1},
+  {id:'quarterly',label:'季付',months:3},
+  {id:'semiannual',label:'半年付',months:6},
+  {id:'annual',label:'年付',months:12}
+];
+const cycleName=Object.fromEntries(billingCycles.map(item=>[item.id,item.label]));
 
 function money(cents,currency='CNY'){
   try{return new Intl.NumberFormat('zh-CN',{style:'currency',currency:currency||'CNY'}).format(Number(cents||0)/100)}
@@ -35,7 +42,7 @@ async function render(){
   clearInterval(paymentPoll);paymentPoll=null;
   clearInterval(returnPoll);returnPoll=null;
   const content=BQ('.content');
-  content.innerHTML=`<div class="productPageHead"><div><h1>套餐与账单</h1><p>查看当前套餐和账单记录；在线支付确认后套餐会自动生效。</p></div><button id="billingRefresh">刷新</button></div><div id="billingWorkspace" class="productLoading">正在加载账单…</div>`;
+  content.innerHTML=`<div class="productPageHead"><div><h1>套餐与账单</h1><p>查看当前套餐和账单记录；月付、季付、半年付和年付均按套餐月价计算。</p></div><button id="billingRefresh">刷新</button></div><div id="billingWorkspace" class="productLoading">正在加载账单…</div>`;
   BQ('#billingRefresh').onclick=render;
   await load();
   beginReturnReconcile();
@@ -56,8 +63,8 @@ async function load(){
         ${subscription.plan_code&&subscription.plan_code!=='starter'?`<button id="billingCancellation">${subscription.cancel_at_period_end?'继续订阅':'到期后取消'}</button>`:''}
       </section>
       ${subscription.cancel_at_period_end?'<div class="notice">当前套餐将在本周期结束后停止续订。你可以在到期前恢复续订。</div>':''}
-      <section class="billingSection"><div class="billingSectionHead"><div><h2>选择套餐</h2><p>按需要升级或续费；付款确认后无需再次操作。</p></div></div><div class="planGrid billingPlans">${plans.map(plan=>planCard(plan,subscription)).join('')}</div></section>
-      <section class="billingSection"><div class="billingSectionHead"><div><h2>账单记录</h2><p>支付状态、支付时间和套餐生效结果均以系统确认记录为准。</p></div></div>${invoices.length?`<div class="billingInvoiceList">${invoices.map(invoiceCard).join('')}</div>`:'<div class="billingEmpty">还没有账单。</div>'}</section>`;
+      <section class="billingSection"><div class="billingSectionHead"><div><h2>选择套餐</h2><p>套餐以月价为基础，创建账单时选择月付、季付、半年付或年付。</p></div></div><div class="planGrid billingPlans">${plans.map(plan=>planCard(plan,subscription)).join('')}</div></section>
+      <section class="billingSection"><div class="billingSectionHead"><div><h2>账单记录</h2><p>支付状态、账单周期、支付时间和套餐生效结果均以系统确认记录为准。</p></div></div>${invoices.length?`<div class="billingInvoiceList">${invoices.map(invoiceCard).join('')}</div>`:'<div class="billingEmpty">还没有账单。</div>'}</section>`;
     wire(subscription);
   }catch(error){
     host.innerHTML=`<div class="productError">${BE(error.message)}</div>`;
@@ -98,6 +105,9 @@ function planCard(plan,subscription){
     <small>${current?'当前套餐':'可选套餐'}</small>
     <h3>${BE(plan.name)}</h3>
     <strong>${money(plan.monthly_price_cents,plan.currency)}<i>/月</i></strong>
+    <div class="planCyclePreview" aria-label="周期价格">
+      ${billingCycles.map(cycle=>`<span><b>${BE(cycle.label)}</b>${money(Number(plan.monthly_price_cents||0)*cycle.months,plan.currency)}</span>`).join('')}
+    </div>
     <p>${BE(plan.description||'')}</p>
     <ul>${(plan.features||[]).map(feature=>`<li>${BE(feature)}</li>`).join('')}</ul>
     ${current&&starter?'<button disabled>当前套餐</button>':`<button data-plan="${BE(plan.code)}" data-type="${current?'renewal':starter?'purchase':'upgrade'}">${current?'续费':'选择套餐'}</button>`}
@@ -106,8 +116,9 @@ function planCard(plan,subscription){
 
 function invoiceCard(invoice){
   const payable=['pending','overdue'].includes(invoice.status)&&Number(invoice.amount_cents)>0;
+  const cycle=cycleName[invoice.billing_cycle]||`${Number(invoice.period_months||1)} 个月`;
   return `<article class="invoiceCard">
-    <div class="invoiceMain"><div class="invoiceTitle"><b>${BE(invoice.invoice_number)}</b><span class="productStatus">${BE(statusName[invoice.status]||invoice.status)}</span></div><div class="invoiceMeta"><span>${BE(invoice.plan_name)}</span><span>${BE(typeName[invoice.invoice_type]||invoice.invoice_type)}</span><span>开具 ${fmtDate(invoice.created_at)}</span>${invoice.status==='paid'&&invoice.paid_at?`<span>支付 ${fmtDate(invoice.paid_at)}</span>`:invoice.due_at?`<span>支付期限 ${fmtDate(invoice.due_at)}</span>`:''}</div></div>
+    <div class="invoiceMain"><div class="invoiceTitle"><b>${BE(invoice.invoice_number)}</b><span class="productStatus">${BE(statusName[invoice.status]||invoice.status)}</span></div><div class="invoiceMeta"><span>${BE(invoice.plan_name)}</span><span>${BE(typeName[invoice.invoice_type]||invoice.invoice_type)}</span><span>${BE(cycle)}</span><span>开具 ${fmtDate(invoice.created_at)}</span>${invoice.status==='paid'&&invoice.paid_at?`<span>支付 ${fmtDate(invoice.paid_at)}</span>`:invoice.due_at?`<span>支付期限 ${fmtDate(invoice.due_at)}</span>`:''}</div></div>
     <strong class="invoiceAmount">${money(invoice.amount_cents,invoice.currency)}</strong>
     <div class="invoiceActions">${payable?`<button class="primary" data-pay-invoice="${Number(invoice.id)}">立即支付</button>`:''}<button data-download-invoice="${Number(invoice.id)}" data-invoice-number="${BE(invoice.invoice_number)}">下载账单</button></div>
   </article>`;
@@ -120,17 +131,29 @@ function wire(subscription){
   BQA('[data-download-invoice]').forEach(button=>button.onclick=()=>downloadPDF(Number(button.dataset.downloadInvoice),button.dataset.invoiceNumber));
 }
 
+function cycleChooser(plan){
+  return `<fieldset class="billingCycleChooser"><legend>账单周期</legend>${billingCycles.map(cycle=>`<label><input type="radio" name="billing_cycle" value="${BE(cycle.id)}" ${cycle.id==='monthly'?'checked':''}><span><b>${BE(cycle.label)}</b><small>${cycle.months} ${cycle.months===1?'个月':'个月'} · ${money(Number(plan.monthly_price_cents||0)*cycle.months,plan.currency)}</small></span></label>`).join('')}</fieldset><div class="billingCycleTotal" data-cycle-total>本次应付：<strong>${money(plan.monthly_price_cents,plan.currency)}</strong></div>`;
+}
+
 async function requestInvoice(planCode,type){
+  const plan=(billingData?.plans||[]).find(item=>item.code===planCode);
+  if(!plan){return}
   const title=type==='renewal'?'确认续费':'确认选择套餐';
-  const dialog=modal(title,`<form id="invoiceRequestForm"><p>下一步将创建账单并选择支付方式。付款确认后套餐自动生效，不需要再次返回账单页操作。</p><div data-error></div><div class="productModalFoot"><button type="button" data-cancel>取消</button><button class="primary">继续支付</button></div></form>`);
+  const dialog=modal(title,`<form id="invoiceRequestForm"><p>选择实际账单周期。周期金额严格按当前月价 × 月数计算，付款成功后按自然月延长订阅。</p>${cycleChooser(plan)}<div data-error></div><div class="productModalFoot"><button type="button" data-cancel>取消</button><button class="primary">继续支付</button></div></form>`);
   dialog.layer.querySelector('[data-cancel]').onclick=dialog.close;
+  dialog.layer.querySelectorAll('input[name="billing_cycle"]').forEach(input=>input.addEventListener('change',()=>{
+    const cycle=billingCycles.find(item=>item.id===input.value)||billingCycles[0];
+    const host=dialog.layer.querySelector('[data-cycle-total] strong');
+    if(host)host.textContent=money(Number(plan.monthly_price_cents||0)*cycle.months,plan.currency);
+  }));
   dialog.layer.querySelector('form').onsubmit=async event=>{
     event.preventDefault();
     const submit=event.currentTarget.querySelector('button.primary');
+    const cycle=event.currentTarget.querySelector('input[name="billing_cycle"]:checked')?.value||'monthly';
     submit.disabled=true;
     submit.textContent='正在创建账单…';
     try{
-      const invoice=await api(`/api/workspaces/${state.workspace}/billing/invoices`,{method:'POST',body:JSON.stringify({plan_code:planCode,type})});
+      const invoice=await api(`/api/workspaces/${state.workspace}/billing/invoices`,{method:'POST',body:JSON.stringify({plan_code:planCode,type,billing_cycle:cycle})});
       dialog.close();
       if(Number(invoice.amount_cents||0)<=0){await load();return}
       await choosePayment(Number(invoice.id));
@@ -201,13 +224,8 @@ async function downloadPDF(invoiceID,number){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),90000);
   try{
-    const response=await fetch(`/api/workspaces/${state.workspace}/billing/invoices/${invoiceID}/pdf`,{
-      headers:{Authorization:`Bearer ${state.token}`,'Cache-Control':'no-cache'},cache:'no-store',signal:controller.signal
-    });
-    if(!response.ok){
-      let message='';try{message=(await response.json()).error||''}catch{}
-      throw new Error(message||`账单下载失败（HTTP ${response.status}）`);
-    }
+    const response=await fetch(`/api/workspaces/${state.workspace}/billing/invoices/${invoiceID}/pdf`,{headers:{Authorization:`Bearer ${state.token}`,'Cache-Control':'no-cache'},cache:'no-store',signal:controller.signal});
+    if(!response.ok){let message='';try{message=(await response.json()).error||''}catch{}throw new Error(message||`账单下载失败（HTTP ${response.status}）`)}
     const contentType=String(response.headers.get('Content-Type')||'').toLowerCase();
     if(!contentType.includes('application/pdf'))throw new Error('服务器返回的不是 PDF 文件，请刷新后重试。');
     const blob=await response.blob();
@@ -217,9 +235,7 @@ async function downloadPDF(invoiceID,number){
     const safeNumber=String(number||'Document').replace(/[^a-z0-9]/gi,'');
     anchor.href=objectURL;anchor.download=`GoJetInvoice${safeNumber}.pdf`;document.body.appendChild(anchor);anchor.click();anchor.remove();
     setTimeout(()=>URL.revokeObjectURL(objectURL),5000);dialog.close();
-  }catch(error){
-    showDownloadError(dialog,error?.name==='AbortError'?'账单生成超过 90 秒，请稍后重试。':error?.message||'账单下载连接中断，请稍后重试。');
-  }finally{clearTimeout(timeout)}
+  }catch(error){showDownloadError(dialog,error?.name==='AbortError'?'账单生成超过 90 秒，请稍后重试。':error?.message||'账单下载连接中断，请稍后重试。')}finally{clearTimeout(timeout)}
 }
 
 function showDownloadError(dialog,message){
@@ -231,13 +247,7 @@ function showDownloadError(dialog,message){
 async function toggleCancellation(cancel){
   const dialog=modal(cancel?'到期后取消':'继续订阅',`<form><p>${cancel?'当前周期结束前仍可继续使用，周期结束后不再续订。':'恢复后会保留当前订阅，并可继续正常续费。'}</p><div data-error></div><div class="productModalFoot"><button type="button" data-cancel>取消</button><button class="primary">确认</button></div></form>`);
   dialog.layer.querySelector('[data-cancel]').onclick=dialog.close;
-  dialog.layer.querySelector('form').onsubmit=async event=>{
-    event.preventDefault();
-    try{
-      await api(`/api/workspaces/${state.workspace}/billing/cancellation`,{method:'PATCH',body:JSON.stringify({cancel})});
-      dialog.close();await load();
-    }catch(error){dialog.layer.querySelector('[data-error]').innerHTML=`<div class="productError">${BE(error.message)}</div>`}
-  };
+  dialog.layer.querySelector('form').onsubmit=async event=>{event.preventDefault();try{await api(`/api/workspaces/${state.workspace}/billing/cancellation`,{method:'PATCH',body:JSON.stringify({cancel})});dialog.close();await load()}catch(error){dialog.layer.querySelector('[data-error]').innerHTML=`<div class="productError">${BE(error.message)}</div>`}};
 }
 
 window.GoJetPages=window.GoJetPages||{};
