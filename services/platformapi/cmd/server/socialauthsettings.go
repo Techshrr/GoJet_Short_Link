@@ -25,7 +25,7 @@ var socialProviderDefinitions = []socialProviderDefinition{
 	{ID: "github", Label: "GitHub"},
 	{ID: "qq", Label: "QQ"},
 	{ID: "wechat", Label: "微信"},
-	{ID: "rainbow", Label: "彩虹聚合登录"},
+	{ID: "rainbow", Label: "聚合登录"},
 }
 
 var rainbowPublicLoginTypes = []map[string]string{
@@ -51,9 +51,12 @@ func init() {
 		sensitiveSettings[prefix+"client_secret"] = true
 	}
 	// Rainbow compatible services use an operator supplied interface URL plus
-	// APPID/APPKEY. Login type is selected per login request, not stored as an
-	// application credential.
+	// APPID/APPKEY. Login type remains a per-request value; these additional
+	// settings only control the customer-facing label and which allowed types
+	// the administrator chooses to expose.
 	keys["auth.social.rainbow.base_url"] = true
+	keys["auth.social.rainbow.display_name"] = true
+	keys["auth.social.rainbow.login_types"] = true
 	settingSections["socialauth"] = keys
 }
 
@@ -76,6 +79,67 @@ func socialProviderDefinitionByID(provider string) (socialProviderDefinition, bo
 	return socialProviderDefinition{}, false
 }
 
+func (s *server) rainbowDisplayName(ctx context.Context) string {
+	value, err := s.socialStringSetting(ctx, "auth.social.rainbow.display_name")
+	value = strings.TrimSpace(value)
+	if err != nil || value == "" {
+		return "聚合登录"
+	}
+	if len([]rune(value)) > 32 {
+		value = string([]rune(value)[:32])
+	}
+	return value
+}
+
+func rainbowTypeAllowed(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	for _, item := range rainbowPublicLoginTypes {
+		if item["id"] == value {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *server) rainbowSelectedLoginTypes(ctx context.Context) []map[string]string {
+	raw, exists, err := s.settings.Get(ctx, "auth.social.rainbow.login_types")
+	selected := map[string]bool{}
+	if err == nil && exists {
+		switch values := decodeSetting(raw).(type) {
+		case []any:
+			for _, value := range values {
+				if text, ok := value.(string); ok && rainbowTypeAllowed(text) {
+					selected[strings.ToLower(strings.TrimSpace(text))] = true
+				}
+			}
+		case []string:
+			for _, value := range values {
+				if rainbowTypeAllowed(value) {
+					selected[strings.ToLower(strings.TrimSpace(value))] = true
+				}
+			}
+		case string:
+			for _, value := range strings.FieldsFunc(values, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
+				if rainbowTypeAllowed(value) {
+					selected[strings.ToLower(strings.TrimSpace(value))] = true
+				}
+			}
+		}
+	}
+	// Existing installations did not have an exposure setting. Default to QQ
+	// rather than suddenly exposing every aggregate method to customers.
+	if len(selected) == 0 && (!exists || err != nil) {
+		selected["qq"] = true
+	}
+	items := make([]map[string]string, 0, len(selected))
+	for _, item := range rainbowPublicLoginTypes {
+		if selected[item["id"]] {
+			items = append(items, map[string]string{"id": item["id"], "label": item["label"]})
+		}
+	}
+	return items
+}
+
 func (s *server) publicSocialProviders(w http.ResponseWriter, r *http.Request) {
 	providers := make([]map[string]any, 0, len(socialProviderDefinitions))
 	for _, definition := range socialProviderDefinitions {
@@ -90,9 +154,15 @@ func (s *server) publicSocialProviders(w http.ResponseWriter, r *http.Request) {
 		if !configured {
 			continue
 		}
-		item := map[string]any{"id": definition.ID, "label": definition.Label}
+		label := definition.Label
+		item := map[string]any{"id": definition.ID, "label": label}
 		if definition.ID == "rainbow" {
-			item["login_types"] = rainbowPublicLoginTypes
+			loginTypes := s.rainbowSelectedLoginTypes(r.Context())
+			if len(loginTypes) == 0 {
+				continue
+			}
+			item["label"] = s.rainbowDisplayName(r.Context())
+			item["login_types"] = loginTypes
 		}
 		providers = append(providers, item)
 	}
@@ -118,15 +188,21 @@ func (s *server) adminSocialProviders(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		implemented := socialProviderImplemented(definition.ID)
+		label := definition.Label
 		item := map[string]any{
 			"id":          definition.ID,
-			"label":       definition.Label,
+			"label":       label,
 			"implemented": implemented,
 			"enabled":     enabled,
 			"configured":  complete,
 			"visible":     implemented && enabled && complete,
 		}
-		if definition.ID != "rainbow" {
+		if definition.ID == "rainbow" {
+			item["label"] = s.rainbowDisplayName(r.Context())
+			item["display_name"] = s.rainbowDisplayName(r.Context())
+			item["login_types"] = s.rainbowSelectedLoginTypes(r.Context())
+			item["available_login_types"] = rainbowPublicLoginTypes
+		} else {
 			item["callback_url"] = base + "/api/public/auth/" + definition.ID + "/callback"
 		}
 		providers = append(providers, item)
@@ -150,6 +226,9 @@ func (s *server) socialProviderCredentialsComplete(ctx context.Context, provider
 			return false, getErr
 		}
 		if _, validateErr := normalizeRainbowBaseURL(baseURL); validateErr != nil {
+			return false, nil
+		}
+		if len(s.rainbowSelectedLoginTypes(ctx)) == 0 {
 			return false, nil
 		}
 	}
@@ -182,7 +261,11 @@ func (s *server) socialProviderConfiguration(ctx context.Context, provider strin
 	if err != nil {
 		return socialProviderConfig{}, false, err
 	}
-	config := socialProviderConfig{ID: provider, Label: definition.Label, ClientID: strings.TrimSpace(clientID), ClientSecret: strings.TrimSpace(secret)}
+	label := definition.Label
+	if provider == "rainbow" {
+		label = s.rainbowDisplayName(ctx)
+	}
+	config := socialProviderConfig{ID: provider, Label: label, ClientID: strings.TrimSpace(clientID), ClientSecret: strings.TrimSpace(secret)}
 	if provider == "rainbow" {
 		baseURL, readErr := s.socialStringSetting(ctx, "auth.social.rainbow.base_url")
 		if readErr != nil {
