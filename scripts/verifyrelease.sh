@@ -3,7 +3,7 @@ set -eu
 [ "$#" -eq 1 ] || { echo "usage: $0 <GoJetProduction.zip>" >&2; exit 2; }
 ARCHIVE=$1
 [ -f "$ARCHIVE" ] || { echo "archive not found: $ARCHIVE" >&2; exit 1; }
-for tool in unzip sha256sum python3; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
+for tool in unzip sha256sum python3 bash; do command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }; done
 unzip -tq "$ARCHIVE" >/dev/null
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -27,6 +27,6 @@ done
 grep -Fq 'scripts/installgeoip.sh' "$ROOT/install.sh" || { echo 'release bootstrap does not require GeoIP installer' >&2; exit 1; }
 grep -Fq 'GEOIP_MMDB=__GOJET_ROOT__/deploy/data/geoip/city.mmdb' "$ROOT/deploy/native/gojet@.service" || { echo 'release service is missing City MMDB runtime contract' >&2; exit 1; }
 grep -Fq 'test -s __GOJET_ROOT__/deploy/data/geoip/city.mmdb' "$ROOT/deploy/native/gojet@.service" || { echo 'release service does not fail closed without City MMDB' >&2; exit 1; }
-sh -n "$ROOT/scripts/installgeoip.sh"
+bash -n "$ROOT/scripts/installgeoip.sh"
 (cd "$ROOT" && sha256sum -c MANIFEST.sha256 >/dev/null)
 printf 'fresh-install release verification passed: %s (%s migrations)\n' "$ARCHIVE" "$catalog_count"
