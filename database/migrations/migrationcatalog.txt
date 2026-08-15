@@ -42,3 +42,4 @@ mailinvoicepresentation.sql
 linkdestinationrisk.sql
 socialauth.sql
 socialsubjectwidth.sql
+billingcycles.sql
