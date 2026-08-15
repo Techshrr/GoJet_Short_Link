@@ -25,6 +25,7 @@ command -v systemctl >/dev/null 2>&1 || die "需要 systemd/systemctl"
 command -v openssl >/dev/null 2>&1 || die "需要 openssl"
 command -v base64 >/dev/null 2>&1 || die "需要 base64"
 command -v curl >/dev/null 2>&1 || die "需要 curl"
+command -v gzip >/dev/null 2>&1 || die "需要 gzip"
 
 "$PHP" -r 'exit(version_compare(PHP_VERSION,"8.3.0",">=")?0:1);' || die "PHP 8.3 或更高版本才受支持"
 REQUIRED_PHP_EXTENSIONS=(pdo_mysql openssl session filter json hash)
@@ -41,6 +42,10 @@ fi
 for binary in redirectengine analyticsworker analyticsreconciler platformapi mailworker fileworker operationsmonitor logreceiver; do
   [[ -x "$ROOT/bin/$binary" ]] || die "发布包缺少可执行文件 bin/$binary"
 done
+[[ -f "$ROOT/scripts/installgeoip.sh" ]] || die "发布包缺少 scripts/installgeoip.sh"
+
+printf '正在准备访问分析 GeoIP 城市数据库…\n'
+bash "$ROOT/scripts/installgeoip.sh" || die "GeoIP 城市数据库准备失败"
 
 WEB_USER=''
 for candidate in www www-data nginx; do
