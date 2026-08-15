@@ -91,18 +91,18 @@ func TestClassifyReviewCategories(t *testing.T) {
 	}
 }
 
-func TestClassifyExplicitAdultHostBlocksBeforeBodyFetch(t *testing.T) {
-	score, categories, signals := classify(Snapshot{FinalURL: "https://missav.ws/dm84/jul-343", Headers: map[string]string{}})
+func TestClassifyAdultURLSemanticsBlocksBeforeBodyFetch(t *testing.T) {
+	score, categories, signals := classify(Snapshot{FinalURL: "https://uncensored-adult-videos.example/library", Headers: map[string]string{}})
 	if score < 90 || decisionForScore(score) != Block {
-		t.Fatalf("explicit adult host must block without fetched body: score=%d signals=%v", score, signals)
+		t.Fatalf("generic adult URL semantics must block without fetched body: score=%d signals=%v", score, signals)
 	}
 	if !hasCategory(categories, CategoryAdult) {
-		t.Fatalf("adult host must include adult category: %v", categories)
+		t.Fatalf("generic adult URL semantics must include adult category: %v", categories)
 	}
 }
 
 func TestPublicFetchErrorNeverLeaksSocketAddresses(t *testing.T) {
-	raw := errors.New(`Get "https://missav.ws/dm84/jul-343": read tcp 110.42.32.62:31186->104.20.31.186:443: read: connection reset by peer`)
+	raw := errors.New(`Get "https://blocked-content.example/library": read tcp 110.42.32.62:31186->104.20.31.186:443: read: connection reset by peer`)
 	message := publicFetchError(raw)
 	for _, secret := range []string{"110.42.32.62", "104.20.31.186", "31186", "443"} {
 		if strings.Contains(message, secret) {
