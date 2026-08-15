@@ -67,11 +67,12 @@ func visibleRuneCount(text string) int {
 }
 
 func clientRenderedShell(snapshot Snapshot, text string) bool {
-	// A small amount of readable HTML wrapped around a JavaScript application is
-	// not evidence that the final application is safe. Random-domain abuse sites
-	// commonly return this kind of shell to non-browser scanners. Keep the rule
-	// generic: it is based on page structure, never a hostname or vendor list.
-	if visibleRuneCount(text) >= 90 {
+	// A short amount of generic readable HTML wrapped around a JavaScript
+	// application is not evidence that the final application is safe. Abuse
+	// sites on random domains commonly return a welcome/bootstrap shell to
+	// non-browser scanners. Require both an application root marker and script
+	// bootstrap, so ordinary content-rich static pages are not affected.
+	if visibleRuneCount(text) >= 180 {
 		return false
 	}
 	source := strings.ToLower(snapshot.Body)
