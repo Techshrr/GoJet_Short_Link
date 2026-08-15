@@ -15,18 +15,19 @@ if(reason==='blocked'){
   title.textContent=`此${resource}已被安全阻止`;
   description.textContent=kind==='link'?'GoJet 的目标安全审核发现该链接存在违反平台安全政策的风险，因此已停止继续跳转。':`GoJet 的安全检查发现此${resource}当前不符合平台安全策略，因此已停止公开访问。`;
   state.textContent='安全阻止';
-  note.textContent=`如果你是${resource}创建者，并认为审核结论有误，可以提交工单并附上参考编号申请人工复核。`;
+  note.textContent=`如果你是${resource}创建者，并认为审核结论有误，可以申请人工复核。`;
 }else if(reason==='unavailable'){
   document.title=`${resource}暂不可用 · GoJet`;
   title.textContent=`此${resource}暂不可用`;
   description.textContent=`此${resource}可能已过期、已关闭、达到使用限制，或当前无法通过安全检查。为保护访问者，GoJet 不会继续提供该内容。`;
   state.textContent='暂不可用';
-  note.textContent=`如果你是${resource}创建者，并认为当前状态有误，可以提交工单并附上参考编号。`;
+  note.textContent=`如果你是${resource}创建者，并认为当前状态有误，可以申请人工复核。`;
 }else{
   document.title=`${resource}正在安全审核 · GoJet`;
   title.textContent=`此${resource}正在安全审核`;
   description.textContent=kind==='link'?'GoJet 暂时无法确认目标页面的安全状态。审核完成并确认可以访问前，我们不会继续跳转。':`GoJet 正在核验此${resource}的安全状态。确认可安全访问前，公开访问将暂时停止。`;
   state.textContent='安全审核中';
+  note.textContent=`如果你是${resource}创建者，需要补充说明或申请人工复核，可以通过支持工单提交。`;
 }
 if(code){document.querySelector('#safetyReference')?.classList.remove('hidden');const target=document.querySelector('#safetyCode');if(target)target.textContent=code}
 const appeal=document.querySelector('#safetyAppeal');
