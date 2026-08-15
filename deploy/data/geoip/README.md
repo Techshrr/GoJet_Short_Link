@@ -1,27 +1,29 @@
 # GoJet GeoIP data
 
-GoJet does not bundle a third-party IP geolocation database. The redirect engine can enrich analytics from CDN location headers, but reliable country/region/city data for direct traffic requires a local database.
+GoJet Native/aaPanel installation now installs a real City MMDB instead of leaving the runtime path empty.
 
-## Recommended MMDB
+## Native / aaPanel
 
-Place a MaxMind DB compatible **City** database at:
+`install.sh` invokes `scripts/installgeoip.sh` before the browser installer is exposed. The helper downloads the newest available monthly **DB-IP City Lite** MMDB (falling back to the previous two monthly releases when necessary), validates the gzip and MMDB metadata, and writes:
 
-- Native/aaPanel: `deploy/data/geoip/GeoLite2-City.mmdb`
-- Docker Compose host: `deploy/data/geoip/GeoLite2-City.mmdb` (mounted read-only as `/data/geoip/GeoLite2-City.mmdb`)
+- database: `deploy/data/geoip/city.mmdb`
+- source/license record: `deploy/data/geoip/source.txt`
 
-GeoLite2 City, GeoIP2 City, or another compatible `.mmdb` database may be used. GoJet reads only country ISO code, first subdivision name/code, and city name. When localized names are available it prefers `zh-CN`, then `zh`, then `en`.
+The systemd service refuses to start without a non-empty `city.mmdb`. This is intentional: a successful fresh installation must not silently fall back to country/region/city = unknown simply because the database was never installed.
 
-After adding or replacing the MMDB, restart the redirect engine so the memory-mapped database is reopened:
+DB-IP City Lite is distributed under the Creative Commons Attribution 4.0 International license. Its web-use attribution requirement is satisfied on GoJet analytics surfaces with a link to DB-IP.
 
-```bash
-systemctl restart gojet@redirectengine.service
-```
-
-or for Compose:
+To refresh the database later:
 
 ```bash
-docker compose -f deploy/compose.production.yaml restart redirectengine
+sudo rm -f deploy/data/geoip/city.mmdb
+sudo bash scripts/installgeoip.sh
+sudo systemctl restart gojet@redirectengine.service
 ```
+
+## Other compatible MMDB data
+
+Operators may replace `deploy/data/geoip/city.mmdb` with another MaxMind DB compatible **City** database. GoJet reads country ISO code, first subdivision name/code, and city name. When localized names are available it prefers `zh-CN`, then `zh`, then `en`.
 
 ## CSV fallback
 
@@ -43,6 +45,6 @@ Country values must be two-letter ISO-style codes. CSV is intended as a lightwei
 
 ## Resolution order
 
-For each field GoJet keeps an already supplied CDN/provider value and fills only missing values from the local MMDB, then from `country.csv`. This matters for Cloudflare, where `CF-IPCountry` commonly supplies the country but not region/city.
+GoJet first accepts trusted location headers from the CDN/reverse proxy, then fills missing country/region/city values from the local MMDB, then from `country.csv`. The actual IP used for MMDB lookup and visitor hashing follows the same trusted client-IP chain behind the local reverse proxy: `CF-Connecting-IP`, `True-Client-IP`, then `X-Real-IP`.
 
-If no provider location headers and no usable local database are available, analytics intentionally stores the missing geography as unknown rather than inventing a location.
+If a provider header does not include region/city, the local City MMDB supplies those fields. GoJet never invents a location when neither trusted provider data nor local database data can identify it.
