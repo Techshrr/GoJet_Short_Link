@@ -42,6 +42,7 @@ func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/destination-risks/{id}/override", s.admin("security.manage", s.adminOverrideDestinationRisk))
 	mux.HandleFunc("DELETE /api/admin/destination-risks/{id}/override", s.admin("security.manage", s.adminClearDestinationRiskOverride))
 	mux.HandleFunc("POST /api/admin/destination-risks/{id}/rescan", s.admin("security.manage", s.adminRescanDestinationRisk))
+	mux.HandleFunc("GET /api/workspaces/{id}/link-risks", s.user(s.workspaceLinkRisks))
 
 	s.registerSupportAndBotRoutes(mux)
 }
