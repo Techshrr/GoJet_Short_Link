@@ -70,9 +70,10 @@ prepare_storage() {
 
 wait_healthy() {
   attempts=0
-  until curl --fail --silent "http://127.0.0.1:${HTTP_PORT:-80}/health" >/dev/null; do
+  until curl --fail --silent "http://127.0.0.1:${HTTP_PORT:-80}/health" >/dev/null \
+    && compose exec -T operationsmonitor /operationsmonitor healthcheck >/dev/null 2>&1; do
     attempts=$((attempts + 1))
-    [ "$attempts" -lt 90 ] || die "health check did not pass; run docker compose logs"
+    [ "$attempts" -lt 90 ] || die "health check did not pass; verify web health and operationsmonitor MySQL/Redis connectivity with docker compose logs"
     sleep 2
   done
 }
