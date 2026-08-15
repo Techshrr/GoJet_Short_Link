@@ -119,7 +119,11 @@ test('admin system settings follows the final nested information architecture',a
   await expect(page.getByLabel('默认跳转方式')).toBeVisible();
 
   await page.getByRole('button',{name:/^支付方式/}).click();
-  await expect(page.getByRole('heading',{name:'Stripe',exact:true})).toBeVisible();
+  const chooser=page.locator('.paymentMultiSelect');
+  await expect(page.getByRole('heading',{name:'选择启用的支付方式',exact:true})).toBeVisible();
+  await expect(chooser).toBeVisible();
+  await chooser.locator('summary').click();
+  await expect(chooser.locator('.paymentMultiSelectMenu').getByText('Stripe',{exact:true})).toBeVisible();
 
   await page.getByRole('button',{name:/^邮件服务/}).click();
   await expect(page.getByRole('heading',{name:'邮件服务',exact:true})).toBeVisible();
