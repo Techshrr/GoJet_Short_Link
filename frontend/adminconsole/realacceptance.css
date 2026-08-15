@@ -10,10 +10,12 @@
 .socialAuthCallbackInfo .btn{flex:0 0 auto}
 .socialAuthProviderBody label{min-width:0}
 
-/* Risk review is an authoritative safety state, not a second unrelated badge. */
+/* Link operational state and target-safety state are separate product facts. */
 .state.risk-blocked{background:#fff0ee!important;color:#9f2f27!important;border:1px solid #efc6c0!important;font-weight:760!important}
 .state.risk-review{background:#fff7e5!important;color:#81591b!important;border:1px solid #ead6a5!important;font-weight:760!important}
 .state.risk-allow{background:#eef8f3!important;color:#116b45!important;border:1px solid #cae5d7!important;font-weight:760!important}
+.adminLinkRiskCell{min-width:112px;white-space:nowrap}
+th[data-link-risk-header]{min-width:112px;white-space:nowrap}
 #content tbody tr.adminLinkRiskBlocked{background:#fffaf9}
 #content tbody tr.adminLinkRiskBlocked td:first-child{box-shadow:inset 3px 0 0 #cb5146}
 #content tbody tr.adminLinkRiskReview{background:#fffdf7}
