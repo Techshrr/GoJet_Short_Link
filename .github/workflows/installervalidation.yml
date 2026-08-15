@@ -91,6 +91,10 @@ jobs:
           grep -Fq 'DESTINATION_RISK_PROVIDER_TOKEN: ${DESTINATION_RISK_PROVIDER_TOKEN:-}' deploy/compose.production.yaml
           grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/.env.production.example
           grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/native/gojet.env.example
+          operations_block="$(sed -n '/^  operationsmonitor:/,/^  clamav:/p' deploy/compose.production.yaml)"
+          printf '%s\n' "$operations_block" | grep -Fq 'REDIS_ADDRESS: redis:6379'
+          printf '%s\n' "$operations_block" | grep -Fq 'REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}'
+          printf '%s\n' "$operations_block" | grep -A1 -F '      redis:' | grep -Fq 'condition: service_healthy'
 
       - name: Validate canonical frontend and flat public build
         run: |
