@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/destinationrisk"
@@ -39,13 +40,15 @@ func main() {
 
 	riskStore := destinationrisk.NewStore(db)
 	riskScanner := newDestinationRiskScanner()
+	var riskCacheDirty atomic.Bool
 	bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	if err = destinationrisk.BackfillRedis(bootstrapCtx, db, rdb); err != nil {
+		riskCacheDirty.Store(true)
 		log.Printf("destination risk cache backfill: %v", err)
 	}
 	bootstrapCancel()
-	go runRiskCacheRecoveryLoop(context.Background(), db, rdb)
-	go runRiskLoop(context.Background(), riskStore, riskScanner, rdb)
+	go runRiskCacheRecoveryLoop(context.Background(), db, rdb, &riskCacheDirty)
+	go runRiskLoop(context.Background(), riskStore, riskScanner, rdb, &riskCacheDirty)
 
 	interval, _ := strconv.Atoi(value("OPERATIONS_MONITOR_INTERVAL_SECONDS", "60"))
 	if interval < 10 {
@@ -99,10 +102,12 @@ func newDestinationRiskScanner() *destinationrisk.Scanner {
 	return destinationrisk.New(destinationrisk.ProviderFromEnvironment())
 }
 
-// runRiskCacheRecoveryLoop detects Redis restarts/flushes through the cache
-// marker written by BackfillRedis. Missing volatile state is reconstructed from
-// the authoritative SQL risk table while redirectengine remains fail-closed.
-func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client) {
+// runRiskCacheRecoveryLoop heals two different classes of cache loss:
+//   - Redis restart/flush removes the SQL-backfill marker and EnsureRedisCache
+//     republishes the exact current fingerprints.
+//   - a scan saved SQL but failed to republish its Redis decision; the in-process
+//     dirty flag forces a full backfill even if the Redis marker itself survived.
+func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client, dirty *atomic.Bool) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -111,7 +116,15 @@ func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client
 			return
 		case <-ticker.C:
 			recoveryCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			err := destinationrisk.EnsureRedisCache(recoveryCtx, db, rdb)
+			var err error
+			if dirty != nil && dirty.Load() {
+				err = destinationrisk.BackfillRedis(recoveryCtx, db, rdb)
+				if err == nil {
+					dirty.Store(false)
+				}
+			} else {
+				err = destinationrisk.EnsureRedisCache(recoveryCtx, db, rdb)
+			}
 			cancel()
 			if err != nil {
 				log.Printf("destination risk cache recovery: %v", err)
@@ -120,7 +133,7 @@ func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client
 	}
 }
 
-func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *destinationrisk.Scanner, rdb *redis.Client) {
+func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *destinationrisk.Scanner, rdb *redis.Client, dirty *atomic.Bool) {
 	interval, _ := strconv.Atoi(value("DESTINATION_RISK_SCAN_INTERVAL_SECONDS", "3"))
 	if interval < 2 {
 		interval = 2
@@ -165,11 +178,40 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 					targets := destinationrisk.Targets(item.Destination, item.RoutingRules, item.ABDestinations)
 					assessment := scanner.Assess(scanCtx, targets)
 					scanCancel()
+					if len(targets) == 0 {
+						continue
+					}
+
+					// Revoke any previously cached ALLOW before changing authoritative
+					// SQL state. If save or republish then fails, redirectengine sees a
+					// cache miss and routes to REVIEW instead of serving stale ALLOW.
+					var invalidateErr error
+					for attempt := 0; attempt < 3; attempt++ {
+						invalidateErr = rdb.Del(ctx, destinationrisk.RedisKey(item.LinkID, targets)).Err()
+						if invalidateErr == nil {
+							break
+						}
+						time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+					}
+					if invalidateErr != nil {
+						if dirty != nil {
+							dirty.Store(true)
+						}
+						log.Printf("destination risk fail-closed invalidate link=%d: %v", item.LinkID, invalidateErr)
+						continue
+					}
+
 					if err := store.Save(ctx, item.LinkID, targets, assessment); err != nil {
+						if dirty != nil {
+							dirty.Store(true)
+						}
 						log.Printf("destination risk save link=%d: %v", item.LinkID, err)
 						continue
 					}
 					if err := destinationrisk.SyncDecision(ctx, rdb, item.LinkID, targets, assessment.Decision); err != nil {
+						if dirty != nil {
+							dirty.Store(true)
+						}
 						log.Printf("destination risk cache link=%d: %v", item.LinkID, err)
 					}
 				}
