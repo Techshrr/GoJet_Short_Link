@@ -21,9 +21,11 @@ test.describe('focused customer account entry surface',()=>{
       expect(surface.border).toBe(0);
       expect(surface.shadow).toBe('none');
       expect(['rgba(0, 0, 0, 0)','transparent']).toContain(surface.bg);
-      const pageSurface=await page.locator('.auth-page').evaluate(node=>{const style=getComputedStyle(node);return{bg:style.backgroundColor,paddingTop:parseFloat(style.paddingTop)}});
-      expect(pageSurface.bg).toBe('rgb(255, 255, 255)');
-      expect(pageSurface.paddingTop).toBeGreaterThanOrEqual(40);
+      const layout=await page.locator('.auth-page').evaluate(node=>{const style=getComputedStyle(node);return{bg:style.backgroundColor,paddingTop:parseFloat(style.paddingTop)}});
+      expect(['rgba(0, 0, 0, 0)','transparent','rgb(255, 255, 255)']).toContain(layout.bg);
+      expect(layout.paddingTop).toBeGreaterThanOrEqual(40);
+      const documentSurface=await page.locator('body').evaluate(node=>getComputedStyle(node).backgroundColor);
+      expect(documentSurface).toBe('rgb(255, 255, 255)');
       await noOverflow(page);
     })
   }
