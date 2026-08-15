@@ -45,9 +45,13 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       VISITOR_HASH_KEY: ${VISITOR_HASH_KEY:?VISITOR_HASH_KEY is required}
       QR_TRACKING_KEY: ${QR_TRACKING_KEY:?QR_TRACKING_KEY is required}
+      GEOIP_MMDB: /data/geoip/GeoLite2-City.mmdb
+      GEOIP_COUNTRY_CSV: /data/geoip/country.csv
       LOG_WEBHOOK_URL: ${LOG_WEBHOOK_URL:-http://logreceiver:8092/v1/logs}
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
       VISIT_RATE_LIMIT_PER_MINUTE: ${VISIT_RATE_LIMIT_PER_MINUTE:-60}
+    volumes:
+      - ./data/geoip:/data/geoip:ro
     healthcheck:
       test: ["CMD", "/service", "healthcheck"]
       interval: 10s

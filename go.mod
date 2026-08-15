@@ -6,6 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/go-sql-driver/mysql v1.9.0
 	github.com/minio/minio-go/v7 v7.0.91
+	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/signintech/gopdf v0.38.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e

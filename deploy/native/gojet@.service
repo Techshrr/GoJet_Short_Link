@@ -11,6 +11,7 @@ WorkingDirectory=__GOJET_ROOT__
 EnvironmentFile=__GOJET_ROOT__/deploy/native/gojet.env
 Environment=BRAND_ASSET_PATH=__GOJET_ROOT__/deploy/data/brand
 Environment=GENERATED_QR_STORAGE_PATH=__GOJET_ROOT__/deploy/data/generated/qr
+Environment=GEOIP_MMDB=__GOJET_ROOT__/deploy/data/geoip/GeoLite2-City.mmdb
 Environment=GEOIP_COUNTRY_CSV=__GOJET_ROOT__/deploy/data/geoip/country.csv
 Environment=PDF_FONT_PATH=__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf
 UMask=0022

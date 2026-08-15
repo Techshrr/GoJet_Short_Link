@@ -25,6 +25,7 @@ func TestRequestGeographyFallsBackToLocalCountryCSV(t *testing.T) {
 	if err := os.WriteFile(path, []byte("203.0.113.0,203.0.113.255,SG\n2001:db8::/32,AU\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("GEOIP_MMDB", "")
 	t.Setenv("GEOIP_COUNTRY_CSV", path)
 	r := httptest.NewRequest("GET", "http://gojet.test/demo", nil)
 	r.RemoteAddr = "127.0.0.1:54321"
@@ -35,12 +36,31 @@ func TestRequestGeographyFallsBackToLocalCountryCSV(t *testing.T) {
 	}
 }
 
+func TestRequestGeographyFillsMissingRegionAndCityAfterCountryHeader(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "location.csv")
+	if err := os.WriteFile(path, []byte("203.0.113.0,203.0.113.255,SG,Central Singapore,Singapore\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GEOIP_MMDB", "")
+	t.Setenv("GEOIP_COUNTRY_CSV", path)
+	r := httptest.NewRequest("GET", "http://gojet.test/demo", nil)
+	r.RemoteAddr = "127.0.0.1:54321"
+	r.Header.Set("CF-IPCountry", "sg")
+	r.Header.Set("X-Real-IP", "203.0.113.42")
+	geo := requestGeography(r)
+	if geo.Country != "SG" || geo.Region != "Central Singapore" || geo.City != "Singapore" {
+		t.Fatalf("expected header country plus local region/city, got %#v", geo)
+	}
+}
+
 func TestRequestGeographyUsesCloudflareVisitorIPForLocalFallback(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "cloudflarecountry.csv")
 	if err := os.WriteFile(path, []byte("198.51.100.0,198.51.100.255,JP\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("GEOIP_MMDB", "")
 	t.Setenv("GEOIP_COUNTRY_CSV", path)
 	r := httptest.NewRequest("GET", "http://gojet.test/demo", nil)
 	r.RemoteAddr = "127.0.0.1:54321"
@@ -55,7 +75,7 @@ func TestRequestGeographyUsesCloudflareVisitorIPForLocalFallback(t *testing.T) {
 func TestCountryDatabaseSupportsIPv4AndIPv6Ranges(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "ranges.csv")
-	if err := os.WriteFile(path, []byte("1.0.0.0,1.0.0.255,AU\n2001:db8:abcd::/48,SG\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("1.0.0.0,1.0.0.255,AU,Queensland,Brisbane\n2001:db8:abcd::/48,SG,Central Singapore,Singapore\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	database, err := loadCountryDatabase(path)
@@ -70,5 +90,19 @@ func TestCountryDatabaseSupportsIPv4AndIPv6Ranges(t *testing.T) {
 		if got := database.Lookup(ip); got != want {
 			t.Fatalf("lookup %s: got %q want %q", address, got, want)
 		}
+	}
+	ip := netip.MustParseAddr("1.0.0.8")
+	geo := database.LookupGeography(ip)
+	if geo.Region != "Queensland" || geo.City != "Brisbane" {
+		t.Fatalf("expected range location metadata, got %#v", geo)
+	}
+}
+
+func TestPreferredGeoNameUsesChineseThenEnglish(t *testing.T) {
+	if got := preferredGeoName(map[string]string{"en": "Singapore", "zh-CN": "新加坡"}); got != "新加坡" {
+		t.Fatalf("unexpected preferred name %q", got)
+	}
+	if got := preferredGeoName(map[string]string{"en": "Tokyo"}); got != "Tokyo" {
+		t.Fatalf("unexpected English fallback %q", got)
 	}
 }
