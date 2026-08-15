@@ -20,6 +20,15 @@ function linkTable(){
     return labels.includes('短码')&&labels.includes('目标');
   })||null;
 }
+function rowLinkID(row){
+  const first=row.children[0];
+  const id=Number(row.dataset.linkId||first?.textContent.trim()||0);
+  return Number.isFinite(id)&&id>0?id:0;
+}
+function currentLinkIDs(){
+  const table=linkTable();if(!table)return[];
+  return[...new Set([...table.querySelectorAll('tbody tr')].map(row=>rowLinkID(row)).filter(Boolean))].slice(0,100);
+}
 function prepareTable(table){
   const headers=[...table.querySelectorAll('thead th')];
   let statusIndex=headers.findIndex(th=>['状态','运行状态'].includes(th.textContent.trim()));
@@ -44,10 +53,9 @@ function decorate(){
   [...table.querySelectorAll('tbody tr')].forEach(row=>{
     const cells=[...row.children];
     if(cells.length<=statusIndex||cells[0]?.hasAttribute('colspan'))return;
-    const id=Number(row.dataset.linkId||cells[0]?.textContent.trim()||0);
-    if(!Number.isFinite(id)||id<1)return;
+    const id=rowLinkID(row);
+    if(!id)return;
     row.dataset.linkId=String(id);
-    if(!row.dataset.linkDestination&&cells[2])row.dataset.linkDestination=cells[2].textContent.trim();
     let riskCell=row.querySelector('[data-link-risk]');
     if(!riskCell){
       riskCell=document.createElement('td');
@@ -65,9 +73,15 @@ function decorate(){
 }
 async function refresh(){
   if(busy||(typeof currentView!=='undefined'&&currentView!=='links'))return;
+  const ids=currentLinkIDs();
+  if(!ids.length){lastRisks=new Map();decorate();return}
   busy=true;
   try{
-    const result=await api('/api/admin/destination-risks?limit=100&offset=0');
+    // Ask for the exact links currently rendered. Review-queue severity ordering
+    // and the first-100 pagination window must never decide what link management
+    // thinks the safety state is.
+    const query=new URLSearchParams({link_ids:ids.join(',')});
+    const result=await api('/api/admin/destination-risks?'+query);
     const items=result.data||result.items||[];
     lastRisks=new Map(items.map(item=>[Number(item.link_id),item]).filter(([id])=>Number.isFinite(id)&&id>0));
   }catch(error){
