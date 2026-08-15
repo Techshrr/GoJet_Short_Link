@@ -78,6 +78,22 @@ test('destination risk review is a dedicated workflow and admin link management 
     const location=blocked.headers().location||'';
     expect(location).toContain('/link-unavailable');
     expect(location).not.toContain('risk-ui.invalid');
+
+    // The public result is a branded safety surface, not raw JSON. Its appeal
+    // handoff carries only the short resource reference and moderation state;
+    // the private destination and internal evidence must not leak into the URL.
+    const safety=await page.context().newPage();
+    await safety.goto(new URL(location,base).href);
+    await expect(safety.getByRole('heading',{name:'此链接已被安全阻止'})).toBeVisible();
+    await expect(safety.locator('#safetyCode')).toHaveText(code);
+    const appeal=await safety.locator('#safetyAppeal').getAttribute('href');
+    expect(appeal).toContain('/app/support?');
+    expect(appeal).toContain('mode=appeal');
+    expect(appeal).toContain(`resource_ref=${encodeURIComponent(code)}`);
+    expect(appeal).toContain('safety_state=blocked');
+    expect(appeal).not.toContain('risk-ui.invalid');
+    expect(appeal).not.toContain('target=');
+    await safety.close();
   }
 
   await openRisk(page,code);
