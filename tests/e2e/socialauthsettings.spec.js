@@ -65,6 +65,16 @@ async function expectConfiguredCustomerProviders(page){
   await expect(choices.nth(2)).toHaveAttribute('href',/\/api\/public\/auth\/rainbow\/start\?.*type=alipay/);
 }
 
+async function expectRainbowServerPolicy(page){
+  const allowed=await page.request.get(`${base}/api/public/auth/rainbow/start?type=qq&redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
+  expect(allowed.status(),'approved Rainbow method start status').toBe(302);
+  expect(allowed.headers().location||'','approved Rainbow upstream URL').toMatch(/^https:\/\/login\.example\.com\/connect\.php\?/);
+
+  const denied=await page.request.get(`${base}/api/public/auth/rainbow/start?type=sina&redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
+  expect(denied.status(),'unapproved Rainbow method must be rejected server-side').toBe(403);
+  expect(await denied.json()).toMatchObject({error:'该聚合登录方式当前未开放'});
+}
+
 test('customer social login settings use compact multi-select and never change admin authentication',async({page})=>{
   await adminLogin(page);await openSocialSettings(page);
   for(const id of ['google','facebook','github','qq','wechat','rainbow'])await expect(page.locator(`[data-social-enable="${id}"]`)).toHaveCount(1);
@@ -90,8 +100,11 @@ test('customer social login settings use compact multi-select and never change a
   await expect(page.locator('[data-social-provider="rainbow"] input[name="auth.social.rainbow.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
   await expect(page.locator('[data-social-provider="rainbow"] input[name="auth.social.rainbow.display_name"]')).toHaveValue('快捷登录');
   await expectNativeLaunchRoutes(page);
+  await expectRainbowServerPolicy(page);
   await page.goto(base+'/login');await expectConfiguredCustomerProviders(page);
   await page.goto(base+'/admin/');await expect(page.locator('#adminView')).toBeVisible();await expect(page.locator('.social-provider')).toHaveCount(0);await openSocialSettings(page);await choose(page,'facebook',false);await choose(page,'qq',false);await choose(page,'wechat',false);await choose(page,'rainbow',false);await saveSettings(page);
   await expect(page.locator('[data-socialauth-picker-summary]')).toHaveText('已选择 2 个服务');
+  const disabledRainbow=await page.request.get(`${base}/api/public/auth/rainbow/start?type=qq&redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
+  expect([403,404]).toContain(disabledRainbow.status());
   await page.goto(base+'/login');const remaining=page.locator('.social-provider[data-provider]');await expect(remaining).toHaveCount(2);await expect(remaining).toHaveText(['继续使用 Google','继续使用 GitHub']);await expect(page.locator('.social-provider-group')).toHaveCount(0);
 });
