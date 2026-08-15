@@ -16,7 +16,8 @@ async function expectSplitEntry(page,path,title){
     const showcase=document.querySelector('.auth-showcase').getBoundingClientRect();
     const form=document.querySelector('.auth-form-panel').getBoundingClientRect();
     const panel=document.querySelector('.auth-panel').getBoundingClientRect();
-    return{showcase:{x:showcase.x,width:showcase.width},form:{x:form.x,width:form.width},panel:{width:panel.width},viewport:innerWidth};
+    const back=document.querySelector('.auth-return').getBoundingClientRect();
+    return{showcase:{x:showcase.x,width:showcase.width,right:showcase.right},form:{x:form.x,width:form.width},panel:{width:panel.width},back:{left:back.left,right:back.right,top:back.top},viewport:innerWidth};
   });
   expect(geometry.showcase.width).toBeGreaterThan(360);
   expect(geometry.form.width).toBeGreaterThan(560);
@@ -24,6 +25,11 @@ async function expectSplitEntry(page,path,title){
   expect(geometry.panel.width).toBeGreaterThan(380);
   expect(geometry.panel.width).toBeLessThanOrEqual(620);
   expect(geometry.showcase.width+geometry.form.width).toBeGreaterThan(geometry.viewport*.9);
+  expect(geometry.back.right).toBeLessThanOrEqual(geometry.showcase.right-20);
+  expect(geometry.back.right).toBeGreaterThanOrEqual(geometry.showcase.right-150);
+  expect(geometry.back.left).toBeGreaterThan(geometry.showcase.x+120);
+  expect(geometry.back.top).toBeGreaterThanOrEqual(20);
+  expect(geometry.back.top).toBeLessThanOrEqual(55);
   await noOverflow(page);
 }
 
@@ -52,8 +58,9 @@ test.describe('customer account entry surface',()=>{
     await expect(page.locator('.auth-showcase')).toBeHidden();
     await expect(page.locator('.auth-form-panel')).toBeVisible();
     await expect(page.getByRole('link',{name:'返回网站'})).toBeVisible();
-    const panel=await page.locator('.auth-form-panel').evaluate(node=>{const rect=node.getBoundingClientRect(),style=getComputedStyle(node);return{x:rect.x,width:rect.width,radius:parseFloat(style.borderRadius)||0}});
-    expect(panel.x).toBe(0);expect(panel.width).toBe(390);expect(panel.radius).toBe(0);
+    const geometry=await page.evaluate(()=>{const panel=document.querySelector('.auth-form-panel').getBoundingClientRect(),style=getComputedStyle(document.querySelector('.auth-form-panel')),back=document.querySelector('.auth-return').getBoundingClientRect();return{panel:{x:panel.x,width:panel.width,radius:parseFloat(style.borderRadius)||0},back:{left:back.left,right:back.right,top:back.top}}});
+    expect(geometry.panel.x).toBe(0);expect(geometry.panel.width).toBe(390);expect(geometry.panel.radius).toBe(0);
+    expect(geometry.back.right).toBeLessThanOrEqual(370);expect(geometry.back.left).toBeGreaterThan(200);expect(geometry.back.top).toBeGreaterThanOrEqual(18);expect(geometry.back.top).toBeLessThanOrEqual(38);
     await noOverflow(page);
   });
 
