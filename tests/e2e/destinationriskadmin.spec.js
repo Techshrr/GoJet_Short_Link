@@ -31,14 +31,9 @@ async function confirmRiskAction(page,button,confirmation){
   await expect(modal).toHaveClass(/hidden/,{timeout:10000});
 }
 
-test('destination risk review is a dedicated page workflow with real override and rescan',async({page,request})=>{
-  const {code}=await createReviewLink(request);
-  await adminLogin(page);
+async function openRisk(page,code){
   await page.locator('#nav [data-risk-review]').click();
   await expect(page.locator('.riskWorkspace')).toBeVisible();
-  await expect(page.locator('#pageTitle')).toHaveText('目标风险审核');
-  await expect(page.locator('#modal')).toHaveClass(/hidden/);
-
   const row=page.locator('.riskRow').filter({hasText:code});
   for(let i=0;i<12 && !await row.count();i++){
     await page.getByRole('button',{name:'刷新队列'}).click();
@@ -46,15 +41,47 @@ test('destination risk review is a dedicated page workflow with real override an
   }
   await expect(row).toBeVisible({timeout:5000});
   await row.click();
+  return row;
+}
+
+test('destination risk review is a dedicated workflow and admin link management consumes the same safety truth',async({page,request})=>{
+  const {code}=await createReviewLink(request);
+  await adminLogin(page);
+  await openRisk(page,code);
+  await expect(page.locator('#pageTitle')).toHaveText('目标风险审核');
+  await expect(page.locator('#modal')).toHaveClass(/hidden/);
   await expect(page.locator('[data-risk-detail]')).toContainText('待审核');
   await expect(page.locator('[data-risk-detail]')).toContainText('risk-ui.invalid');
 
   await page.locator('[data-risk-review-form] textarea').fill('Browser gate reviewed current target and evidence');
   await confirmRiskAction(page,page.locator('[data-decision="block"]'),'确认阻止');
   await expect(page.locator('[data-risk-detail]')).toContainText('人工结论：阻止',{timeout:10000});
-  const blocked=await request.get(base+'/'+code,{maxRedirects:0});
-  expect([301,302,307,308]).not.toContain(blocked.status());
 
+  // Link management must preserve operational state and expose target safety as
+  // a separate authoritative column. It must never rewrite “active” into a
+  // misleading generic status or bind a decision by row position.
+  await page.locator('#nav [data-view="links"]').click();
+  await expect(page.locator('#pageTitle')).toHaveText('链接管理');
+  await expect(page.locator('#content table thead')).toContainText('运行状态');
+  await expect(page.locator('#content table thead')).toContainText('目标安全');
+  const linkRow=page.locator('#content table tbody tr').filter({hasText:code});
+  await expect(linkRow).toBeVisible();
+  await expect(linkRow.locator('td').nth(5)).toHaveText('正常');
+  await expect(linkRow.locator('[data-link-risk]')).toHaveText('安全阻止',{timeout:8000});
+  await expect(linkRow).toHaveAttribute('data-risk-decision','block');
+
+  const blocked=await request.get(base+'/'+code,{maxRedirects:0});
+  // Risk enforcement remains fail-closed. Depending on fixture presentation
+  // configuration this is either the branded internal safety redirect or a
+  // non-redirecting closed response, never the original target.
+  if([301,302,307,308].includes(blocked.status())){
+    const location=blocked.headers().location||'';
+    expect(location).toContain('/link-unavailable');
+    expect(location).not.toContain('risk-ui.invalid');
+  }
+
+  await openRisk(page,code);
+  await expect(page.locator('[data-risk-detail]')).toContainText('人工结论：阻止',{timeout:10000});
   await confirmRiskAction(page,page.locator('[data-clear-override]'),'恢复自动判断');
   await expect(page.locator('[data-risk-detail]')).toContainText('待审核',{timeout:10000});
 
