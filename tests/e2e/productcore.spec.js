@@ -93,13 +93,17 @@ test('admin users page exposes actual management actions',async({page})=>{
 });
 
 test('admin files and security pages expose operational actions',async({page})=>{
+  await page.route('**/api/admin/files',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:[{id:9,name:'scan-error.zip',mime:'application/zip',size:4096,scan_status:'error',status:'active',workspace:'安全测试'}]})}));
+  await page.route('**/api/admin/resources',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:[]})}));
+  await page.route('**/api/admin/security',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({data:[{id:5,event_type:'destination-risk',severity:'high',source:'browser-contract',description:'待管理员处置的安全事件',status:'open'}]})}));
   await adminLogin(page);
   await page.getByRole('button',{name:'文件安全',exact:true}).click();
-  await expect(page.getByRole('button',{name:'重新扫描'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'强制隔离'})).toBeVisible();
+  await expect(page.getByText('scan-error.zip',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'重试扫描',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'隔离',exact:true})).toBeVisible();
 
   await page.getByRole('button',{name:'安全事件',exact:true}).click();
-  await expect(page.getByRole('button',{name:'标记已读'}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'标记已处理',exact:true})).toBeVisible();
 });
 
 test('admin system settings follows the final nested information architecture',async({page})=>{
@@ -115,7 +119,7 @@ test('admin system settings follows the final nested information architecture',a
   await expect(page.getByLabel('默认跳转方式')).toBeVisible();
 
   await page.getByRole('button',{name:/^支付方式/}).click();
-  await expect(page.getByText('Stripe',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Stripe',exact:true})).toBeVisible();
 
   await page.getByRole('button',{name:/^邮件服务/}).click();
   await expect(page.getByRole('heading',{name:'邮件服务',exact:true})).toBeVisible();
