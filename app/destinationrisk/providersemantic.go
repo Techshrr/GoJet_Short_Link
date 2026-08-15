@@ -23,7 +23,10 @@ func (p *semanticProvider) Name() string {
 	return "semantic"
 }
 
-var htmlTagPattern = regexp.MustCompile(`(?is)<(script|style|noscript)[^>]*>.*?</\1>|<[^>]+>`)
+// Go's regexp engine deliberately does not implement backreferences. Keep the
+// script/style/noscript alternatives explicit so package initialization cannot
+// panic before the risk worker starts.
+var htmlTagPattern = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>|<[^>]+>`)
 var whitespacePattern = regexp.MustCompile(`\s+`)
 
 func readablePageText(snapshot Snapshot) string {
@@ -107,11 +110,11 @@ func (p *semanticProvider) Assess(ctx context.Context, snapshot Snapshot) (Provi
 	// required for ambiguous words; strongly explicit phrases can block alone.
 	adultExplicit := containsSemantic(full,
 		"adult pornography", "porn videos", "free porn", "xxx videos", "hardcore porn", "live sex cam",
-		"成人视频", "成人影片", "成人视频", "色情影片", "色情视频", "无码av", "无码av", "有码av", "成人直播", "色情直播", "裸聊",
+		"成人视频", "成人影片", "色情影片", "色情视频", "无码av", "无码av", "有码av", "成人直播", "色情直播", "裸聊",
 	)
 	adultGroups := semanticGroups(full,
-		[]string{"porn", "pornography", "xxx", "成人视频", "成人影片", "色情", "无码AV", "无码", "有码"},
-		[]string{"sex video", "sex videos", "hardcore", "hentai", "jav", "av电影", "av电影", "无码av", "情色", "成人视频"},
+		[]string{"porn", "pornography", "xxx", "成人视频", "成人影片", "色情", "无码av", "无码", "有码"},
+		[]string{"sex video", "sex videos", "hardcore", "hentai", "jav", "av电影", "AV无码", "情色", "成人视频"},
 		[]string{"live cam", "webcam sex", "nude", "nudity", "裸聊", "裸照", "成人直播", "成人视频直播"},
 		[]string{"18+", "adults only", "age verification", "未满18", "成人入口", "未成年人禁止"},
 	)
