@@ -31,7 +31,7 @@ func main() {
 	}
 
 	riskStore := destinationrisk.NewStore(db)
-	riskScanner := destinationrisk.New(destinationrisk.ProviderFromEnvironment())
+	riskScanner := newDestinationRiskScanner()
 	bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	if err = destinationrisk.BackfillRedis(bootstrapCtx, db, rdb); err != nil {
 		log.Printf("destination risk cache backfill: %v", err)
@@ -53,6 +53,13 @@ func main() {
 		}
 		time.Sleep(time.Duration(interval) * time.Second)
 	}
+}
+
+// newDestinationRiskScanner is deliberately small and directly tested. The
+// production worker must always use ProviderFromEnvironment so generic semantic
+// detection remains active even when no external reputation service is set.
+func newDestinationRiskScanner() *destinationrisk.Scanner {
+	return destinationrisk.New(destinationrisk.ProviderFromEnvironment())
 }
 
 func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *destinationrisk.Scanner, rdb *redis.Client) {
