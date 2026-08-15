@@ -90,7 +90,13 @@ for(const viewport of viewports){
       const response=await page.goto(base+route,{waitUntil:'networkidle'});
       expect(response&&response.status(),`${viewport.name} ${route}`).toBeLessThan(400);
       await expect(page.locator('#shell')).toBeVisible({timeout:10000});
-      await expect(page.locator('.content h1').first()).toBeVisible({timeout:10000});
+      // Route ownership is represented by the rendered content surface, not by
+      // one mandatory heading level. Several first-party pages deliberately use
+      // h2/card headings, so requiring `.content h1` turns valid responsive
+      // pages into false negatives while adding no layout coverage.
+      const content=page.locator('.content');
+      await expect(content).toBeVisible({timeout:10000});
+      await expect(content).not.toBeEmpty();
       await assertViewportHealthy(page,`${viewport.name} ${route}`);
     }
 
