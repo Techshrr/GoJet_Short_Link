@@ -12,12 +12,366 @@ import (
 	"github.com/Techshrr/GoJet_Short_Link/app/identity"
 )
 
-func (s *server) socialCallbackRouter(fixedProvider string,next http.HandlerFunc)http.HandlerFunc{return func(w http.ResponseWriter,r *http.Request){provider:=strings.ToLower(strings.TrimSpace(fixedProvider));if provider==""{provider=strings.ToLower(strings.TrimSpace(r.PathValue("provider")))};state:=strings.TrimSpace(r.URL.Query().Get("state"));if state==""{next(w,r);return};isBind,err:=s.isSocialBindAttempt(r.Context(),provider,state);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"第三方登录状态暂时不可用"});return};if !isBind{next(w,r);return};config,configured,err:=s.socialProviderConfiguration(r.Context(),provider);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"第三方登录配置暂时不可用"});return};if !configured{jsonResponse(w,http.StatusForbidden,map[string]string{"error":"该第三方登录方式已经停用"});return};s.socialBindCallback(w,r,provider,config)}}
-func(s *server)mySocialIdentities(w http.ResponseWriter,r *http.Request){user:=currentUser(r);identities,err:=s.identity.ListSocialIdentities(r.Context(),user.ID);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法读取第三方账户"});return};passwordEnabled,err:=s.identity.PasswordLoginEnabled(r.Context(),user.ID);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法读取登录凭据状态"});return};linked:=map[string]bool{};items:=make([]map[string]any,0,len(identities));for _,item:=range identities{linked[item.Provider]=true;definition,_:=socialProviderDefinitionByID(item.Provider);label:=definition.Label;if label==""{label=item.Provider};items=append(items,map[string]any{"provider":item.Provider,"label":label,"provider_email":item.ProviderEmail,"email_verified":item.EmailVerified,"display_name":item.DisplayName,"avatar_url":item.AvatarURL,"created_at":item.CreatedAt,"last_login_at":item.LastLoginAt})};providers:=[]map[string]any{};for _,definition:=range socialProviderDefinitions{if !socialProviderImplemented(definition.ID){continue};configured,getErr:=s.socialProviderConfigured(r.Context(),definition.ID);if getErr!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法读取第三方登录配置"});return};providers=append(providers,map[string]any{"id":definition.ID,"label":definition.Label,"configured":configured,"linked":linked[definition.ID]})};jsonResponse(w,http.StatusOK,map[string]any{"password_login_enabled":passwordEnabled,"identities":items,"providers":providers})}
-func(s *server)socialBindStart(w http.ResponseWriter,r *http.Request){provider:=strings.ToLower(strings.TrimSpace(r.PathValue("provider")));if !socialProviderImplemented(provider){jsonResponse(w,http.StatusNotFound,map[string]string{"error":"该第三方登录适配器尚未启用"});return};user:=currentUser(r);linked,err:=s.identity.SocialProviderLinked(r.Context(),user.ID,provider);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法读取账户绑定状态"});return};if linked{jsonResponse(w,http.StatusConflict,map[string]string{"error":"当前账户已经绑定该第三方登录方式"});return};config,configured,err:=s.socialProviderConfiguration(r.Context(),provider);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"第三方登录配置暂时不可用"});return};if !configured{jsonResponse(w,http.StatusNotFound,map[string]string{"error":"该第三方登录方式当前不可用"});return};base,secure,err:=socialPublicBase();if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"第三方登录回调地址配置无效"});return};state,err:=randomURLToken(32);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法创建绑定请求"});return};nonce,err:=randomURLToken(32);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法创建绑定请求"});return};verifier,err:=randomURLToken(32);if err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法创建绑定请求"});return};ip:=clientIP(r);if ip==""{ip="0.0.0.0"};if _,err=s.db.ExecContext(r.Context(),`INSERT INTO social_auth_attempts(state_hash,nonce_hash,pkce_verifier_hash,provider,mode,user_id,return_to,ip_address,user_agent,expires_at) VALUES(?,?,?,?,'bind',?,'/app/settings',?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))`,hashText(state),hashText(nonce),hashText(verifier),provider,user.ID,ip,limitText(r.UserAgent(),512));err!=nil{jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法保存绑定请求"});return};setSocialCookie(w,socialStateCookie,state,secure);setSocialCookie(w,socialNonceCookie,nonce,secure);setSocialCookie(w,socialPKCECookie,verifier,secure);callback:=base+"/api/public/auth/"+url.PathEscape(provider)+"/callback";var authorizeURL string;if provider=="rainbow"{providerURL,authErr:=rainbowAuthorizationURL(r.Context(),config,callback+"?state="+url.QueryEscape(state));if authErr!=nil{clearSocialCookies(w);jsonResponse(w,http.StatusBadGateway,map[string]string{"error":"彩虹聚合登录暂时无法创建授权请求"});return};ticket,ticketErr:=s.createRainbowBindLaunch(r.Context(),state,providerURL);if ticketErr!=nil{clearSocialCookies(w);jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法创建绑定跳转"});return};authorizeURL=base+"/api/public/auth/rainbow/bind-launch?ticket="+url.QueryEscape(ticket)}else{authorizeURL,err=socialAuthorizationURL(provider,config,state,verifier,callback);if err!=nil{jsonResponse(w,http.StatusNotImplemented,map[string]string{"error":"该第三方登录适配器尚未完成"});return}};jsonResponse(w,http.StatusOK,map[string]string{"authorize_url":authorizeURL})}
-func socialAuthorizationURL(provider string,config socialProviderConfig,state,verifier,callback string)(string,error){switch provider{case"google":return googleAuthorizationRedirect(config,state,verifier,callback),nil;case"github":values:=url.Values{};values.Set("client_id",config.ClientID);values.Set("redirect_uri",callback);values.Set("scope","user:email");values.Set("state",state);values.Set("code_challenge",pkceChallenge(verifier));values.Set("code_challenge_method","S256");return githubOAuthAuthorizeURL+"?"+values.Encode(),nil;case"facebook":return facebookAuthorizationRedirect(config,state,callback),nil;case"qq":return qqAuthorizationRedirect(config,state,callback),nil;case"wechat":return wechatAuthorizationRedirect(config,state,callback),nil;default:return"",errors.New("social provider is not implemented")}}
-func(s *server)isSocialBindAttempt(ctx context.Context,provider,state string)(bool,error){if strings.TrimSpace(state)==""{return false,nil};var mode string;err:=s.db.QueryRowContext(ctx,`SELECT mode FROM social_auth_attempts WHERE state_hash=? AND provider=? AND consumed_at IS NULL AND expires_at>UTC_TIMESTAMP()`,hashText(state),provider).Scan(&mode);if errors.Is(err,sql.ErrNoRows){return false,nil};if err!=nil{return false,err};return mode=="bind",nil}
-func(s *server)consumeSocialBindAttempt(ctx context.Context,provider,state,nonce,verifier string)(int64,error){tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return 0,err};defer tx.Rollback();var id,userID int64;var nonceHash,verifierHash string;if err=tx.QueryRowContext(ctx,`SELECT id,user_id,nonce_hash,pkce_verifier_hash FROM social_auth_attempts WHERE state_hash=? AND provider=? AND mode='bind' AND user_id IS NOT NULL AND consumed_at IS NULL AND expires_at>UTC_TIMESTAMP() FOR UPDATE`,hashText(state),provider).Scan(&id,&userID,&nonceHash,&verifierHash);err!=nil{return 0,err};if userID<=0||subtle.ConstantTimeCompare([]byte(nonceHash),[]byte(hashText(nonce)))!=1||subtle.ConstantTimeCompare([]byte(verifierHash),[]byte(hashText(verifier)))!=1{return 0,errors.New("social bind attempt browser binding mismatch")};result,err:=tx.ExecContext(ctx,`UPDATE social_auth_attempts SET consumed_at=UTC_TIMESTAMP() WHERE id=? AND consumed_at IS NULL`,id);if err!=nil{return 0,err};changed,err:=result.RowsAffected();if err!=nil||changed!=1{return 0,errors.New("social bind attempt was already consumed")};if err=tx.Commit();err!=nil{return 0,err};return userID,nil}
-func(s *server)socialBindCallback(w http.ResponseWriter,r *http.Request,provider string,config socialProviderConfig){state:=strings.TrimSpace(r.URL.Query().Get("state"));providerError:=strings.TrimSpace(r.URL.Query().Get("error"));code:=strings.TrimSpace(r.URL.Query().Get("code"));if state==""||(providerError==""&&code==""){jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"第三方绑定回调缺少必要参数"});return};stateCookie,stateErr:=r.Cookie(socialStateCookie);nonceCookie,nonceErr:=r.Cookie(socialNonceCookie);pkceCookie,pkceErr:=r.Cookie(socialPKCECookie);if stateErr!=nil||nonceErr!=nil||pkceErr!=nil||subtle.ConstantTimeCompare([]byte(state),[]byte(stateCookie.Value))!=1{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"第三方绑定状态验证失败"});return};userID,err:=s.consumeSocialBindAttempt(r.Context(),provider,state,nonceCookie.Value,pkceCookie.Value);if err!=nil{jsonResponse(w,http.StatusBadRequest,map[string]string{"error":"第三方绑定请求无效、已过期或已经使用"});return};clearSocialCookies(w);if providerError!=""{redirectSocialBindError(w,r,"cancelled");return};base,_,err:=socialPublicBase();if err!=nil{redirectSocialBindError(w,r,"provider_failed");return};callback:=base+"/api/public/auth/"+url.PathEscape(provider)+"/callback";var token string;var profile identity.SocialProfile;switch provider{case"google":token,err=exchangeGoogleCode(r.Context(),config,code,pkceCookie.Value,callback);if err==nil{profile,err=fetchGoogleSocialProfile(r.Context(),token)};case"github":token,err=exchangeGitHubCode(r.Context(),config,code,pkceCookie.Value,callback);if err==nil{profile,err=fetchGitHubSocialProfile(r.Context(),token)};case"facebook":profile,err=fetchFacebookProfileFromCode(r.Context(),config,code,callback);case"qq":token,err=exchangeQQCode(r.Context(),config,code,callback);if err==nil{profile,err=fetchQQSocialProfile(r.Context(),config,token)};case"wechat":profile,err=fetchWeChatProfileFromCode(r.Context(),config,code,callback);case"rainbow":loginType:=strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")));profile,err=fetchRainbowSocialProfile(r.Context(),config,loginType,code);default:err=errors.New("provider adapter is not implemented")};token="";if err!=nil{redirectSocialBindError(w,r,"provider_failed");return};if err=s.identity.BindSocialIdentity(r.Context(),userID,profile);err!=nil{switch{case errors.Is(err,identity.ErrSocialIdentityInUse):redirectSocialBindError(w,r,"identity_in_use");case errors.Is(err,identity.ErrSocialProviderAlreadyLinked):redirectSocialBindError(w,r,"provider_already_linked");case errors.Is(err,identity.ErrSocialAccountUnavailable):redirectSocialBindError(w,r,"account_unavailable");default:redirectSocialBindError(w,r,"provider_failed")};return};http.Redirect(w,r,"/app/settings#social_bound="+url.QueryEscape(provider),http.StatusFound)}
-func(s *server)socialUnbind(w http.ResponseWriter,r *http.Request){provider:=strings.ToLower(strings.TrimSpace(r.PathValue("provider")));if _,exists:=socialProviderDefinitionByID(provider);!exists{jsonResponse(w,http.StatusNotFound,map[string]string{"error":"未知的第三方登录方式"});return};user:=currentUser(r);if err:=s.identity.UnbindSocialIdentity(r.Context(),user.ID,provider);err!=nil{switch{case errors.Is(err,identity.ErrLastLoginCredential):jsonResponse(w,http.StatusConflict,map[string]string{"error":err.Error()});case errors.Is(err,identity.ErrSocialIdentityNotLinked):jsonResponse(w,http.StatusNotFound,map[string]string{"error":err.Error()});case errors.Is(err,identity.ErrSocialAccountUnavailable):jsonResponse(w,http.StatusForbidden,map[string]string{"error":err.Error()});default:jsonResponse(w,http.StatusServiceUnavailable,map[string]string{"error":"暂时无法解除第三方账户绑定"})};return};w.WriteHeader(http.StatusNoContent)}
-func redirectSocialBindError(w http.ResponseWriter,r *http.Request,code string){http.Redirect(w,r,"/app/settings#social_bind_error="+url.QueryEscape(code),http.StatusFound)}
+func socialAttemptProviderForCallback(provider string, r *http.Request) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider != "rainbow" {
+		return provider
+	}
+	loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if !validRainbowLoginType(loginType) {
+		return provider
+	}
+	return rainbowAttemptProvider(loginType)
+}
+
+func (s *server) socialCallbackRouter(fixedProvider string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		provider := strings.ToLower(strings.TrimSpace(fixedProvider))
+		if provider == "" {
+			provider = strings.ToLower(strings.TrimSpace(r.PathValue("provider")))
+		}
+		state := strings.TrimSpace(r.URL.Query().Get("state"))
+		if state == "" {
+			next(w, r)
+			return
+		}
+		attemptProvider := socialAttemptProviderForCallback(provider, r)
+		isBind, err := s.isSocialBindAttempt(r.Context(), attemptProvider, state)
+		if err != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录状态暂时不可用"})
+			return
+		}
+		if !isBind {
+			next(w, r)
+			return
+		}
+		config, configured, err := s.socialProviderConfiguration(r.Context(), provider)
+		if err != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置暂时不可用"})
+			return
+		}
+		if !configured {
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "该第三方登录方式已经停用"})
+			return
+		}
+		s.socialBindCallback(w, r, provider, config)
+	}
+}
+
+func (s *server) mySocialIdentities(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	identities, err := s.identity.ListSocialIdentities(r.Context(), user.ID)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法读取第三方账户"})
+		return
+	}
+	passwordEnabled, err := s.identity.PasswordLoginEnabled(r.Context(), user.ID)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法读取登录凭据状态"})
+		return
+	}
+	linked := map[string]bool{}
+	items := make([]map[string]any, 0, len(identities))
+	for _, item := range identities {
+		linked[item.Provider] = true
+		definition, _ := socialProviderDefinitionByID(item.Provider)
+		label := definition.Label
+		if label == "" {
+			label = item.Provider
+		}
+		items = append(items, map[string]any{
+			"provider": item.Provider, "label": label, "provider_email": item.ProviderEmail,
+			"email_verified": item.EmailVerified, "display_name": item.DisplayName,
+			"avatar_url": item.AvatarURL, "created_at": item.CreatedAt, "last_login_at": item.LastLoginAt,
+		})
+	}
+	providers := []map[string]any{}
+	for _, definition := range socialProviderDefinitions {
+		if !socialProviderImplemented(definition.ID) {
+			continue
+		}
+		configured, getErr := s.socialProviderConfigured(r.Context(), definition.ID)
+		if getErr != nil {
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法读取第三方登录配置"})
+			return
+		}
+		item := map[string]any{"id": definition.ID, "label": definition.Label, "configured": configured, "linked": linked[definition.ID]}
+		if definition.ID == "rainbow" {
+			item["login_types"] = rainbowPublicLoginTypes
+		}
+		providers = append(providers, item)
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"password_login_enabled": passwordEnabled, "identities": items, "providers": providers})
+}
+
+func (s *server) socialBindStart(w http.ResponseWriter, r *http.Request) {
+	provider := strings.ToLower(strings.TrimSpace(r.PathValue("provider")))
+	if !socialProviderImplemented(provider) {
+		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "该第三方登录适配器尚未启用"})
+		return
+	}
+	loginType := ""
+	attemptProvider := provider
+	if provider == "rainbow" {
+		loginType = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+		// Existing account-setting clients did not have a type picker. Keep QQ as
+		// the compatibility default for binding while new UI can choose explicitly.
+		if loginType == "" {
+			loginType = "qq"
+		}
+		if !validRainbowLoginType(loginType) {
+			jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "请选择有效的彩虹聚合登录方式"})
+			return
+		}
+		attemptProvider = rainbowAttemptProvider(loginType)
+	}
+	user := currentUser(r)
+	linked, err := s.identity.SocialProviderLinked(r.Context(), user.ID, provider)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法读取账户绑定状态"})
+		return
+	}
+	if linked {
+		jsonResponse(w, http.StatusConflict, map[string]string{"error": "当前账户已经绑定该第三方登录方式"})
+		return
+	}
+	config, configured, err := s.socialProviderConfiguration(r.Context(), provider)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录配置暂时不可用"})
+		return
+	}
+	if !configured {
+		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "该第三方登录方式当前不可用"})
+		return
+	}
+	base, secure, err := socialPublicBase()
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "第三方登录回调地址配置无效"})
+		return
+	}
+	state, err := randomURLToken(32)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法创建绑定请求"})
+		return
+	}
+	nonce, err := randomURLToken(32)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法创建绑定请求"})
+		return
+	}
+	verifier, err := randomURLToken(32)
+	if err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法创建绑定请求"})
+		return
+	}
+	ip := clientIP(r)
+	if ip == "" {
+		ip = "0.0.0.0"
+	}
+	if _, err = s.db.ExecContext(r.Context(), `INSERT INTO social_auth_attempts(state_hash,nonce_hash,pkce_verifier_hash,provider,mode,user_id,return_to,ip_address,user_agent,expires_at) VALUES(?,?,?,?,'bind',?,'/app/settings',?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))`, hashText(state), hashText(nonce), hashText(verifier), attemptProvider, user.ID, ip, limitText(r.UserAgent(), 512)); err != nil {
+		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法保存绑定请求"})
+		return
+	}
+	setSocialCookie(w, socialStateCookie, state, secure)
+	setSocialCookie(w, socialNonceCookie, nonce, secure)
+	setSocialCookie(w, socialPKCECookie, verifier, secure)
+	callback := base + "/api/public/auth/" + url.PathEscape(provider) + "/callback"
+	var authorizeURL string
+	if provider == "rainbow" {
+		providerURL, authErr := rainbowAuthorizationURL(r.Context(), config, loginType, callback+"?state="+url.QueryEscape(state))
+		if authErr != nil {
+			clearSocialCookies(w)
+			jsonResponse(w, http.StatusBadGateway, map[string]string{"error": "彩虹聚合登录暂时无法创建授权请求"})
+			return
+		}
+		ticket, ticketErr := s.createRainbowBindLaunch(r.Context(), state, providerURL)
+		if ticketErr != nil {
+			clearSocialCookies(w)
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法创建绑定跳转"})
+			return
+		}
+		authorizeURL = base + "/api/public/auth/rainbow/bind-launch?ticket=" + url.QueryEscape(ticket)
+	} else {
+		authorizeURL, err = socialAuthorizationURL(provider, config, state, verifier, callback)
+		if err != nil {
+			jsonResponse(w, http.StatusNotImplemented, map[string]string{"error": "该第三方登录适配器尚未完成"})
+			return
+		}
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"authorize_url": authorizeURL})
+}
+
+func socialAuthorizationURL(provider string, config socialProviderConfig, state, verifier, callback string) (string, error) {
+	switch provider {
+	case "google":
+		return googleAuthorizationRedirect(config, state, verifier, callback), nil
+	case "github":
+		values := url.Values{}
+		values.Set("client_id", config.ClientID)
+		values.Set("redirect_uri", callback)
+		values.Set("scope", "user:email")
+		values.Set("state", state)
+		values.Set("code_challenge", pkceChallenge(verifier))
+		values.Set("code_challenge_method", "S256")
+		return githubOAuthAuthorizeURL + "?" + values.Encode(), nil
+	case "facebook":
+		return facebookAuthorizationRedirect(config, state, callback), nil
+	case "qq":
+		return qqAuthorizationRedirect(config, state, callback), nil
+	case "wechat":
+		return wechatAuthorizationRedirect(config, state, callback), nil
+	default:
+		return "", errors.New("social provider is not implemented")
+	}
+}
+
+func (s *server) isSocialBindAttempt(ctx context.Context, provider, state string) (bool, error) {
+	if strings.TrimSpace(state) == "" {
+		return false, nil
+	}
+	var mode string
+	err := s.db.QueryRowContext(ctx, `SELECT mode FROM social_auth_attempts WHERE state_hash=? AND provider=? AND consumed_at IS NULL AND expires_at>UTC_TIMESTAMP()`, hashText(state), provider).Scan(&mode)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return mode == "bind", nil
+}
+
+func (s *server) consumeSocialBindAttempt(ctx context.Context, provider, state, nonce, verifier string) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var id, userID int64
+	var nonceHash, verifierHash string
+	if err = tx.QueryRowContext(ctx, `SELECT id,user_id,nonce_hash,pkce_verifier_hash FROM social_auth_attempts WHERE state_hash=? AND provider=? AND mode='bind' AND user_id IS NOT NULL AND consumed_at IS NULL AND expires_at>UTC_TIMESTAMP() FOR UPDATE`, hashText(state), provider).Scan(&id, &userID, &nonceHash, &verifierHash); err != nil {
+		return 0, err
+	}
+	if userID <= 0 || subtle.ConstantTimeCompare([]byte(nonceHash), []byte(hashText(nonce))) != 1 || subtle.ConstantTimeCompare([]byte(verifierHash), []byte(hashText(verifier))) != 1 {
+		return 0, errors.New("social bind attempt browser binding mismatch")
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE social_auth_attempts SET consumed_at=UTC_TIMESTAMP() WHERE id=? AND consumed_at IS NULL`, id)
+	if err != nil {
+		return 0, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil || changed != 1 {
+		return 0, errors.New("social bind attempt was already consumed")
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return userID, nil
+}
+
+func (s *server) socialBindCallback(w http.ResponseWriter, r *http.Request, provider string, config socialProviderConfig) {
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	providerError := strings.TrimSpace(r.URL.Query().Get("error"))
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if state == "" || (providerError == "" && code == "") {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方绑定回调缺少必要参数"})
+		return
+	}
+	stateCookie, stateErr := r.Cookie(socialStateCookie)
+	nonceCookie, nonceErr := r.Cookie(socialNonceCookie)
+	pkceCookie, pkceErr := r.Cookie(socialPKCECookie)
+	if stateErr != nil || nonceErr != nil || pkceErr != nil || subtle.ConstantTimeCompare([]byte(state), []byte(stateCookie.Value)) != 1 {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方绑定状态验证失败"})
+		return
+	}
+	attemptProvider := socialAttemptProviderForCallback(provider, r)
+	userID, err := s.consumeSocialBindAttempt(r.Context(), attemptProvider, state, nonceCookie.Value, pkceCookie.Value)
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "第三方绑定请求无效、已过期或已经使用"})
+		return
+	}
+	clearSocialCookies(w)
+	if providerError != "" {
+		redirectSocialBindError(w, r, "cancelled")
+		return
+	}
+	base, _, err := socialPublicBase()
+	if err != nil {
+		redirectSocialBindError(w, r, "provider_failed")
+		return
+	}
+	callback := base + "/api/public/auth/" + url.PathEscape(provider) + "/callback"
+	var token string
+	var profile identity.SocialProfile
+	switch provider {
+	case "google":
+		token, err = exchangeGoogleCode(r.Context(), config, code, pkceCookie.Value, callback)
+		if err == nil {
+			profile, err = fetchGoogleSocialProfile(r.Context(), token)
+		}
+	case "github":
+		token, err = exchangeGitHubCode(r.Context(), config, code, pkceCookie.Value, callback)
+		if err == nil {
+			profile, err = fetchGitHubSocialProfile(r.Context(), token)
+		}
+	case "facebook":
+		profile, err = fetchFacebookProfileFromCode(r.Context(), config, code, callback)
+	case "qq":
+		token, err = exchangeQQCode(r.Context(), config, code, callback)
+		if err == nil {
+			profile, err = fetchQQSocialProfile(r.Context(), config, token)
+		}
+	case "wechat":
+		profile, err = fetchWeChatProfileFromCode(r.Context(), config, code, callback)
+	case "rainbow":
+		loginType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+		profile, err = fetchRainbowSocialProfile(r.Context(), config, loginType, code)
+	default:
+		err = errors.New("provider adapter is not implemented")
+	}
+	token = ""
+	if err != nil {
+		redirectSocialBindError(w, r, "provider_failed")
+		return
+	}
+	if err = s.identity.BindSocialIdentity(r.Context(), userID, profile); err != nil {
+		switch {
+		case errors.Is(err, identity.ErrSocialIdentityInUse):
+			redirectSocialBindError(w, r, "identity_in_use")
+		case errors.Is(err, identity.ErrSocialProviderAlreadyLinked):
+			redirectSocialBindError(w, r, "provider_already_linked")
+		case errors.Is(err, identity.ErrSocialAccountUnavailable):
+			redirectSocialBindError(w, r, "account_unavailable")
+		default:
+			redirectSocialBindError(w, r, "provider_failed")
+		}
+		return
+	}
+	http.Redirect(w, r, "/app/settings#social_bound="+url.QueryEscape(provider), http.StatusFound)
+}
+
+func (s *server) socialUnbind(w http.ResponseWriter, r *http.Request) {
+	provider := strings.ToLower(strings.TrimSpace(r.PathValue("provider")))
+	if _, exists := socialProviderDefinitionByID(provider); !exists {
+		jsonResponse(w, http.StatusNotFound, map[string]string{"error": "未知的第三方登录方式"})
+		return
+	}
+	user := currentUser(r)
+	if err := s.identity.UnbindSocialIdentity(r.Context(), user.ID, provider); err != nil {
+		switch {
+		case errors.Is(err, identity.ErrLastLoginCredential):
+			jsonResponse(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		case errors.Is(err, identity.ErrSocialIdentityNotLinked):
+			jsonResponse(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		case errors.Is(err, identity.ErrSocialAccountUnavailable):
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		default:
+			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "暂时无法解除第三方账户绑定"})
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func redirectSocialBindError(w http.ResponseWriter, r *http.Request, code string) {
+	http.Redirect(w, r, "/app/settings#social_bind_error="+url.QueryEscape(code), http.StatusFound)
+}
