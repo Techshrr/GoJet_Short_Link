@@ -9,6 +9,8 @@ on:
       - 'app/destinationrisk/**'
       - 'services/platformapi/cmd/operationsmonitor/**'
       - 'services/redirectengine/internal/store/**'
+      - 'database/migrations/linkdestinationrisk*.sql'
+      - 'database/migrations/migrationcatalog.txt'
       - 'deploy/compose.production.yaml'
       - 'deploy/native/gojet@.service'
       - 'scripts/lib.sh'
@@ -18,6 +20,8 @@ on:
       - 'app/destinationrisk/**'
       - 'services/platformapi/cmd/operationsmonitor/**'
       - 'services/redirectengine/internal/store/**'
+      - 'database/migrations/linkdestinationrisk*.sql'
+      - 'database/migrations/migrationcatalog.txt'
       - 'deploy/compose.production.yaml'
       - 'deploy/native/gojet@.service'
       - 'scripts/lib.sh'
@@ -41,6 +45,20 @@ jobs:
           set -euo pipefail
           go test ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/internal/store
           go vet ./app/destinationrisk ./services/platformapi/cmd/operationsmonitor ./services/redirectengine/internal/store
+      - name: Validate safe migration baseline
+        run: |
+          set -euo pipefail
+          grep -Fq "'review'," database/migrations/linkdestinationrisk.sql
+          grep -Fq "review until first destination scan completes" database/migrations/linkdestinationrisk.sql
+          grep -Fq 'UTC_TIMESTAMP()' database/migrations/linkdestinationrisk.sql
+          grep -Fq "WHERE provider='migration_legacy'" database/migrations/linkdestinationriskbaseline.sql
+          grep -Fq "SET decision='review'" database/migrations/linkdestinationriskbaseline.sql
+          grep -Fq 'next_scan_at=UTC_TIMESTAMP()' database/migrations/linkdestinationriskbaseline.sql
+          tail -n 1 database/migrations/migrationcatalog.txt | grep -Fxq 'linkdestinationriskbaseline.sql'
+          if grep -n -A18 'legacy migration baseline' database/migrations/linkdestinationrisk.sql | grep -Fq "'allow'"; then
+            echo 'destination-risk migration baseline must never grant ALLOW' >&2
+            exit 1
+          fi
       - name: Validate redirect fail-closed contract
         run: |
           set -euo pipefail
@@ -65,6 +83,7 @@ jobs:
           grep -Fq 'operationsmonitor healthcheck' deploy/native/gojet@.service
           grep -Fq 'EnsureRedisCache' services/platformapi/cmd/operationsmonitor/main.go
           grep -Fq 'redisCacheReadyKey' app/destinationrisk/runtime.go
+          grep -Fq 'rdb.Del(ctx, destinationrisk.RedisKey(item.LinkID, targets))' services/platformapi/cmd/operationsmonitor/main.go
       - name: Reject named-site risk exceptions
         run: |
           set -euo pipefail
