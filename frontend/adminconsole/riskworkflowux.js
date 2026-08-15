@@ -7,10 +7,15 @@ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 function normalizeModalClose(root=document){
   root.querySelectorAll?.('.modal-head [data-modal-close]').forEach(button=>{
-    button.textContent='×';
-    button.classList.add('gojetDialogClose');
-    button.setAttribute('aria-label','关闭');
-    button.setAttribute('title','关闭');
+    // This function is called from a childList MutationObserver. Replacing the
+    // close button text node unconditionally creates another childList mutation
+    // and can lock the browser in an infinite observer loop whenever any admin
+    // modal opens. Keep normalization strictly idempotent.
+    if(button.textContent!=='×')button.textContent='×';
+    if(!button.classList.contains('gojetDialogClose'))button.classList.add('gojetDialogClose');
+    if(button.getAttribute('aria-label')!=='关闭')button.setAttribute('aria-label','关闭');
+    if(button.getAttribute('title')!=='关闭')button.setAttribute('title','关闭');
+    if(button.type!=='button')button.type='button';
   });
 }
 
