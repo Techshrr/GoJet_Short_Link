@@ -8,6 +8,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const redisCacheReadyKey = "gojet:risk:cache:ready:v1"
+
 func RedisKey(linkID int64, targets []string) string {
 	return "gojet:risk:" + fmt.Sprint(linkID) + ":" + Fingerprint(targets)
 }
@@ -23,6 +25,27 @@ func SyncDecision(ctx context.Context, client *redis.Client, linkID int64, targe
 	pipe.Set(ctx, RedisKey(linkID, targets), string(decision), 0)
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+// EnsureRedisCache makes the SQL risk table authoritative after Redis restarts
+// or is flushed. The marker is stored in Redis itself, so loss of volatile cache
+// state automatically causes a complete exact-fingerprint republish on the next
+// recovery check instead of leaving every redirect in a permanent cache miss.
+func EnsureRedisCache(ctx context.Context, db *sql.DB, client *redis.Client) error {
+	if db == nil || client == nil {
+		return fmt.Errorf("risk cache dependencies are required")
+	}
+	exists, err := client.Exists(ctx, redisCacheReadyKey).Result()
+	if err != nil {
+		return err
+	}
+	if exists > 0 {
+		return nil
+	}
+	if err = BackfillRedis(ctx, db, client); err != nil {
+		return err
+	}
+	return client.Set(ctx, redisCacheReadyKey, "1", 0).Err()
 }
 
 // BackfillRedis only republishes a decision when it belongs to the exact current
