@@ -10,20 +10,44 @@
 </head>
 <body data-auth-page="register">
 <header class="auth-header"><a class="auth-brand" href="/" aria-label="GoJet 首页">GoJet<span>.</span></a></header>
+<a class="auth-return" href="/" aria-label="返回网站">返回网站 <span aria-hidden="true">↗</span></a>
 <main class="auth-page">
-  <section class="auth-panel" aria-labelledby="authTitle">
-    <div class="auth-heading"><h1 id="authTitle">开始使用 GoJet</h1><p>创建客户账户，开始管理短链接、分享与团队协作。</p></div>
-    <div id="message" class="message" role="status" aria-live="polite"></div>
-    <div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱注册</span></div></div>
-    <form id="registerForm">
-      <label class="field"><span>显示名称</span><input name="display_name" autocomplete="name" required maxlength="120" placeholder="你的名称"></label>
-      <label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="email" inputmode="email" required placeholder="name@example.com"></label>
-      <label class="field"><span>密码</span><input name="password" type="password" autocomplete="new-password" required minlength="10" placeholder="至少 10 位字符"></label>
-      <label class="field"><span>确认密码</span><input name="password_confirmation" type="password" autocomplete="new-password" required minlength="10" placeholder="再次输入密码"></label>
-      <label class="agreement"><input type="checkbox" required><span>我已阅读并同意 <a href="/terms" target="_blank" rel="noopener">服务条款</a> 和 <a href="/privacy" target="_blank" rel="noopener">隐私政策</a></span></label>
-      <button class="primary auth-submit" type="submit">创建账户</button>
-    </form>
-    <footer class="auth-foot">已有账户？<a href="/login">登录</a></footer>
+  <section class="auth-shell">
+    <aside class="auth-showcase" aria-hidden="true">
+      <div class="auth-art auth-art-register">
+        <svg viewBox="0 0 560 460" role="img">
+          <defs><linearGradient id="registerAccent" x1="0" x2="1"><stop stop-color="#c9ef67"/><stop offset="1" stop-color="#8fe4bd"/></linearGradient></defs>
+          <ellipse cx="281" cy="355" rx="178" ry="83" fill="none" stroke="#172144" stroke-width="4"/>
+          <ellipse cx="281" cy="355" rx="143" ry="55" fill="none" stroke="#6373e8" stroke-width="4" transform="rotate(13 281 355)"/>
+          <g transform="translate(214 123) rotate(-16 80 105)">
+            <path d="M30 32C71 5 124 20 142 60L127 180 51 185 18 91C10 69 14 48 30 32z" fill="#fff" stroke="#172144" stroke-width="5"/>
+            <path d="M51 185h76l-15 38-43-4z" fill="url(#registerAccent)" stroke="#172144" stroke-width="4"/>
+            <circle cx="94" cy="83" r="27" fill="#eef3ff" stroke="#172144" stroke-width="4"/><path d="M82 83h24M94 71v24" stroke="#6373e8" stroke-width="4" stroke-linecap="round"/>
+            <path d="M63 188l-11 52M111 188l18 49" stroke="#172144" stroke-width="7" stroke-linecap="round"/>
+          </g>
+          <circle cx="434" cy="237" r="21" fill="#ff6f4e"/><path d="M425 237h18m-9-9v18" stroke="#172144" stroke-width="3"/>
+          <circle cx="112" cy="205" r="24" fill="#c9ef67"/><path d="M101 205l8 8 14-17" fill="none" stroke="#172144" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M427 117l8 16 18 4-16 8-4 18-8-16-18-4 16-8z" fill="#172144"/>
+        </svg>
+      </div>
+      <p class="auth-showcase-caption">创建空间，开始更简单的链接与内容协作。</p>
+    </aside>
+    <section class="auth-form-panel">
+      <section class="auth-panel" aria-labelledby="authTitle">
+        <div class="auth-heading"><h1 id="authTitle">开始使用 GoJet</h1><p>创建客户账户，开始管理短链接、分享与团队协作。</p></div>
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+        <div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱注册</span></div></div>
+        <form id="registerForm">
+          <label class="field"><span>显示名称</span><input name="display_name" autocomplete="name" required maxlength="120" placeholder="你的名称"></label>
+          <label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="email" inputmode="email" required placeholder="name@example.com"></label>
+          <label class="field"><span>密码</span><input name="password" type="password" autocomplete="new-password" required minlength="10" placeholder="至少 10 位字符"></label>
+          <label class="field"><span>确认密码</span><input name="password_confirmation" type="password" autocomplete="new-password" required minlength="10" placeholder="再次输入密码"></label>
+          <label class="agreement"><input type="checkbox" required><span>我已阅读并同意 <a href="/terms" target="_blank" rel="noopener">服务条款</a> 和 <a href="/privacy" target="_blank" rel="noopener">隐私政策</a></span></label>
+          <button class="primary auth-submit" type="submit">创建账户</button>
+        </form>
+        <footer class="auth-foot">已有账户？<a href="/login">登录</a></footer>
+      </section>
+    </section>
   </section>
 </main>
 <script src="/assets/auth.js"></script>

@@ -10,18 +10,39 @@
 </head>
 <body data-auth-page="login">
 <header class="auth-header"><a class="auth-brand" href="/" aria-label="GoJet 首页">GoJet<span>.</span></a></header>
+<a class="auth-return" href="/" aria-label="返回网站">返回网站 <span aria-hidden="true">↗</span></a>
 <main class="auth-page">
-  <section class="auth-panel" aria-labelledby="authTitle">
-    <div class="auth-heading"><h1 id="authTitle">欢迎回来</h1><p>登录 GoJet，继续管理你的链接与内容。</p></div>
-    <div id="message" class="message" role="status" aria-live="polite"></div>
-    <div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱</span></div></div>
-    <form id="loginForm">
-      <label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="username" inputmode="email" required autofocus placeholder="name@example.com"></label>
-      <label class="field"><span>密码</span><input name="password" type="password" autocomplete="current-password" required minlength="10" placeholder="输入登录密码"></label>
-      <div class="auth-row"><a href="/forgotpassword">忘记密码？</a></div>
-      <button class="primary auth-submit" type="submit">登录</button>
-    </form>
-    <footer class="auth-foot">还没有账户？<a href="/register">免费注册</a></footer>
+  <section class="auth-shell">
+    <aside class="auth-showcase" aria-hidden="true">
+      <div class="auth-art auth-art-login">
+        <svg viewBox="0 0 560 460" role="img">
+          <defs><linearGradient id="loginAccent" x1="0" x2="1"><stop stop-color="#9ce8c1"/><stop offset="1" stop-color="#c7ee68"/></linearGradient></defs>
+          <circle cx="160" cy="320" r="53" fill="#172144"/><circle cx="410" cy="130" r="64" fill="#172144"/>
+          <path d="M192 300C278 294 272 174 351 153" fill="none" stroke="#172144" stroke-width="5" stroke-linecap="round"/>
+          <path d="M190 339C295 354 318 214 366 180" fill="none" stroke="#6373e8" stroke-width="5" stroke-linecap="round"/>
+          <path d="M199 367C333 390 347 253 397 199" fill="none" stroke="#172144" stroke-width="5" stroke-linecap="round"/>
+          <path d="M331 151l18 3-9 16" fill="none" stroke="#172144" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="309" cy="237" r="17" fill="url(#loginAccent)"/><path d="M302 237h14m-7-7v14" stroke="#172144" stroke-width="3" stroke-linecap="round"/>
+          <path d="M112 241l10 20 22 5-20 11-4 22-11-20-22-4 20-11z" fill="#ff6f4e"/>
+          <path d="M277 76l10 19 21 4-19 10-4 21-10-19-21-4 19-10z" fill="#172144"/>
+        </svg>
+      </div>
+      <p class="auth-showcase-caption">连接每一次访问，也连接下一次增长。</p>
+    </aside>
+    <section class="auth-form-panel">
+      <section class="auth-panel" aria-labelledby="authTitle">
+        <div class="auth-heading"><h1 id="authTitle">欢迎回来</h1><p>登录 GoJet，继续管理你的链接与内容。</p></div>
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+        <div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱</span></div></div>
+        <form id="loginForm">
+          <label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="username" inputmode="email" required autofocus placeholder="name@example.com"></label>
+          <label class="field"><span>密码</span><input name="password" type="password" autocomplete="current-password" required minlength="10" placeholder="输入登录密码"></label>
+          <div class="auth-row"><a href="/forgotpassword">忘记密码？</a></div>
+          <button class="primary auth-submit" type="submit">登录</button>
+        </form>
+        <footer class="auth-foot">还没有账户？<a href="/register">免费注册</a></footer>
+      </section>
+    </section>
   </section>
 </main>
 <script src="/assets/auth.js"></script>
