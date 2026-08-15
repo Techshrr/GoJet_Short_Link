@@ -82,6 +82,10 @@ jobs:
           grep -Fq 'scripts/installgeoip.sh' install.sh
           grep -Fq 'GEOIP_MMDB=__GOJET_ROOT__/deploy/data/geoip/city.mmdb' deploy/native/gojet@.service
           grep -Fq 'test -s __GOJET_ROOT__/deploy/data/geoip/city.mmdb' deploy/native/gojet@.service
+          grep -Fq 'GEOIP_MMDB: /data/geoip/city.mmdb' deploy/compose.production.yaml
+          grep -Fq 'bash "$ROOT/scripts/installgeoip.sh"' scripts/installdocker.sh
+          grep -Fq 'deploy/data/geoip/city.mmdb' deploy/.env.production.example
+          test -z "$(grep -R -F 'GeoLite2-City.mmdb' deploy scripts install.sh 2>/dev/null || true)"
 
       - name: Validate canonical frontend and flat public build
         run: |
