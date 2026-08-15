@@ -2,6 +2,8 @@
 const H=v=>escapeHTML(v??'');
 const statusText={open:'待处理',customer_reply:'等待客服回复',staff_reply:'客服已回复',in_progress:'处理中',resolved:'已解决',closed:'已关闭'};
 const priorityText={low:'低',normal:'普通',high:'高',urgent:'紧急'};
+const appealKindText={link:'短链接',text:'文本分享',file:'文件分享',bio:'个人主页'};
+const appealStateText={blocked:'安全阻止',review:'安全审核中',unavailable:'暂不可用'};
 let botPolicyPromise=null,turnstileScriptPromise=null;
 const turnstileWidgets=new Map();
 async function botPolicy(){if(!botPolicyPromise)botPolicyPromise=fetch('/api/public/turnstile').then(r=>r.ok?r.json():{enabled:false}).catch(()=>({enabled:false}));return botPolicyPromise}
@@ -11,18 +13,35 @@ async function turnstileToken(surface,action,form){const id=await ensureTurnstil
 function resetTurnstile(form){const id=turnstileWidgets.get(form);if(id!==undefined&&window.turnstile)window.turnstile.reset(id)}
 function ticketStatus(v){return `<span class="state ${H(v)}">${H(statusText[v]||v)}</span>`}
 function when(v){const d=new Date(v);return Number.isNaN(d.valueOf())?'—':d.toLocaleString('zh-CN',{hour12:false})}
+function appealContext(){
+ const params=new URLSearchParams(location.search);
+ if(params.get('mode')!=='appeal')return null;
+ const rawKind=(params.get('resource_kind')||'link').trim(),kind=appealKindText[rawKind]?rawKind:'link';
+ const rawState=(params.get('safety_state')||'review').trim(),safetyState=appealStateText[rawState]?rawState:'review';
+ const ref=(params.get('resource_ref')||'').trim().slice(0,80);
+ const kindLabel=appealKindText[kind],stateLabel=appealStateText[safetyState];
+ const subject=`安全审核申诉：${kindLabel}${ref?' '+ref:''}`.slice(0,220);
+ const message=`我希望申请人工复核以下资源的安全状态。\n\n资源类型：${kindLabel}\n${ref?`参考编号：${ref}\n`:''}当前状态：${stateLabel}\n\n补充说明：\n`;
+ return{kind,ref,safetyState,kindLabel,stateLabel,subject,message};
+}
+function clearAppealURL(){if(location.pathname==='/app/support'&&location.search)history.replaceState({view:'tickets'},'', '/app/support')}
 
 async function renderTickets(){
  const [tickets,depts]=await Promise.all([api('/api/support/tickets'),api('/api/support/departments')]);
+ const appeal=appealContext();
+ if(appeal)return renderNewTicket(depts.data||[],appeal);
  const content=document.querySelector('.content'),items=tickets.data||[];
  content.innerHTML=`<div class="productPageHead"><div><h1>支持工单</h1><p>查看服务进度或继续回复已有问题。</p></div><button class="primary" id="newTicket">新建工单</button></div>${items.length?`<div class="supportList">${items.map(t=>`<article class="supportRow" data-ticket-id="${t.id}" tabindex="0"><div><b>${H(t.ticket_number)}</b><small>${when(t.created_at)}</small></div><div><div class="supportSubject">${H(t.subject)}</div><small>${H(t.department_name)}</small></div><div>${H(priorityText[t.priority]||t.priority)}<small>优先级</small></div><div>${ticketStatus(t.status)}</div><div>${t.last_reply_by==='customer'?'等待客服':'客服已回复'}<small>最后回复方</small></div><div>${when(t.last_reply_at)}</div></article>`).join('')}</div>`:`<div class="productEmpty"><div class="emptyIcon">?</div><h3>暂无工单</h3><p>需要协助时，可以直接创建一张工单。</p><button class="primary" id="emptyNewTicket">新建工单</button></div>`}`;
  const openNew=()=>renderNewTicket(depts.data||[]);content.querySelector('#newTicket').onclick=openNew;content.querySelector('#emptyNewTicket')?.addEventListener('click',openNew);content.querySelectorAll('[data-ticket-id]').forEach(row=>{const open=()=>renderTicketDetail(Number(row.dataset.ticketId));row.onclick=open;row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}}})
 }
 
-function renderNewTicket(departments){
+function renderNewTicket(departments,appeal=null){
  const content=document.querySelector('.content');
- content.innerHTML=`<div class="productPageHead"><div><h1>新建支持工单</h1><p>选择问题类型并说明需要协助的内容。</p></div><button id="backTickets">返回列表</button></div><form id="ticketCreateForm" class="resourceForm"><div class="grid"><label>支持部门<select name="department_id" required>${departments.map(d=>`<option value="${d.id}">${H(d.name)}</option>`).join('')}</select></label><label>优先级<select name="priority"><option value="normal">普通</option><option value="low">低</option><option value="high">高</option><option value="urgent">紧急</option></select></label></div><label>主题<input name="subject" maxlength="220" required placeholder="例如：自定义域名无法验证"></label><label>问题内容<textarea name="message" rows="10" maxlength="50000" required placeholder="请说明问题现象，以及已经尝试过的操作。"></textarea></label><div id="ticketCreateError" class="error"></div><footer class="supportCreateActions"><button type="button" id="cancelTicket">取消</button><button class="primary" type="submit">提交工单</button></footer></form>`;
- content.querySelector('#backTickets').onclick=renderTickets;content.querySelector('#cancelTicket').onclick=renderTickets;const form=content.querySelector('#ticketCreateForm');ensureTurnstile('ticket_create','support_ticket_create',form).catch(err=>content.querySelector('#ticketCreateError').textContent=err.message);form.onsubmit=async e=>{e.preventDefault();const payload=Object.fromEntries(new FormData(form));payload.department_id=Number(payload.department_id);try{payload.turnstile_token=await turnstileToken('ticket_create','support_ticket_create',form);const created=await api('/api/support/tickets',{method:'POST',body:JSON.stringify(payload)});await renderTicketDetail(created.id)}catch(err){content.querySelector('#ticketCreateError').textContent=err.message;resetTurnstile(form)}}
+ const intro=appeal?'参考编号和安全状态已经带入工单。请补充说明你认为需要复核的原因。':'选择问题类型并说明需要协助的内容。';
+ const notice=appeal?`<div class="info"><b>安全审核申诉</b><br>${H(appeal.kindLabel)}${appeal.ref?` · 参考编号 ${H(appeal.ref)}`:''} · ${H(appeal.stateLabel)}。工单只携带资源参考信息，不会在页面中暴露目标地址或内部扫描细节。</div>`:'';
+ content.innerHTML=`<div class="productPageHead"><div><h1>${appeal?'提交安全审核申诉':'新建支持工单'}</h1><p>${H(intro)}</p></div><button id="backTickets">返回列表</button></div><form id="ticketCreateForm" class="resourceForm">${notice}<div class="grid"><label>支持部门<select name="department_id" required>${departments.map(d=>`<option value="${d.id}">${H(d.name)}</option>`).join('')}</select></label><label>优先级<select name="priority"><option value="normal">普通</option><option value="low">低</option><option value="high">高</option><option value="urgent">紧急</option></select></label></div><label>主题<input name="subject" maxlength="220" required placeholder="例如：自定义域名无法验证" value="${H(appeal?.subject||'')}"></label><label>问题内容<textarea name="message" rows="10" maxlength="50000" required placeholder="请说明问题现象，以及已经尝试过的操作。">${H(appeal?.message||'')}</textarea></label><div id="ticketCreateError" class="error"></div><footer class="supportCreateActions"><button type="button" id="cancelTicket">取消</button><button class="primary" type="submit">${appeal?'提交复核申请':'提交工单'}</button></footer></form>`;
+ const leaveAppeal=()=>{clearAppealURL();renderTickets()};
+ content.querySelector('#backTickets').onclick=leaveAppeal;content.querySelector('#cancelTicket').onclick=leaveAppeal;const form=content.querySelector('#ticketCreateForm');ensureTurnstile('ticket_create','support_ticket_create',form).catch(err=>content.querySelector('#ticketCreateError').textContent=err.message);form.onsubmit=async e=>{e.preventDefault();const payload=Object.fromEntries(new FormData(form));payload.department_id=Number(payload.department_id);try{payload.turnstile_token=await turnstileToken('ticket_create','support_ticket_create',form);const created=await api('/api/support/tickets',{method:'POST',body:JSON.stringify(payload)});clearAppealURL();await renderTicketDetail(created.id)}catch(err){content.querySelector('#ticketCreateError').textContent=err.message;resetTurnstile(form)}}
 }
 
 async function renderTicketDetail(id){
