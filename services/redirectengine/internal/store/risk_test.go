@@ -3,6 +3,7 @@ package store
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/destinationkey"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirectengine/internal/domain"
@@ -23,7 +24,14 @@ func TestRiskDecisionUsesBrandedFailClosedInterstitial(t *testing.T) {
 	}
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {
-			link := domain.Link{ID: "42", Code: "go", Destination: "https://example.com", StatusCode: 301, Active: true, RoutingRules: []domain.RoutingRule{{Dimension: "country", Value: "US", Destination: "https://example.com/us"}}, Destinations: []domain.Destination{{ID: "a", Destination: "https://example.com/a", Weight: 100}}, UTM: map[string]string{"utm_source": "test"}}
+			expires := time.Now().Add(-time.Hour)
+			link := domain.Link{
+				ID: "42", Code: "go", Destination: "https://example.com", StatusCode: 301, Active: true,
+				ExpiresAt: &expires, PasswordHash: "hash", MaxClicks: 1, OneTime: true,
+				RoutingRules: []domain.RoutingRule{{Dimension: "country", Value: "US", Destination: "https://example.com/us"}},
+				Destinations: []domain.Destination{{ID: "a", Destination: "https://example.com/a", Weight: 100}},
+				UTM: map[string]string{"utm_source": "test"},
+			}
 			enforceRiskDecision(&link, item.raw)
 			if !link.Active {
 				t.Fatalf("risk interstitial should remain routable for %#v", item.raw)
@@ -33,6 +41,9 @@ func TestRiskDecisionUsesBrandedFailClosedInterstitial(t *testing.T) {
 			}
 			if link.StatusCode != 302 || len(link.RoutingRules) != 0 || len(link.Destinations) != 0 || len(link.UTM) != 0 {
 				t.Fatalf("risk interstitial must bypass smart routing and tracking parameters: %#v", link)
+			}
+			if link.ExpiresAt != nil || link.PasswordHash != "" || link.MaxClicks != 0 || link.OneTime {
+				t.Fatalf("risk interstitial must take precedence over expiry/password/click gates: %#v", link)
 			}
 		})
 	}
