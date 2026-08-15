@@ -20,11 +20,18 @@ function badge(value){const key=['allow','review','block'].includes(value)?value
 function categories(items=[]){return items.length?items.map(item=>`<span class="riskCategory">${safeEsc(categoryNames[item]||item)}</span>`).join(''):'<span class="riskCategory">未发现分类信号</span>'}
 function evidenceRows(raw){const list=Array.isArray(raw)?raw:[];if(!list.length)return '<div class="riskEmpty">暂无扫描证据</div>';return list.map(item=>`<article><b>${safeEsc(item.final_url||item.url||'目标')}</b>${item.error?`<p>${safeEsc(item.error)}</p>`:''}<p>HTTP ${safeEsc(item.status_code||'—')} · ${safeEsc(item.content_type||'未知类型')}</p>${Array.isArray(item.signals)&&item.signals.length?`<div class="riskSignals">${item.signals.map(signal=>`<span>${safeEsc(signal)}</span>`).join('')}</div>`:''}</article>`).join('')}
 function currentButton(){return q('#nav [data-risk-review]')}
+function active(){return !!currentButton()?.classList.contains('active')}
+function ensureShell(){
+  if(!active())return false;
+  if(!q('.riskWorkspace'))renderShell();
+  return !!q('[data-risk-list]')&&!!q('[data-risk-detail]');
+}
 function enter(){
   qa('#nav [data-view],#nav [data-risk-review]').forEach(node=>node.classList.toggle('active',node===currentButton()));
   q('#pageTitle').textContent='目标风险审核';
   if(!baseReload)baseReload=q('#reload').onclick;
   q('#reload').onclick=()=>void loadQueue(model.selected);
+  model.busy=false;
   renderShell();void loadQueue(model.selected);
 }
 function leave(){if(baseReload)q('#reload').onclick=baseReload;currentButton()?.classList.remove('active')}
@@ -38,10 +45,11 @@ function renderShell(){
   qa('[data-risk-filter]').forEach(button=>button.onclick=()=>{model.filter=button.dataset.riskFilter||'';model.offset=0;model.selected=null;qa('[data-risk-filter]').forEach(x=>x.classList.toggle('active',x===button));void loadQueue()});
 }
 async function loadQueue(selectID){
-  if(model.busy)return;model.busy=true;
+  if(model.busy||!ensureShell())return;model.busy=true;
   try{
     const params=new URLSearchParams({limit:String(model.limit),offset:String(model.offset)});if(model.filter)params.set('decision',model.filter);
     const payload=await request('/api/admin/destination-risks?'+params);
+    if(!ensureShell())return;
     model.items=Array.isArray(payload.data)?payload.data:[];model.total=Number(payload.total||0);
     q('[data-risk-total]').textContent=String(model.total);
     q('[data-risk-review-count]').textContent=String(model.items.filter(x=>x.effective_decision==='review').length)+(model.filter?' / 本页':'');
@@ -49,22 +57,26 @@ async function loadQueue(selectID){
     q('[data-risk-filter-name]').textContent=model.filter?(decisionNames[model.filter]||model.filter):'全部';
     renderList();
     if(selectID&&model.items.some(x=>Number(x.link_id)===Number(selectID)))model.selected=Number(selectID);
-    if(model.selected)await loadDetail(model.selected);else if(model.items.length)await loadDetail(Number(model.items[0].link_id));else q('[data-risk-detail]').innerHTML='<div class="riskEmpty">当前筛选下没有风险记录。</div>';
-  }catch(error){q('[data-risk-list]').innerHTML=`<div class="riskEmpty">${safeEsc(error.message)}</div>`;report(error.message)}finally{model.busy=false}
+    if(model.selected)await loadDetail(model.selected);else if(model.items.length)await loadDetail(Number(model.items[0].link_id));else if(ensureShell())q('[data-risk-detail]').innerHTML='<div class="riskEmpty">当前筛选下没有风险记录。</div>';
+  }catch(error){if(ensureShell())q('[data-risk-list]').innerHTML=`<div class="riskEmpty">${safeEsc(error.message)}</div>`;report(error.message)}finally{model.busy=false}
 }
 function renderList(){
+  if(!ensureShell())return;
   const list=q('[data-risk-list]');
+  if(!list)return;
   list.innerHTML=model.items.length?model.items.map(item=>`<button class="riskRow ${Number(item.link_id)===Number(model.selected)?'active':''}" data-risk-id="${Number(item.link_id)}"><div class="riskRowMain"><div class="riskRowTitle"><strong>${safeEsc(item.domain?item.domain+'/'+item.code:item.code||('链接 #'+item.link_id))}</strong>${badge(item.effective_decision)}</div><span class="riskRowTarget">${safeEsc(item.destination||'')}</span><div class="riskRowMeta"><span>自动：${safeEsc(decisionNames[item.decision]||item.decision)}</span><span>${safeEsc((item.categories||[]).map(x=>categoryNames[x]||x).slice(0,2).join(' · ')||'无分类')}</span><span>${safeEsc(fmtDate(item.scanned_at))}</span></div></div><div class="riskScore"><span>风险分</span><strong>${Number(item.score||0)}</strong></div></button>`).join(''):'<div class="riskEmpty">当前筛选下没有风险记录。</div>';
   qa('[data-risk-id]',list).forEach(button=>button.onclick=()=>void loadDetail(Number(button.dataset.riskId)));
-  const from=model.total?model.offset+1:0,to=Math.min(model.offset+model.limit,model.total);q('[data-risk-pager]').innerHTML=`<span>${from}–${to} / ${model.total}</span><div><button data-risk-prev ${model.offset<=0?'disabled':''}>上一页</button><button data-risk-next ${model.offset+model.limit>=model.total?'disabled':''}>下一页</button></div>`;
+  const from=model.total?model.offset+1:0,to=Math.min(model.offset+model.limit,model.total);const pager=q('[data-risk-pager]');if(!pager)return;pager.innerHTML=`<span>${from}–${to} / ${model.total}</span><div><button data-risk-prev ${model.offset<=0?'disabled':''}>上一页</button><button data-risk-next ${model.offset+model.limit>=model.total?'disabled':''}>下一页</button></div>`;
   q('[data-risk-prev]')?.addEventListener('click',()=>{model.offset=Math.max(0,model.offset-model.limit);model.selected=null;void loadQueue()});
   q('[data-risk-next]')?.addEventListener('click',()=>{model.offset+=model.limit;model.selected=null;void loadQueue()});
 }
 async function loadDetail(id){
+  if(!ensureShell())return;
   model.selected=id;qa('[data-risk-id]').forEach(row=>row.classList.toggle('active',Number(row.dataset.riskId)===id));q('[data-risk-detail]').innerHTML='<div class="riskEmpty">正在读取扫描证据…</div>';
-  try{model.detail=await request(`/api/admin/destination-risks/${id}`);renderDetail(model.detail)}catch(error){q('[data-risk-detail]').innerHTML=`<div class="riskEmpty">${safeEsc(error.message)}</div>`;report(error.message)}
+  try{const detail=await request(`/api/admin/destination-risks/${id}`);if(!ensureShell())return;model.detail=detail;renderDetail(model.detail)}catch(error){if(ensureShell())q('[data-risk-detail]').innerHTML=`<div class="riskEmpty">${safeEsc(error.message)}</div>`;report(error.message)}
 }
 function renderDetail(payload){
+  if(!ensureShell())return;
   const risk=payload.risk||{},manual=risk.manual_decision||'',effective=risk.effective_decision||risk.decision||'review',targets=Array.isArray(payload.targets)?payload.targets:[];
   q('[data-risk-detail]').innerHTML=`
     ${payload.stale?'<div class="riskStale">当前目标已经变化，旧扫描结论已失效。请重新扫描后再进行人工审核。</div>':''}
