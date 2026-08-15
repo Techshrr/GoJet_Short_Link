@@ -7,6 +7,13 @@ const idFromHandler=(element,name)=>{
   const match=source.match(new RegExp(`${name}\\((\\d+)\\)`));
   return match?Number(match[1]):0;
 };
+const shareSlug=(href,prefix)=>{
+  try{
+    const path=new URL(href,location.origin).pathname;
+    if(!path.startsWith(prefix))return'';
+    return decodeURIComponent(path.slice(prefix.length).split('/')[0]||'');
+  }catch{return''}
+};
 
 function closeDialog(dialog){
   if(!dialog)return;
@@ -68,6 +75,25 @@ function enhanceTextCards(){
   });
 }
 
+async function enhanceCreatedText(){
+  const created=document.querySelector('.textCreated');
+  if(!created||created.dataset.qrReady==='1'||created.dataset.qrLoading==='1')return;
+  const anchor=created.querySelector('.textCreatedURL a[href]');
+  const slug=shareSlug(anchor?.href||'','/t/');
+  if(!slug)return;
+  created.dataset.qrLoading='1';
+  try{
+    const items=(await api(`/api/workspaces/${state.workspace}/text-shares`)).data||[];
+    const item=items.find(value=>String(value.slug||'')===slug&&value.status==='active');
+    if(!item)return;
+    appendQRButton(created.querySelector('.textCreatedURL'),'text',Number(item.id),item.title||'文本分享');
+    created.dataset.qrReady='1';
+  }catch{
+    // The share itself already exists. A transient list refresh failure must not
+    // replace the success state; the normal text library will retry on return.
+  }finally{delete created.dataset.qrLoading}
+}
+
 function enhanceFileCards(){
   document.querySelectorAll('#fileList .shareCard').forEach(card=>{
     if(!card.querySelector('.shareLine'))return;
@@ -88,13 +114,27 @@ function enhanceBioCards(){
   });
 }
 
+function enhanceCreatedBio(){
+  const created=document.querySelector('#bioEditor .shareCreated');
+  if(!created||created.dataset.qrReady==='1')return;
+  const anchor=created.querySelector('.shareLine a[href]');
+  const slug=shareSlug(anchor?.href||'','/p/');
+  if(!slug)return;
+  const item=(state.resourceBios||[]).find(value=>String(value.slug||'')===slug&&value.status==='published');
+  if(!item)return;
+  appendQRButton(created.querySelector('.shareActions'),'bio',Number(item.id),item.title||'个人主页');
+  created.dataset.qrReady='1';
+}
+
 let timer=0;
 function enhance(){
   clearTimeout(timer);
   timer=setTimeout(()=>{
     enhanceTextCards();
+    void enhanceCreatedText();
     enhanceFileCards();
     enhanceBioCards();
+    enhanceCreatedBio();
   },30);
 }
 
