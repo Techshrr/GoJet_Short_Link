@@ -129,7 +129,7 @@ func riskInterstitialURL(l domain.Link, decision string) string {
 	if decision == "block" {
 		reason = "blocked"
 	}
-	return base + "/link-unavailable?reason=" + url.QueryEscape(reason) + "&code=" + url.QueryEscape(l.Code)
+	return base + "/linkunavailable?reason=" + url.QueryEscape(reason) + "&code=" + url.QueryEscape(l.Code)
 }
 
 func enforceRiskDecision(l *domain.Link, raw any) {
