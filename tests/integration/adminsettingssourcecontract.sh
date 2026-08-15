@@ -43,12 +43,12 @@ grep -Fq 'window.refreshMailSettings=' "$mail"
 grep -Fq 'async function renderBotProtectionSettings(target=null,options={})' "$bot"
 
 # Customer social login is configured inside System Settings, but it is never
-# an administrator authentication method. The settings extension owns only the
-# customer provider configuration and compact multi-select picker.
+# an administrator authentication method. Assert the product boundary, not a
+# retired sentence that can change during copy polishing.
 grep -Fq "const original=window.renderSettings;" "$social"
 grep -Fq "button.dataset.ahTab='socialauth'" "$social"
 grep -Fq '<b>客户快捷登录</b>' "$social"
-grep -Fq '管理后台不会使用这些快捷登录方式' "$social"
+grep -Fq '管理员登录始终独立' "$social"
 grep -Fq "api('/api/admin/auth/providers')" "$social"
 grep -Fq "api('/api/admin/settings/socialauth',{method:'PUT'" "$social"
 grep -Fq "data-sensitive=\"1\"" "$social"
