@@ -3,10 +3,11 @@
 const params=new URLSearchParams(location.search);
 const rawReason=(params.get('reason')||'review').trim();
 const reason=rawReason==='blocked'?'blocked':rawReason==='unavailable'?'unavailable':'review';
-const kind=(params.get('kind')||'link').trim();
+const rawKind=(params.get('kind')||'link').trim();
+const kind=['link','text','file','bio'].includes(rawKind)?rawKind:'link';
 const code=(params.get('code')||params.get('ref')||'').trim().slice(0,80);
 const labels={link:'链接',text:'文本分享',file:'文件分享',bio:'个人主页'};
-const resource=labels[kind]||'内容';
+const resource=labels[kind];
 document.body.dataset.safety=reason;
 const title=document.querySelector('#safetyTitle'),description=document.querySelector('#safetyDescription'),state=document.querySelector('#safetyState'),note=document.querySelector('#safetyNote');
 if(reason==='blocked'){
@@ -28,4 +29,10 @@ if(reason==='blocked'){
   state.textContent='安全审核中';
 }
 if(code){document.querySelector('#safetyReference')?.classList.remove('hidden');const target=document.querySelector('#safetyCode');if(target)target.textContent=code}
+const appeal=document.querySelector('#safetyAppeal');
+if(appeal){
+  const appealParams=new URLSearchParams({mode:'appeal',resource_kind:kind,safety_state:reason});
+  if(code)appealParams.set('resource_ref',code);
+  appeal.href=`/app/support?${appealParams.toString()}`;
+}
 })();
