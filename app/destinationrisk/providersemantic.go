@@ -66,6 +66,25 @@ func visibleRuneCount(text string) int {
 	return count
 }
 
+func clientRenderedShell(snapshot Snapshot, text string) bool {
+	// A small amount of readable HTML wrapped around a JavaScript application is
+	// not evidence that the final application is safe. Random-domain abuse sites
+	// commonly return this kind of shell to non-browser scanners. Keep the rule
+	// generic: it is based on page structure, never a hostname or vendor list.
+	if visibleRuneCount(text) >= 90 {
+		return false
+	}
+	source := strings.ToLower(snapshot.Body)
+	rootMarker := containsSemantic(source,
+		`id="app"`, `id='app'`, `id="root"`, `id='root'`, `id="__next"`, `id='__next'`, `id="__nuxt"`, `id='__nuxt'`,
+		"data-reactroot", "data-server-rendered", "window.__nuxt__", "__next_data__",
+	)
+	if !rootMarker {
+		return false
+	}
+	return strings.Count(source, "<script") >= 1
+}
+
 func mergeProviderResults(left, right ProviderResult) ProviderResult {
 	out := left
 	if right.Score > out.Score {
@@ -188,6 +207,8 @@ func (p *semanticProvider) Assess(ctx context.Context, snapshot Snapshot) (Provi
 	contentType := strings.ToLower(snapshot.ContentType)
 	if strings.Contains(contentType, "text/html") && snapshot.StatusCode >= 200 && snapshot.StatusCode < 400 && visibleRuneCount(text) < 28 && rank(result.Decision) < rank(Review) {
 		add(Review, 45, CategoryPlatformSecurity, "destination_content_not_verifiable")
+	} else if strings.Contains(contentType, "text/html") && snapshot.StatusCode >= 200 && snapshot.StatusCode < 400 && clientRenderedShell(snapshot, text) && rank(result.Decision) < rank(Review) {
+		add(Review, 52, CategoryPlatformSecurity, "destination_client_rendered_content_not_verifiable")
 	}
 
 	if p != nil && p.external != nil {
