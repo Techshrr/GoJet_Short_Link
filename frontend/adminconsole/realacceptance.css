@@ -5,8 +5,26 @@
 .socialAuthCallbackInfo{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #e3eae6;border-radius:10px;background:#f8faf9;padding:12px 14px;min-width:0}
 .socialAuthCallbackInfo>div{min-width:0;display:grid;gap:4px}
 .socialAuthCallbackInfo b{font-size:11px;color:#344054}
-.socialAuthCallbackInfo small{font-size:10px;color:#7d8a83;line-height:1.5}
+.socialAuthCallbackInfo small{font-size:10px;color:#66756e;line-height:1.5}
 .socialAuthCallbackInfo code{display:block;max-width:100%;overflow:auto;white-space:nowrap;background:transparent;color:#355148;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;padding:0}
 .socialAuthCallbackInfo .btn{flex:0 0 auto}
 .socialAuthProviderBody label{min-width:0}
+
+/* Risk review is an authoritative safety state, not a second unrelated badge. */
+.state.risk-blocked{background:#fff0ee!important;color:#9f2f27!important;border:1px solid #efc6c0!important;font-weight:760!important}
+.state.risk-review{background:#fff7e5!important;color:#81591b!important;border:1px solid #ead6a5!important;font-weight:760!important}
+.state.risk-allow{background:#eef8f3!important;color:#116b45!important;border:1px solid #cae5d7!important;font-weight:760!important}
+#content tbody tr.adminLinkRiskBlocked{background:#fffaf9}
+#content tbody tr.adminLinkRiskBlocked td:first-child{box-shadow:inset 3px 0 0 #cb5146}
+#content tbody tr.adminLinkRiskReview{background:#fffdf7}
+#content tbody tr.adminLinkRiskReview td:first-child{box-shadow:inset 3px 0 0 #c99231}
+
+/* Sidebar identity must remain readable at normal desktop viewing distance. */
+.sidebar-account{grid-template-columns:38px minmax(0,1fr)!important;grid-template-areas:"avatar identity" "avatar role"!important;column-gap:10px!important;row-gap:4px!important;padding:14px 9px!important;border-top:1px solid #e6ece8!important;align-items:center!important}
+.adminAvatar{grid-area:avatar!important;width:38px!important;height:38px!important;border-radius:11px!important;font-size:12px!important;font-weight:850!important}
+.adminIdentity{grid-area:identity!important;min-width:0!important}
+.adminIdentity strong{display:block!important;font-size:12.5px!important;line-height:1.35!important;color:#1f322a!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.adminIdentity span{display:block!important;margin-top:2px!important;font-size:10.5px!important;line-height:1.35!important;color:#6f7e76!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.role-pill{grid-area:role!important;justify-self:start!important;min-height:23px!important;padding:0 8px!important;border:1px solid #dce6e1!important;background:#f6f9f7!important;color:#3b5448!important;font-size:10.5px!important;font-weight:720!important}
+
 @media(max-width:700px){.socialAuthCallbackInfo{align-items:stretch;flex-direction:column}.socialAuthCallbackInfo .btn{align-self:flex-start}}
