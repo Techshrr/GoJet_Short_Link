@@ -197,6 +197,8 @@ services:
     environment:
       MYSQL_DSN: gojet:${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}@tcp(mysql:3306)/gojet?parseTime=true&charset=utf8mb4
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:?SETTINGS_ENCRYPTION_KEY is required}
+      REDIS_ADDRESS: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       ALERT_RECIPIENT: ${ALERT_RECIPIENT:-}
       OPERATIONS_MONITOR_INTERVAL_SECONDS: ${OPERATIONS_MONITOR_INTERVAL_SECONDS:-60}
       DESTINATION_RISK_SCAN_INTERVAL_SECONDS: ${DESTINATION_RISK_SCAN_INTERVAL_SECONDS:-3}
@@ -208,6 +210,8 @@ services:
       LOG_WEBHOOK_TOKEN: ${LOG_WEBHOOK_TOKEN:?LOG_WEBHOOK_TOKEN is required}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       platformapi:
         condition: service_started
