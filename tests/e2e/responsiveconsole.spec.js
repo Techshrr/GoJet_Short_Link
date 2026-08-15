@@ -1,6 +1,10 @@
 const {test,expect}=require('@playwright/test');
 
-const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4180';
+// Product Surface runs this suite against its real Nginx fixture on 4180 via
+// GOJET_SURFACE_BASE. The general installer/browser fixture is served by the
+// root Playwright config on 4173. Keep the default aligned with that canonical
+// fixture instead of silently dialing a server that does not exist.
+const base=process.env.GOJET_SURFACE_BASE||'http://127.0.0.1:4173';
 const viewports=[
   {name:'desktop',width:1440,height:900},
   {name:'tablet',width:1024,height:768},
