@@ -44,6 +44,7 @@ func main() {
 		log.Printf("destination risk cache backfill: %v", err)
 	}
 	bootstrapCancel()
+	go runRiskCacheRecoveryLoop(context.Background(), db, rdb)
 	go runRiskLoop(context.Background(), riskStore, riskScanner, rdb)
 
 	interval, _ := strconv.Atoi(value("OPERATIONS_MONITOR_INTERVAL_SECONDS", "60"))
@@ -91,6 +92,27 @@ func operationsHealthcheck() bool {
 // detection remains active even when no external reputation service is set.
 func newDestinationRiskScanner() *destinationrisk.Scanner {
 	return destinationrisk.New(destinationrisk.ProviderFromEnvironment())
+}
+
+// runRiskCacheRecoveryLoop detects Redis restarts/flushes through the cache
+// marker written by BackfillRedis. Missing volatile state is reconstructed from
+// the authoritative SQL risk table while redirectengine remains fail-closed.
+func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			recoveryCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			err := destinationrisk.EnsureRedisCache(recoveryCtx, db, rdb)
+			cancel()
+			if err != nil {
+				log.Printf("destination risk cache recovery: %v", err)
+			}
+		}
+	}
 }
 
 func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *destinationrisk.Scanner, rdb *redis.Client) {
