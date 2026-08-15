@@ -59,10 +59,13 @@ async function assertViewportHealthy(page,label){
 
 async function adminLogin(page){
   await page.goto(base+'/admin/',{waitUntil:'domcontentloaded'});
+  await expect(page.locator('#loginView')).toBeVisible();
+  await expect(page.locator('#adminView')).toBeHidden();
   await page.getByLabel('管理员邮箱').fill('owner@example.test');
   await page.getByLabel('密码').fill('OwnerPassword!2026');
   await page.getByRole('button',{name:'登录',exact:true}).click();
   await expect(page.locator('#adminView')).toBeVisible({timeout:10000});
+  await expect(page.locator('#loginView')).toBeHidden();
 }
 
 for(const viewport of viewports){
