@@ -16,3 +16,10 @@ func TestProductionDestinationRiskScannerAlwaysHasSemanticProvider(t *testing.T)
 		t.Fatalf("expected production scanner semantic fallback, got %q", scanner.Provider.Name())
 	}
 }
+
+func TestOperationsHealthcheckFailsClosedWithoutDSN(t *testing.T) {
+	t.Setenv("MYSQL_DSN", "")
+	if operationsHealthcheck() {
+		t.Fatal("operations healthcheck must fail closed when MySQL is not configured")
+	}
+}
