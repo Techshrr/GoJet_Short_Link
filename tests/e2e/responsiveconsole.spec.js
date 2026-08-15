@@ -124,7 +124,7 @@ test('desktop Bio editor exposes theme state, live preview, prominent add-link C
   await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
   await page.goto(base+'/app/bio',{waitUntil:'networkidle'});
 
-  await expect(page.getByRole('heading',{name:'个人主页'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'个人主页',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'创建主页',exact:true}).first().click();
 
   const editor=page.locator('#bioEditor .bioEditor');
