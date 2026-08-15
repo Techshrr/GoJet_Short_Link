@@ -172,3 +172,8 @@
   .shell main>header,.admin-shell .topbar{position:sticky!important;top:0!important;z-index:20!important}
   .page-actions,.row-actions,.riskReviewActions{justify-content:flex-start!important}
 }
+
+/* Visibility is application state, not presentation. Keep this last so older
+   product-specific responsive !important display rules cannot reveal a shell,
+   modal, error or control that JavaScript has explicitly hidden. */
+[hidden],.hidden{display:none!important}
