@@ -11,11 +11,12 @@ WorkingDirectory=__GOJET_ROOT__
 EnvironmentFile=__GOJET_ROOT__/deploy/native/gojet.env
 Environment=BRAND_ASSET_PATH=__GOJET_ROOT__/deploy/data/brand
 Environment=GENERATED_QR_STORAGE_PATH=__GOJET_ROOT__/deploy/data/generated/qr
+Environment=GEOIP_COUNTRY_CSV=__GOJET_ROOT__/deploy/data/geoip/country.csv
 Environment=PDF_FONT_PATH=__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf
 UMask=0022
-ExecStartPre=/usr/bin/mkdir -p __GOJET_ROOT__/deploy/data/brand __GOJET_ROOT__/deploy/data/generated/qr
+ExecStartPre=/usr/bin/mkdir -p __GOJET_ROOT__/deploy/data/brand __GOJET_ROOT__/deploy/data/generated/qr __GOJET_ROOT__/deploy/data/geoip
 ExecStartPre=/usr/bin/test -s __GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf
-ExecStartPre=/usr/bin/chmod 0755 __GOJET_ROOT__/deploy/data/brand __GOJET_ROOT__/deploy/data/generated/qr
+ExecStartPre=/usr/bin/chmod 0755 __GOJET_ROOT__/deploy/data/brand __GOJET_ROOT__/deploy/data/generated/qr __GOJET_ROOT__/deploy/data/geoip
 ExecStart=__GOJET_ROOT__/bin/%i
 Restart=on-failure
 RestartSec=3
