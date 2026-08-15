@@ -130,6 +130,76 @@ func decisionForScore(score int) Decision {
 	return Allow
 }
 
+func maxScore(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func appendCategory(categories []Category, category Category) []Category {
+	for _, existing := range categories {
+		if existing == category {
+			return categories
+		}
+	}
+	return append(categories, category)
+}
+
+func applyRisk(out *Assessment, seenCategories map[Category]bool, raw, finalURL string, score int, categories []Category, decision Decision) {
+	for _, category := range categories {
+		if !seenCategories[category] {
+			seenCategories[category] = true
+			out.Categories = append(out.Categories, category)
+		}
+	}
+	if score > out.Score {
+		out.Score = score
+	}
+	if rank(decision) > rank(out.Decision) {
+		out.Decision = decision
+		out.ScannedURL = raw
+		if finalURL != "" {
+			out.FinalURL = finalURL
+		}
+	} else if out.FinalURL == "" && finalURL != "" {
+		out.FinalURL = finalURL
+	}
+}
+
+// publicFetchError deliberately converts transport failures into stable public
+// messages. net/http errors frequently contain the local socket address and the
+// remote peer (for example "read tcp 10.0.0.2:1234->203.0.113.2:443"). Those
+// implementation details are useful in private service logs, but must never be
+// persisted as risk evidence or shown in the administrator UI.
+func publicFetchError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var targetErr *targetError
+	if errors.As(err, &targetErr) {
+		return targetErr.message
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Err != nil {
+		return publicFetchError(urlErr.Err)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "destination request timed out"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return "destination request timed out"
+		}
+		return "destination network connection failed"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "destination response ended unexpectedly"
+	}
+	return "destination request failed"
+}
+
 func (s *Scanner) Assess(ctx context.Context, targets []string) Assessment {
 	now := time.Now().UTC()
 	out := Assessment{Decision: Allow, Provider: "builtin", ScannedAt: now, NextScanAt: now.Add(24 * time.Hour)}
@@ -146,52 +216,57 @@ func (s *Scanner) Assess(ctx context.Context, targets []string) Assessment {
 			out.ScannedURL = raw
 		}
 
+		// URL/host signals are evaluated before DNS and HTTP. A destination that
+		// is unambiguously prohibited must not become merely "review" because its
+		// CDN resets the scanner connection or otherwise refuses automated fetches.
+		preScore, preCategories, preSignals := classify(Snapshot{URL: raw, FinalURL: raw, Headers: map[string]string{}})
+		preDecision := decisionForScore(preScore)
 		evidence := Evidence{URL: raw}
+
 		if _, err := s.validateTarget(ctx, raw); err != nil {
+			localScore := preScore
+			localCategories := append([]Category(nil), preCategories...)
+			localDecision := preDecision
 			var targetErr *targetError
 			if errors.As(err, &targetErr) {
 				evidence.Error = targetErr.message
-				evidence.Signals = []string{"network_target_rejected"}
-				out.Evidence = append(out.Evidence, evidence)
-				if !seenCategories[targetErr.category] {
-					seenCategories[targetErr.category] = true
-					out.Categories = append(out.Categories, targetErr.category)
+				evidence.Signals = append(evidence.Signals, preSignals...)
+				evidence.Signals = append(evidence.Signals, "network_target_rejected")
+				localCategories = appendCategory(localCategories, targetErr.category)
+				if rank(targetErr.decision) > rank(localDecision) {
+					localDecision = targetErr.decision
 				}
-				if rank(targetErr.decision) > rank(out.Decision) {
-					out.Decision = targetErr.decision
-					out.ScannedURL = raw
+				if targetErr.decision == Block {
+					localScore = maxScore(localScore, 100)
+				} else {
+					localScore = maxScore(localScore, 45)
 				}
-				if targetErr.decision == Block && out.Score < 100 {
-					out.Score = 100
-				} else if out.Score < 45 {
-					out.Score = 45
+			} else {
+				evidence.Error = publicFetchError(err)
+				evidence.Signals = append(evidence.Signals, preSignals...)
+				evidence.Signals = append(evidence.Signals, "network_validation_failed")
+				if rank(Review) > rank(localDecision) {
+					localDecision = Review
 				}
-				continue
+				localScore = maxScore(localScore, 45)
 			}
-
-			evidence.Error = err.Error()
 			out.Evidence = append(out.Evidence, evidence)
-			if rank(Review) > rank(out.Decision) {
-				out.Decision = Review
-				out.ScannedURL = raw
-			}
-			if out.Score < 45 {
-				out.Score = 45
-			}
+			applyRisk(&out, seenCategories, raw, raw, localScore, localCategories, localDecision)
 			continue
 		}
 
 		snapshot, err := s.fetch(ctx, raw)
 		if err != nil {
-			evidence.Error = err.Error()
+			localScore := maxScore(preScore, 45)
+			localDecision := preDecision
+			if rank(Review) > rank(localDecision) {
+				localDecision = Review
+			}
+			evidence.Error = publicFetchError(err)
+			evidence.Signals = append(evidence.Signals, preSignals...)
+			evidence.Signals = append(evidence.Signals, "network_fetch_failed")
 			out.Evidence = append(out.Evidence, evidence)
-			if rank(Review) > rank(out.Decision) {
-				out.Decision = Review
-				out.ScannedURL = raw
-			}
-			if out.Score < 45 {
-				out.Score = 45
-			}
+			applyRisk(&out, seenCategories, raw, raw, localScore, preCategories, localDecision)
 			continue
 		}
 
@@ -220,28 +295,15 @@ func (s *Scanner) Assess(ctx context.Context, targets []string) Assessment {
 				if rank(providerResult.Decision) > rank(localDecision) {
 					localDecision = providerResult.Decision
 				}
-				categories = append(categories, providerResult.Categories...)
+				for _, category := range providerResult.Categories {
+					categories = appendCategory(categories, category)
+				}
 				evidence.Signals = append(evidence.Signals, providerResult.Signals...)
 			}
 		}
 
 		out.Evidence = append(out.Evidence, evidence)
-		for _, category := range categories {
-			if !seenCategories[category] {
-				seenCategories[category] = true
-				out.Categories = append(out.Categories, category)
-			}
-		}
-		if score > out.Score {
-			out.Score = score
-		}
-		if rank(localDecision) > rank(out.Decision) {
-			out.Decision = localDecision
-			out.ScannedURL = raw
-			out.FinalURL = snapshot.FinalURL
-		} else if out.FinalURL == "" {
-			out.FinalURL = snapshot.FinalURL
-		}
+		applyRisk(&out, seenCategories, raw, snapshot.FinalURL, score, categories, localDecision)
 	}
 
 	if len(seenTargets) == 0 {
@@ -351,7 +413,7 @@ func (s *Scanner) fetch(ctx context.Context, raw string) (Snapshot, error) {
 		DialContext: func(dialCtx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
 			if err != nil {
-				return nil, err
+				return nil, errors.New("destination address is invalid")
 			}
 			ips, err := s.lookup(dialCtx, host)
 			if err != nil || len(ips) == 0 {
@@ -380,7 +442,7 @@ func (s *Scanner) fetch(ctx context.Context, raw string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	req.Header.Set("User-Agent", "GoJet-Destination-Risk/1.1")
+	req.Header.Set("User-Agent", "GoJet-Destination-Risk/1.2")
 	req.Header.Set("Accept", "text/html,text/plain;q=0.9,*/*;q=0.1")
 	response, err := client.Do(req)
 	if err != nil {
@@ -468,9 +530,11 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 	}
 
 	adultHost := false
+	gamblingHost := false
 	if parsed, err := url.Parse(snapshot.FinalURL); err == nil {
 		host := strings.ToLower(parsed.Hostname())
 		adultHost = containsHostLabel(host, "missav", "pornhub", "xvideos", "xnxx", "redtube", "brazzers", "javdb", "javbus", "avgle")
+		gamblingHost = containsHostLabel(host, "bet365", "1xbet")
 	}
 	adultExplicit := containsAny(
 		"porn video", "porn videos", "xxx video", "adult video", "adult cam", "sex video", "uncensored porn",
@@ -478,7 +542,7 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 	)
 	adultSecondary := containsAny("nsfw videos", "nude videos", "国产自拍", "成人内容", "情色影片", "jav porn")
 	if adultHost {
-		add(CategoryAdult, 55, "adult_host_signal")
+		add(CategoryAdult, 95, "adult_host_signal")
 	}
 	if adultExplicit {
 		add(CategoryAdult, 55, "adult_explicit_content_signal")
@@ -486,6 +550,9 @@ func classify(snapshot Snapshot) (int, []Category, []string) {
 		add(CategoryAdult, 45, "adult_content_signal")
 	}
 
+	if gamblingHost {
+		add(CategoryGambling, 90, "gambling_host_signal")
+	}
 	if containsAny("online casino", "sports betting", "casino bonus", "betting odds", "博彩", "赌场", "下注送彩金", "体育投注") {
 		add(CategoryGambling, 65, "gambling_signal")
 	}
