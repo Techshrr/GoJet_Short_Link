@@ -9,6 +9,10 @@ import (
 	"testing"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func TestRainbowLoginAndProfileExchangeKeepSecretServerSide(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/connect.php", func(w http.ResponseWriter, r *http.Request) {
@@ -34,10 +38,29 @@ func TestRainbowLoginAndProfileExchangeKeepSecretServerSide(t *testing.T) {
 	})
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
+
+	upstream, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseClient := ts.Client()
+	baseTransport := baseClient.Transport
 	oldClient := socialOAuthHTTPClient
-	socialOAuthHTTPClient = ts.Client()
+	socialOAuthHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		clone := req.Clone(req.Context())
+		clonedURL := *req.URL
+		clonedURL.Scheme = upstream.Scheme
+		clonedURL.Host = upstream.Host
+		clone.URL = &clonedURL
+		clone.Host = "rainbow.test"
+		return baseTransport.RoundTrip(clone)
+	})}
 	defer func() { socialOAuthHTTPClient = oldClient }()
-	config := socialProviderConfig{ClientID: "rainbow-app", ClientSecret: "rainbow-secret", BaseURL: ts.URL + "/connect.php"}
+
+	// Production validation must continue to see a public-host-shaped HTTPS
+	// interface. The test transport above maps that hostname to the local TLS
+	// fixture without weakening normalizeRainbowBaseURL for real deployments.
+	config := socialProviderConfig{ClientID: "rainbow-app", ClientSecret: "rainbow-secret", BaseURL: "https://rainbow.test/connect.php"}
 	authorize, err := rainbowAuthorizationURL(context.Background(), config, "qq", "https://gojet.test/api/public/auth/rainbow/callback?state=state-value")
 	if err != nil || authorize != "https://graph.qq.com/oauth2.0/authorize?from=rainbow" {
 		t.Fatalf("authorize=%q err=%v", authorize, err)
