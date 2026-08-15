@@ -68,6 +68,33 @@ func TestSemanticProviderReviewsUnverifiableChallenge(t *testing.T) {
 	}
 }
 
+func TestSemanticProviderReviewsClientRenderedShellWithoutEnoughEvidence(t *testing.T) {
+	provider := newSemanticProvider(nil)
+	result, err := provider.Assess(context.Background(), Snapshot{
+		URL:         "https://opaque-random.example/",
+		FinalURL:    "https://opaque-random.example/",
+		StatusCode:  200,
+		ContentType: "text/html; charset=utf-8",
+		Title:       "Welcome",
+		Body:        `<html><body><div id="app"><h1>Welcome</h1><p>Please open the interactive application to continue with the available account services.</p></div><script src="/assets/runtime.js"></script><script src="/assets/app.js"></script></body></html>`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Decision != Review || result.Score < 50 {
+		t.Fatalf("expected unverifiable client-rendered shell to require review, got %#v", result)
+	}
+	found := false
+	for _, signal := range result.Signals {
+		if signal == "destination_client_rendered_content_not_verifiable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("client-rendered evidence signal missing: %#v", result)
+	}
+}
+
 func TestSemanticProviderDoesNotBlockOrdinaryPaymentsOrSports(t *testing.T) {
 	provider := newSemanticProvider(nil)
 	result, err := provider.Assess(context.Background(), Snapshot{
