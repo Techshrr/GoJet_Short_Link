@@ -24,6 +24,20 @@ async function choose(page,id,enabled=true){
 }
 async function configure(page,id,{clientID,secret,baseURL,loginType}={}){const card=page.locator(`[data-social-provider="${id}"]`);if(!(await card.evaluate(el=>el.open)))await card.locator('summary').click();if(clientID!==undefined)await card.locator('input[name$="client_id"]').fill(clientID);if(secret!==undefined)await card.locator('input[name$="client_secret"]').fill(secret);if(baseURL!==undefined)await card.locator('input[name$="base_url"]').fill(baseURL);if(loginType!==undefined)await card.locator('select[name$="login_type"]').selectOption(loginType);}
 async function saveSettings(page){const response=page.waitForResponse(res=>res.request().method()==='PUT'&&res.url().endsWith('/api/admin/settings/socialauth'));await page.getByRole('button',{name:'保存设置',exact:true}).click();expect((await response).status()).toBe(200);await expect(page.locator('[data-socialauth-form]')).toBeVisible();}
+async function expectNativeLaunchRoutes(page){
+  const expected={
+    google:'https://accounts.google.com/o/oauth2/v2/auth?',
+    facebook:'https://www.facebook.com/dialog/oauth?',
+    github:'https://github.com/login/oauth/authorize?',
+    qq:'https://graph.qq.com/oauth2.0/authorize?',
+    wechat:'https://open.weixin.qq.com/connect/qrconnect?'
+  };
+  for(const [provider,prefix] of Object.entries(expected)){
+    const response=await page.request.get(`${base}/api/public/auth/${provider}/start?redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
+    expect(response.status(),`${provider} social start status`).toBe(302);
+    expect(response.headers().location||'',`${provider} social start location`).toMatch(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`));
+  }
+}
 
 test('customer social login settings use compact multi-select and never change admin authentication',async({page})=>{
   await adminLogin(page);await openSocialSettings(page);
@@ -39,6 +53,7 @@ test('customer social login settings use compact multi-select and never change a
   await saveSettings(page);
   await expect(page.locator('[data-socialauth-picker-summary]')).toHaveText('已选择 6 个方式');
   await expect(page.locator('[data-social-provider="github"] input[name="auth.social.github.client_secret"]')).toHaveAttribute('placeholder','已配置，留空保持不变');
+  await expectNativeLaunchRoutes(page);
   await page.goto(base+'/login');await expect(page.locator('.social-provider')).toHaveCount(6);await expect(page.locator('.social-provider')).toHaveText(['继续使用 Google','继续使用 Facebook','继续使用 GitHub','继续使用 QQ','继续使用 微信','继续使用 彩虹聚合登录']);
   await page.goto(base+'/admin/');await expect(page.locator('#adminView')).toBeVisible();await expect(page.locator('.social-provider')).toHaveCount(0);await openSocialSettings(page);await choose(page,'facebook',false);await choose(page,'qq',false);await choose(page,'wechat',false);await choose(page,'rainbow',false);await saveSettings(page);
   await expect(page.locator('[data-socialauth-picker-summary]')).toHaveText('已选择 2 个方式');
