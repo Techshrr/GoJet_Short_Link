@@ -1,1 +1,31 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>注册 · GoJet</title><meta name="robots" content="noindex"><link rel="stylesheet" href="/assets/gojetdesignsystem.css"><link rel="stylesheet" href="/assets/auth.css"></head><body data-auth-page="register"><header class="auth-header"><a class="auth-brand" href="/" aria-label="GoJet 首页">GoJet<span>.</span></a></header><main class="auth-page"><section class="auth-panel" aria-labelledby="authTitle"><div class="auth-heading"><h1 id="authTitle">创建 GoJet 账户</h1><p>几步完成注册，之后即可开始使用。</p></div><div id="message" class="message" role="status" aria-live="polite"></div><div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱注册</span></div></div><form id="registerForm"><label class="field"><span>显示名称</span><input name="display_name" autocomplete="name" required maxlength="120" placeholder="你的名称"></label><label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label><label class="field"><span>密码</span><input name="password" type="password" autocomplete="new-password" required minlength="10" placeholder="至少 10 位字符"></label><label class="field"><span>确认密码</span><input name="password_confirmation" type="password" autocomplete="new-password" required minlength="10"></label><label class="agreement"><input type="checkbox" required><span>我已阅读并同意 <a href="/terms" target="_blank" rel="noopener">服务条款</a> 和 <a href="/privacy" target="_blank" rel="noopener">隐私政策</a></span></label><button class="primary auth-submit" type="submit">创建账户</button></form><footer class="auth-foot">已有账户？<a href="/login">登录</a></footer></section></main><script src="/assets/auth.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>注册 · GoJet</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/assets/gojetdesignsystem.css">
+<link rel="stylesheet" href="/assets/auth.css">
+</head>
+<body data-auth-page="register">
+<header class="auth-header"><a class="auth-brand" href="/" aria-label="GoJet 首页">GoJet<span>.</span></a></header>
+<main class="auth-page">
+  <section class="auth-panel" aria-labelledby="authTitle">
+    <div class="auth-heading"><h1 id="authTitle">开始使用 GoJet</h1><p>创建客户账户，开始管理短链接、分享与团队协作。</p></div>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+    <div id="socialAuth" class="social-auth hidden"><div id="socialProviders" class="social-providers"></div><div class="auth-divider"><span>或使用邮箱注册</span></div></div>
+    <form id="registerForm">
+      <label class="field"><span>显示名称</span><input name="display_name" autocomplete="name" required maxlength="120" placeholder="你的名称"></label>
+      <label class="field"><span>邮箱</span><input name="email" type="email" autocomplete="email" inputmode="email" required placeholder="name@example.com"></label>
+      <label class="field"><span>密码</span><input name="password" type="password" autocomplete="new-password" required minlength="10" placeholder="至少 10 位字符"></label>
+      <label class="field"><span>确认密码</span><input name="password_confirmation" type="password" autocomplete="new-password" required minlength="10" placeholder="再次输入密码"></label>
+      <label class="agreement"><input type="checkbox" required><span>我已阅读并同意 <a href="/terms" target="_blank" rel="noopener">服务条款</a> 和 <a href="/privacy" target="_blank" rel="noopener">隐私政策</a></span></label>
+      <button class="primary auth-submit" type="submit">创建账户</button>
+    </form>
+    <footer class="auth-foot">已有账户？<a href="/login">登录</a></footer>
+  </section>
+</main>
+<script src="/assets/auth.js"></script>
+</body>
+</html>
