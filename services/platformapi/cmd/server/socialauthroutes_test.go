@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestSocialAuthRoutesAreRegistered(t *testing.T) {
+func TestSocialAuthRoutesAreRegisteredByProductionRegistrar(t *testing.T) {
 	mux := http.NewServeMux()
-	(&server{}).registerSocialAuthRoutes(mux)
+	(&server{}).registerEmailCodeRoutes(mux)
 
 	cases := []struct {
 		method  string
@@ -16,8 +16,13 @@ func TestSocialAuthRoutesAreRegistered(t *testing.T) {
 		pattern string
 	}{
 		{http.MethodGet, "/api/public/auth/providers", "GET /api/public/auth/providers"},
-		{http.MethodGet, "/api/public/auth/google/start", "GET /api/public/auth/{provider}/start"},
-		{http.MethodGet, "/api/public/auth/github/callback", "GET /api/public/auth/{provider}/callback"},
+		{http.MethodGet, "/api/public/auth/google/start", "GET /api/public/auth/google/start"},
+		{http.MethodGet, "/api/public/auth/facebook/start", "GET /api/public/auth/facebook/start"},
+		{http.MethodGet, "/api/public/auth/github/start", "GET /api/public/auth/github/start"},
+		{http.MethodGet, "/api/public/auth/qq/start", "GET /api/public/auth/qq/start"},
+		{http.MethodGet, "/api/public/auth/wechat/start", "GET /api/public/auth/wechat/start"},
+		{http.MethodGet, "/api/public/auth/rainbow/start", "GET /api/public/auth/rainbow/start"},
+		{http.MethodGet, "/api/public/auth/github/callback", "GET /api/public/auth/github/callback"},
 		{http.MethodPost, "/api/public/auth/handoff", "POST /api/public/auth/handoff"},
 		{http.MethodGet, "/api/public/auth/rainbow/bind-launch", "GET /api/public/auth/rainbow/bind-launch"},
 		{http.MethodGet, "/api/admin/auth/providers", "GET /api/admin/auth/providers"},
@@ -35,20 +40,18 @@ func TestSocialAuthRoutesAreRegistered(t *testing.T) {
 	}
 }
 
-func TestSocialAuthDispatchRejectsUnknownProviderBeforeBackendAccess(t *testing.T) {
-	s := &server{}
+func TestUnknownSocialLoginProviderHasNoProductionRoute(t *testing.T) {
 	mux := http.NewServeMux()
-	s.registerSocialAuthRoutes(mux)
+	(&server{}).registerEmailCodeRoutes(mux)
 
 	for _, path := range []string{
 		"/api/public/auth/unknown/start",
 		"/api/public/auth/unknown/callback",
 	} {
-		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "http://gojet.test"+path, nil)
-		mux.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusNotFound {
-			t.Errorf("GET %s status = %d, want %d", path, recorder.Code, http.StatusNotFound)
+		_, pattern := mux.Handler(request)
+		if pattern != "" {
+			t.Errorf("GET %s unexpectedly matched %q", path, pattern)
 		}
 	}
 }
