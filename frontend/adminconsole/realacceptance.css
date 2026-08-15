@@ -19,6 +19,10 @@
 #content tbody tr.adminLinkRiskReview{background:#fffdf7}
 #content tbody tr.adminLinkRiskReview td:first-child{box-shadow:inset 3px 0 0 #c99231}
 
+/* Derived cycle prices are supporting information, presented as four clear cards. */
+.adminCyclePreview{display:grid!important;grid-template-columns:minmax(180px,.65fr) minmax(0,1.35fr)!important;gap:18px!important;align-items:center!important;padding:15px 16px!important;border:1px solid #e2e8e5!important;border-radius:11px!important;background:#f9fbfa!important}.adminCyclePreview>div:first-child{display:grid!important;gap:4px!important}.adminCyclePreview>div:first-child b{font-size:12px!important;color:#2c4036!important}.adminCyclePreview>div:first-child small{font-size:10.5px!important;line-height:1.55!important;color:#718078!important}.adminCyclePrices{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important}.adminCyclePrices>span{display:grid!important;gap:4px!important;min-width:0!important;padding:9px 10px!important;border:1px solid #dfe6e2!important;border-radius:9px!important;background:#fff!important;color:#23392e!important;font-size:11px!important;font-variant-numeric:tabular-nums!important;white-space:normal!important}.adminCyclePrices>span b{font-size:10px!important;color:#748179!important;font-weight:720!important}
+td>.adminCyclePrices{grid-template-columns:repeat(2,minmax(82px,1fr))!important;min-width:230px!important}.adminWorkflowSectionHead p{line-height:1.6!important;color:#66756e!important}
+
 /* Sidebar identity must remain readable at normal desktop viewing distance. */
 .sidebar-account{grid-template-columns:38px minmax(0,1fr)!important;grid-template-areas:"avatar identity" "avatar role"!important;column-gap:10px!important;row-gap:4px!important;padding:14px 9px!important;border-top:1px solid #e6ece8!important;align-items:center!important}
 .adminAvatar{grid-area:avatar!important;width:38px!important;height:38px!important;border-radius:11px!important;font-size:12px!important;font-weight:850!important}
@@ -27,4 +31,5 @@
 .adminIdentity span{display:block!important;margin-top:2px!important;font-size:10.5px!important;line-height:1.35!important;color:#6f7e76!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 .role-pill{grid-area:role!important;justify-self:start!important;min-height:23px!important;padding:0 8px!important;border:1px solid #dce6e1!important;background:#f6f9f7!important;color:#3b5448!important;font-size:10.5px!important;font-weight:720!important}
 
-@media(max-width:700px){.socialAuthCallbackInfo{align-items:stretch;flex-direction:column}.socialAuthCallbackInfo .btn{align-self:flex-start}}
+@media(max-width:960px){.adminCyclePreview{grid-template-columns:1fr!important}.adminCyclePrices{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:700px){.socialAuthCallbackInfo{align-items:stretch;flex-direction:column}.socialAuthCallbackInfo .btn{align-self:flex-start}.adminCyclePrices{grid-template-columns:1fr 1fr!important}}
