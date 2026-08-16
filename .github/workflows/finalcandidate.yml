@@ -39,6 +39,7 @@ jobs:
             'GoJet Installer Validation':'installervalidation.yml',
             'GoJet Full stack P0 gate':'fullstackp0.yml',
             'GoJet Product Surface Gate':'productsurface.yml',
+            'GoJet Destination Risk Runtime Gate':'destinationriskruntime.yml',
             'GoJet Release Package Gate':'releasepackage.yml',
             'GoJet Public Payment Callback Gate':'paymentcallbackpublic.yml',
             'GoJet Payment Callback Browser Gate':'paymentcallbackbrowser.yml',
