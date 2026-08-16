@@ -94,18 +94,69 @@ jobs:
       - name: Start backend, analytics and destination risk services
         run: |
           set -euo pipefail
+          sudo sh -c "printf '\n127.0.0.1 rainbow.test\n' >> /etc/hosts"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout /tmp/gojetsurface/rainbow.key \
+            -out /tmp/gojetsurface/rainbow.crt \
+            -days 1 -subj '/CN=rainbow.test' \
+            -addext 'subjectAltName=DNS:rainbow.test' >/dev/null 2>&1
+          cat >/tmp/gojetsurface/rainbowfixture.py <<'PY'
+          import http.server
+          import json
+          import ssl
+          import urllib.parse
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  parsed = urllib.parse.urlparse(self.path)
+                  if parsed.path == '/health':
+                      self.send_response(200)
+                      self.end_headers()
+                      self.wfile.write(b'ok')
+                      return
+                  query = urllib.parse.parse_qs(parsed.query)
+                  if parsed.path != '/connect.php' or query.get('act', [''])[0] != 'login':
+                      self.send_response(400)
+                      self.end_headers()
+                      return
+                  login_type = query.get('type', [''])[0]
+                  payload = {
+                      'code': 0,
+                      'msg': 'succ',
+                      'type': login_type,
+                      'url': 'https://graph.qq.com/oauth2.0/authorize?from=gojet-surface',
+                  }
+                  body = json.dumps(payload).encode()
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'application/json')
+                  self.send_header('Content-Length', str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def log_message(self, format, *args):
+                  return
+
+          server = http.server.ThreadingHTTPServer(('127.0.0.1', 18443), Handler)
+          context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+          context.load_cert_chain('/tmp/gojetsurface/rainbow.crt', '/tmp/gojetsurface/rainbow.key')
+          server.socket = context.wrap_socket(server.socket, server_side=True)
+          server.serve_forever()
+          PY
+          python3 /tmp/gojetsurface/rainbowfixture.py >/tmp/gojetsurface/rainbowfixture.log 2>&1 & echo $! >/tmp/gojetsurface/rainbowfixture.pid
+          for i in $(seq 1 30); do curl --cacert /tmp/gojetsurface/rainbow.crt -fsS https://rainbow.test:18443/health >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 30; done
           SETTINGS_KEY=$(python3 - <<'PY'
           import base64
           print(base64.b64encode(bytes(range(32))).decode())
           PY
           )
           QR_KEY='9c2f6b3a8d7e4f10b5a1c9d8e7f6a5b49c2f6b3a8d7e4f10b5a1c9d8e7f6a5b4'
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojetsurface/uploads' BRAND_ASSET_PATH='/tmp/gojetsurface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetsurface/generated/qr' FILE_STORAGE_PATH='/tmp/gojetsurface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" /tmp/gojetsurface/bin/platformapi >/tmp/gojetsurface/platformapi.log 2>&1 & echo $! >/tmp/gojetsurface/platformapi.pid
+          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojetsurface/uploads' BRAND_ASSET_PATH='/tmp/gojetsurface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetsurface/generated/qr' FILE_STORAGE_PATH='/tmp/gojetsurface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" SSL_CERT_FILE='/tmp/gojetsurface/rainbow.crt' /tmp/gojetsurface/bin/platformapi >/tmp/gojetsurface/platformapi.log 2>&1 & echo $! >/tmp/gojetsurface/platformapi.pid
           env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='productsurfacevisitorkey2026' QR_TRACKING_KEY="$QR_KEY" /tmp/gojetsurface/bin/redirectengine >/tmp/gojetsurface/redirectengine.log 2>&1 & echo $! >/tmp/gojetsurface/redirectengine.pid
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetsurface' ANALYTICS_CONSUMER='browsersurface' /tmp/gojetsurface/bin/analyticsworker >/tmp/gojetsurface/analyticsworker.log 2>&1 & echo $! >/tmp/gojetsurface/analyticsworker.pid
           env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' /tmp/gojetsurface/bin/operationsmonitor >/tmp/gojetsurface/operationsmonitor.log 2>&1 & echo $! >/tmp/gojetsurface/operationsmonitor.pid
           for port in 18090 18080; do for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done; done
           kill -0 "$(cat /tmp/gojetsurface/operationsmonitor.pid)"
+          kill -0 "$(cat /tmp/gojetsurface/rainbowfixture.pid)"
       - name: Serve product through Nginx
         run: |
           set -euo pipefail
@@ -140,6 +191,7 @@ jobs:
           echo '===== redirectengine ====='; cat /tmp/gojetsurface/redirectengine.log 2>/dev/null || true
           echo '===== analyticsworker ====='; cat /tmp/gojetsurface/analyticsworker.log 2>/dev/null || true
           echo '===== operationsmonitor ====='; cat /tmp/gojetsurface/operationsmonitor.log 2>/dev/null || true
+          echo '===== rainbow fixture ====='; cat /tmp/gojetsurface/rainbowfixture.log 2>/dev/null || true
           echo '===== nginx error ====='; sudo cat /var/log/nginx/error.log 2>/dev/null || true
       - name: Upload browser and PDF evidence
         if: always()
@@ -149,4 +201,4 @@ jobs:
         if: always()
         run: |
           sudo nginx -s stop 2>/dev/null || true
-          for name in platformapi redirectengine analyticsworker operationsmonitor; do test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true; done
+          for name in platformapi redirectengine analyticsworker operationsmonitor rainbowfixture; do test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true; done
