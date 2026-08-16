@@ -14,7 +14,7 @@ test('registration social buttons declare the registration flow',async({page})=>
   expect(href).toContain('flow=register');
 });
 
-test('social registration completion always requires GoJet email verification and password',async({page})=>{
+test('social registration completion guides username, GoJet email verification, password and automatic binding',async({page})=>{
   const pending='abcdefghijklmnopqrstuvwxyzABCDEFGH123456789';
   await page.route('**/api/public/settings',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({registration:{enabled:true}})}));
   await page.route('**/api/public/turnstile',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({enabled:false,surfaces:{}})}));
@@ -22,11 +22,18 @@ test('social registration completion always requires GoJet email verification an
   await page.goto(base+'/register#social_registration='+pending);
   await expect(page.locator('#authTitle')).toHaveText('完成 GoJet 注册');
   await expect(page.locator('#socialAuth')).toHaveClass(/hidden/);
-  await expect(page.locator('input[name="display_name"]')).toHaveValue('Octo User');
+  const username=page.locator('input[name="display_name"]');
+  await expect(username.locator('..').locator('span')).toHaveText('用户名（显示名称）');
+  await expect(username).toHaveAttribute('required','');
+  await expect(username).toHaveValue('Octo User');
+  await expect(page.locator('[data-social-username-note]')).toContainText('登录仍使用邮箱');
   await expect(page.locator('input[name="email"]')).toHaveValue('octo@example.test');
   await expect(page.locator('#socialRegisterEmailCode')).toBeVisible();
   await expect(page.locator('#socialRegisterEmailCode')).toHaveAttribute('required','');
   await expect(page.locator('input[name="password"]')).toHaveAttribute('minlength','12');
   await expect(page.getByRole('button',{name:'验证邮箱并完成注册'})).toBeVisible();
+  await expect(page.locator('.auth-heading p')).toContainText('① 设置用户名');
+  await expect(page.locator('.auth-heading p')).toContainText('② 验证邮箱');
+  await expect(page.locator('.auth-heading p')).toContainText('③ 设置密码');
   await expect(page.locator('.auth-heading p')).toContainText('自动绑定');
 });

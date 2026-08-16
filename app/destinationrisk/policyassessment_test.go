@@ -35,6 +35,18 @@ func TestPromoteUnverifiableExplicitAdultURL(t *testing.T) {
 	}
 }
 
+func TestPromoteUnverifiableCompactAdultHostSemantic(t *testing.T) {
+	assessment := PromoteUnverifiableSemanticRisk(reviewAssessment(
+		"https://cn.pornstream.example/view_video.php?viewkey=fixture", CategoryAdult, "adult_url_semantic_signal",
+	))
+	if assessment.Decision != Block || assessment.Score < 92 {
+		t.Fatalf("compact adult hostname semantic plus network failure must resolve to block: %+v", assessment)
+	}
+	if !signalPresent(assessment.Evidence[0].Signals, "high_confidence_url_semantic_with_unverifiable_content") {
+		t.Fatalf("compact-host promotion evidence signal missing: %v", assessment.Evidence[0].Signals)
+	}
+}
+
 func TestPromoteUnverifiableExplicitGamblingURL(t *testing.T) {
 	assessment := PromoteUnverifiableSemanticRisk(reviewAssessment(
 		"https://random-casinoportal.example/play", CategoryGambling, "gambling_url_semantic_signal",

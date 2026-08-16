@@ -20,12 +20,14 @@ async function sendCode(purpose,button){const email=String(form.elements.email?.
 function storeAndRedirect(result){if(result?.token)localStorage.setItem('gojet_token',result.token);const queryTarget=new URLSearchParams(location.search).get('redirect'),target=validLocalPath(result?.redirect)?result.redirect:queryTarget;location.replace(validLocalPath(target)?target:'/app/dashboard')}
 async function setupSocialRegistration(code){
   document.querySelector('#socialAuth')?.classList.add('hidden');
-  const title=document.querySelector('#authTitle'),subtitle=document.querySelector('.auth-heading p'),submit=form.querySelector('button[type="submit"]');
+  const title=document.querySelector('#authTitle'),subtitle=document.querySelector('.auth-heading p'),submit=form.querySelector('button[type="submit"]'),displayInput=form.elements.display_name,displayField=displayInput?.closest('.field');
   try{
     const info=await read('/api/public/auth/social-registration?code='+encodeURIComponent(code));
     if(title)title.textContent='完成 GoJet 注册';
-    if(subtitle)subtitle.textContent=`已验证 ${info.provider_label||'第三方平台'} 身份。完成账户资料与邮箱验证后，会自动绑定到新的 GoJet 账户。`;
-    if(info.suggested_display_name&&!form.elements.display_name.value)form.elements.display_name.value=info.suggested_display_name;
+    if(subtitle)subtitle.textContent=`已验证 ${info.provider_label||'第三方平台'} 身份。接下来完成 3 步：① 设置用户名 ② 验证邮箱 ③ 设置密码。提交后会自动绑定到新的 GoJet 账户。`;
+    if(displayField){const label=displayField.querySelector('span');if(label)label.textContent='用户名（显示名称）';if(!displayField.querySelector('[data-social-username-note]'))displayField.insertAdjacentHTML('beforeend','<small class="auth-field-note" data-social-username-note>用于 GoJet 账户显示；登录仍使用邮箱、密码或已绑定的第三方账户。</small>')}
+    if(displayInput){displayInput.required=true;displayInput.placeholder='请输入用户名'}
+    if(info.suggested_display_name&&!displayInput.value)displayInput.value=info.suggested_display_name;
     if(info.provider_email&&!form.elements.email.value)form.elements.email.value=info.provider_email;
     const min=Math.max(10,Math.min(72,Number(info.password_min_length)||10));
     [form.elements.password,form.elements.password_confirmation].forEach(input=>{if(input){input.minLength=min;input.placeholder=`至少 ${min} 位字符`}});
@@ -35,15 +37,16 @@ async function setupSocialRegistration(code){
     if(codeInput)codeInput.required=true;
     send?.addEventListener('click',()=>sendCode('register',send).catch(err=>show(err.message)));
     if(submit)submit.textContent='验证邮箱并完成注册';
-    show(`已完成 ${info.provider_label||'第三方平台'} 身份验证，请继续完成 GoJet 账户资料。`,'success');
+    show(`已完成 ${info.provider_label||'第三方平台'} 身份验证，请设置用户名、验证邮箱并设置密码。`,'success');
     form.addEventListener('submit',async event=>{
       event.preventDefault();event.stopImmediatePropagation();
       const data=Object.fromEntries(new FormData(form));
+      if(!String(data.display_name||'').trim())return show('请先设置用户名。');
       if(data.password!==data.password_confirmation)return show('两次输入的密码不一致');
       if(!/^\d{6}$/.test(String(data.email_code||'')))return show('请输入邮件中的 6 位验证码。');
       if(!validEmail(data.email))return show('请填写有效的邮箱地址。');
       submit.disabled=true;submit.textContent='正在验证并绑定…';
-      try{storeAndRedirect(await call('/api/public/auth/social-registration/complete',{code,display_name:data.display_name,email:data.email,email_code:data.email_code,password:data.password}))}
+      try{storeAndRedirect(await call('/api/public/auth/social-registration/complete',{code,display_name:String(data.display_name).trim(),email:data.email,email_code:data.email_code,password:data.password}))}
       catch(err){show(err.message);submit.disabled=false;submit.textContent='验证邮箱并完成注册'}
     },true);
   }catch(err){
