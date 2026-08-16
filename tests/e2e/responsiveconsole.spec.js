@@ -275,7 +275,7 @@ test('desktop customer and administrator account areas stay readable and keyboar
   await expect(profile).toBeVisible();
   const customerName=profile.locator('.profileIdentity b');
   const customerEmail=profile.locator('.profileIdentity small');
-  await expect(customerName).toContainText('GoJet Responsive');
+  await expect(customerName).toHaveText(process.env.GOJET_SURFACE_BASE?'GoJet Responsive':'Browser User');
   await expect(customerEmail).toContainText('@example.test');
   const customerType=await customerName.evaluate(node=>parseFloat(getComputedStyle(node).fontSize));
   const customerMeta=await customerEmail.evaluate(node=>{
