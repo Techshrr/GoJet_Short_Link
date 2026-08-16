@@ -58,6 +58,21 @@ jobs:
           grep -Fq '请勿重复提交' public/install/install.js
           test -z "$(grep -R -F 'catch(e){}' public/install 2>/dev/null || true)"
           for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh; do bash -n "$script"; done
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('install.sh').read_text()
+          start = text.index('find_cmd(){')
+          end = text.index('\n}\n\nNGINX=', start)
+          body = text[start:end]
+          assert body.index('for p in "$@"') < body.index('command -v "$name"'), 'aaPanel explicit runtime paths must win over shell PATH'
+          for contract in (
+              'NGINX=$(find_cmd nginx /www/server/nginx/sbin/nginx)',
+              'PHP=$(find_cmd php /www/server/php/83/bin/php)',
+              'MYSQL=$(find_cmd mysql /www/server/mysql/bin/mysql)',
+              'REDIS_CLI=$(find_cmd redis-cli /www/server/redis/src/redis-cli /usr/local/bin/redis-cli)',
+          ):
+              assert contract in text, contract
+          PY
           sh -n scripts/packagerelease.sh
           sh -n scripts/verifyrelease.sh
           python3 -m py_compile scripts/buildpublicsite.py scripts/checknames.py scripts/checkschema.py
