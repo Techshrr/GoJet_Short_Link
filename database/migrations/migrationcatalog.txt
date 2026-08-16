@@ -44,3 +44,4 @@ socialauth.sql
 socialsubjectwidth.sql
 billingcycles.sql
 linkdestinationriskbaseline.sql
+socialregistration.sql
