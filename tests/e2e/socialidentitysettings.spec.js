@@ -21,7 +21,7 @@ async function adminToken(request){
 async function setSession(page,token){await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token)}
 
 test.describe.serial('customer social identity settings',()=>{
-  test('configured provider offers an authenticated PKCE bind launch from account settings',async({page,request})=>{
+  test('configured provider offers an authenticated PKCE bind launch and disabled providers stay hidden',async({page,request})=>{
     const admin=await adminToken(request);
     await json(request,'PUT','/api/admin/settings/registration',{'registration.enabled':true,'registration.require_email_verification':false,'registration.password_min_length':10},admin);
     await json(request,'PUT','/api/admin/settings/socialauth',{'auth.social.github.enabled':true,'auth.social.github.client_id':'surface-bind-client','auth.social.github.client_secret':'SurfaceBindSecret!2026','auth.social.google.enabled':false},admin);
@@ -35,8 +35,7 @@ test.describe.serial('customer social identity settings',()=>{
     const github=panel.locator('[data-social-provider="github"]');
     await expect(github).toContainText('未绑定');
     await expect(github).toContainText('尚未绑定');
-    const google=panel.locator('[data-social-provider="google"]');
-    await expect(google).toContainText('管理员尚未启用此登录方式');
+    await expect(panel.locator('[data-social-provider="google"]')).toHaveCount(0);
     await github.getByRole('button',{name:'绑定',exact:true}).click();
     await expect.poll(()=>authorize,{timeout:10000}).toContain('github.com/login/oauth/authorize');
     const parsed=new URL(authorize),query=parsed.searchParams;
@@ -46,10 +45,10 @@ test.describe.serial('customer social identity settings',()=>{
     expect(query.get('state').length).toBeGreaterThanOrEqual(40);
   });
 
-  test('last-login-credential failure is surfaced without silently unlinking identity',async({page,request})=>{
+  test('a linked provider remains visible even if the administrator later disables new logins',async({page,request})=>{
     const token=await user(request);
     await setSession(page,token);
-    await page.route('**/api/me/social-identities',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({password_login_enabled:false,identities:[{provider:'github',provider_email:'linked@example.test',email_verified:true,display_name:'Linked Account'}],providers:[{id:'github',label:'GitHub',configured:true,linked:true}]})}));
+    await page.route('**/api/me/social-identities',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({password_login_enabled:false,identities:[{provider:'github',provider_email:'linked@example.test',email_verified:true,display_name:'Linked Account'}],providers:[{id:'github',label:'GitHub',configured:false,linked:true},{id:'google',label:'Google',configured:false,linked:false}]})}));
     await page.route('**/api/me/social/github',route=>{
       if(route.request().method()==='DELETE')return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'不能解除最后一个可用登录凭据，请先设置密码或绑定另一种第三方登录方式'})});
       return route.continue();
@@ -59,6 +58,8 @@ test.describe.serial('customer social identity settings',()=>{
     const panel=page.locator('[data-social-identity-mount]');
     await expect(panel).toContainText('当前账户还没有可用的密码登录凭据');
     await expect(page.locator('#passwordSettings')).toContainText('通过邮箱设置密码');
+    await expect(panel.locator('[data-social-provider="github"]')).toContainText('已绑定');
+    await expect(panel.locator('[data-social-provider="google"]')).toHaveCount(0);
     await panel.getByRole('button',{name:'解除绑定'}).click();
     await expect(panel.locator('[data-social-error]')).toContainText('不能解除最后一个可用登录凭据');
     await expect(panel.locator('[data-social-provider="github"]')).toContainText('已绑定');
