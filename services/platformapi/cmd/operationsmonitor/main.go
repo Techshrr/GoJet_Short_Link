@@ -176,7 +176,7 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 				for item := range jobs {
 					scanCtx, scanCancel := context.WithTimeout(ctx, 12*time.Second)
 					targets := destinationrisk.Targets(item.Destination, item.RoutingRules, item.ABDestinations)
-					assessment := scanner.Assess(scanCtx, targets)
+					assessment := scanner.AssessPolicy(scanCtx, targets)
 					scanCancel()
 					if len(targets) == 0 {
 						continue
