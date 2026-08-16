@@ -47,4 +47,5 @@ forbid "$PACKAGE" 'compose.release.yaml'
 forbid "$PACKAGE" 'frontend/marketing-site#__GOJET_ROOT__/public'
 [ ! -e "$ROOT/deploy/compose.release.yaml" ] || { echo 'duplicate deploy/compose.release.yaml must not exist' >&2; exit 1; }
 
+bash "$ROOT/tests/integration/nativeenvsafety.sh"
 printf 'published web/storage namespace contract: PASS\n'
