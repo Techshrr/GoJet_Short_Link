@@ -66,9 +66,14 @@ async function expectConfiguredCustomerProviders(page){
 }
 
 async function expectRainbowServerPolicy(page){
+  // rainbow.invalid is deliberately unreachable. The browser gate verifies that an
+  // approved method reaches the server-side Rainbow adapter and fails closed without
+  // leaking credentials; the Go adapter test owns the successful upstream exchange.
   const allowed=await page.request.get(`${base}/api/public/auth/rainbow/start?type=qq&redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
-  expect(allowed.status(),'approved Rainbow method start status').toBe(302);
-  expect(allowed.headers().location||'','approved Rainbow upstream URL').toMatch(/^https:\/\/login\.example\.com\/connect\.php\?/);
+  expect(allowed.status(),'approved Rainbow method reaches provider adapter').toBe(502);
+  const unavailable=await allowed.json();
+  expect(unavailable).toMatchObject({error:'聚合登录暂时无法创建授权请求'});
+  expect(JSON.stringify(unavailable)).not.toContain('SurfaceRainbowSecret!2026');
 
   const denied=await page.request.get(`${base}/api/public/auth/rainbow/start?type=sina&redirect=%2Fapp%2Fdashboard`,{maxRedirects:0});
   expect(denied.status(),'unapproved Rainbow method must be rejected server-side').toBe(403);
@@ -85,7 +90,7 @@ test('customer social login settings use compact multi-select and never change a
   await configure(page,'github',{clientID:'surface-github-client',secret:'SurfaceGithubSecret!2026'});
   await configure(page,'qq',{clientID:'surface-qq-client',secret:'SurfaceQQSecret!2026'});
   await configure(page,'wechat',{clientID:'surface-wechat-client',secret:'SurfaceWechatSecret!2026'});
-  await configure(page,'rainbow',{clientID:'surface-rainbow-client',secret:'SurfaceRainbowSecret!2026',baseURL:'https://login.example.com/connect.php'});
+  await configure(page,'rainbow',{clientID:'surface-rainbow-client',secret:'SurfaceRainbowSecret!2026',baseURL:'https://rainbow.invalid/connect.php'});
   const rainbowCard=page.locator('[data-social-provider="rainbow"]');
   await expect(rainbowCard.locator('input[name="auth.social.rainbow.base_url"]')).toHaveCount(1);
   await expect(rainbowCard.locator('input[name="auth.social.rainbow.client_id"]')).toHaveCount(1);
