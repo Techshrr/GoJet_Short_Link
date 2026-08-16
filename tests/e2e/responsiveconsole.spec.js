@@ -201,6 +201,24 @@ test('desktop billing cycle chooser is compact, selectable and updates the payab
   const problems=observeBrowserProblems(page);
   const token=await createUser(request,'billing-cycle');
   await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
+
+  // The root installer fixture intentionally keeps billing payloads minimal.
+  // Seed only that generic browser fixture so this UI contract stays stable,
+  // while Product Surface (GOJET_SURFACE_BASE) continues to hit the real API.
+  if(!process.env.GOJET_SURFACE_BASE){
+    await page.route('**/api/workspaces/*/billing',route=>{
+      if(route.request().method()!=='GET')return route.continue();
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+        subscription:{workspace_id:7,plan_code:'starter',plan_name:'基础版',status:'active',cancel_at_period_end:false},
+        plans:[
+          {id:1,code:'starter',name:'基础版',monthly_price_cents:0,currency:'CNY',description:'轻量项目',features:['100 条短链接']},
+          {id:2,code:'pro',name:'专业版',monthly_price_cents:6900,currency:'CNY',description:'增长团队',features:['5,000 条短链接','180 天分析']}
+        ],
+        invoices:[]
+      })});
+    });
+  }
+
   await page.goto(base+'/app/billing',{waitUntil:'networkidle'});
 
   await expect(page.getByRole('heading',{name:'套餐与账单',exact:true})).toBeVisible();
