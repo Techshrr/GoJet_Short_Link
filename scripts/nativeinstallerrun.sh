@@ -117,18 +117,70 @@ verify_current_runtime(){
   done
 }
 
+read_generated_env(){
+  local file=$1
+  declare -n output=$2
+  local line key raw decoded i ch next length
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" && "$line" != '#'* ]] || continue
+    [[ "$line" == *=* ]] || return 1
+    key=${line%%=*}
+    case "$key" in
+      MYSQL_HOST|MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|ADMIN_BOOTSTRAP_EMAIL) ;;
+      *) continue ;;
+    esac
+    raw=${line#*=}
+    [[ ${#raw} -ge 2 && ${raw:0:1} == '"' && ${raw: -1} == '"' ]] || return 1
+    raw=${raw:1:${#raw}-2}
+    decoded=''
+    length=${#raw}
+    for ((i=0; i<length; i++)); do
+      ch=${raw:i:1}
+      if [[ "$ch" == "\\" ]]; then
+        ((i+=1))
+        (( i < length )) || return 1
+        next=${raw:i:1}
+        case "$next" in
+          \\|\") decoded+="$next" ;;
+          *) return 1 ;;
+        esac
+      else
+        decoded+="$ch"
+      fi
+    done
+    output["$key"]=$decoded
+  done < "$file"
+}
+
 verify_fresh_admin(){
-  [[ -f "$ROOT/deploy/native/gojet.env" ]] || {
+  local env_file="$ROOT/deploy/native/gojet.env"
+  [[ -f "$env_file" ]] || {
     write_failure '安装后管理员校验失败：gojet.env 不存在'
     return 1
   }
-  # shellcheck disable=SC1091
-  set -a
-  source "$ROOT/deploy/native/gojet.env"
-  set +a
+
+  # gojet.env contains values supplied by the web installer. Never source it
+  # into a root shell: parse only the generated quoted format without eval or
+  # command substitution so $, backticks and similar password characters stay
+  # literal during post-install verification.
+  declare -A generated_env=()
+  if ! read_generated_env "$env_file" generated_env; then
+    write_failure '安装后管理员校验失败：gojet.env 格式无效'
+    return 1
+  fi
+  local key
+  for key in MYSQL_HOST MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD ADMIN_BOOTSTRAP_EMAIL; do
+    if [[ -z "${generated_env[$key]+present}" ]]; then
+      write_failure "安装后管理员校验失败：gojet.env 缺少 $key"
+      return 1
+    fi
+  done
 
   local row_count admin_row
-  row_count=$(MYSQL_PWD="$MYSQL_PASSWORD" "$mysql" -N -s -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE" \
+  row_count=$(MYSQL_PWD="${generated_env[MYSQL_PASSWORD]}" "$mysql" -N -s \
+    -h "${generated_env[MYSQL_HOST]}" -P "${generated_env[MYSQL_PORT]}" \
+    -u "${generated_env[MYSQL_USER]}" "${generated_env[MYSQL_DATABASE]}" \
     -e 'SELECT COUNT(*) FROM administrators' 2>/dev/null) || {
       write_failure '安装后管理员校验失败：无法读取 administrators'
       return 1
@@ -137,14 +189,16 @@ verify_fresh_admin(){
     write_failure "安装后管理员校验失败：应只有 1 名初始超级管理员，实际为 $row_count"
     return 1
   }
-  admin_row=$(MYSQL_PWD="$MYSQL_PASSWORD" "$mysql" -N -s -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" "$MYSQL_DATABASE" \
+  admin_row=$(MYSQL_PWD="${generated_env[MYSQL_PASSWORD]}" "$mysql" -N -s \
+    -h "${generated_env[MYSQL_HOST]}" -P "${generated_env[MYSQL_PORT]}" \
+    -u "${generated_env[MYSQL_USER]}" "${generated_env[MYSQL_DATABASE]}" \
     -e 'SELECT email,role,status,totp_enabled FROM administrators LIMIT 1' 2>/dev/null) || {
       write_failure '安装后管理员校验失败：无法读取初始超级管理员'
       return 1
     }
   local actual_email actual_role actual_status actual_totp
   IFS=$'\t' read -r actual_email actual_role actual_status actual_totp <<< "$admin_row"
-  if [[ "${actual_email,,}" != "${ADMIN_BOOTSTRAP_EMAIL,,}" || "$actual_role" != 'super_admin' || "$actual_status" != 'active' || "$actual_totp" != '0' ]]; then
+  if [[ "${actual_email,,}" != "${generated_env[ADMIN_BOOTSTRAP_EMAIL],,}" || "$actual_role" != 'super_admin' || "$actual_status" != 'active' || "$actual_totp" != '0' ]]; then
     write_failure '安装后管理员校验失败：初始管理员状态不符合 Fresh Install 约束'
     return 1
   fi
