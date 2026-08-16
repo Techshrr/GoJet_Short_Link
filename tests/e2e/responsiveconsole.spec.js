@@ -195,3 +195,53 @@ test('desktop Bio editor exposes theme state, live preview, prominent add-link C
   await assertViewportHealthy(page,'desktop Bio editor and share QR');
   expect(problems,'desktop Bio browser console/network problems').toEqual([]);
 });
+
+test('desktop billing cycle chooser is compact, selectable and updates the payable total',async({page,request})=>{
+  await page.setViewportSize({width:1440,height:1000});
+  const problems=observeBrowserProblems(page);
+  const token=await createUser(request,'billing-cycle');
+  await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
+  await page.goto(base+'/app/billing',{waitUntil:'networkidle'});
+
+  await expect(page.getByRole('heading',{name:'套餐与账单',exact:true})).toBeVisible();
+  const planButton=page.locator('.planCard button[data-plan]').first();
+  await expect(planButton).toBeVisible();
+  await planButton.click();
+
+  const dialog=page.locator('.productModal.billingDialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('group',{name:'选择付款周期'})).toBeVisible();
+  const cycles=dialog.locator('input[name="billing_cycle"]');
+  await expect(cycles).toHaveCount(4);
+  await expect(dialog.getByText('月付',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('季付',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('半年付',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('年付',{exact:true})).toBeVisible();
+
+  const monthly=dialog.locator('input[value="monthly"]');
+  const annual=dialog.locator('input[value="annual"]');
+  await expect(monthly).toBeChecked();
+  const amount=dialog.locator('[data-cycle-total] > strong');
+  const monthlyText=await amount.innerText();
+  const numeric=text=>Number(String(text).replace(/[^0-9.-]/g,''));
+  const monthlyAmount=numeric(monthlyText);
+  expect(monthlyAmount).toBeGreaterThan(0);
+
+  await annual.check();
+  await expect(annual).toBeChecked();
+  await expect(monthly).not.toBeChecked();
+  await expect(dialog.locator('[data-cycle-summary]')).toHaveText('年付 · 12 个月');
+  const annualAmount=numeric(await amount.innerText());
+  expect(annualAmount).toBeCloseTo(monthlyAmount*12,2);
+
+  const box=await dialog.boundingBox();
+  expect(box,'billing dialog box').toBeTruthy();
+  expect(box.width,'billing dialog should not consume the whole desktop').toBeLessThan(760);
+  expect(box.x,'billing dialog left edge').toBeGreaterThan(0);
+  expect(box.x+box.width,'billing dialog right edge').toBeLessThan(1440);
+  await expect(dialog.getByRole('button',{name:'继续支付',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'取消',exact:true})).toBeVisible();
+
+  await assertViewportHealthy(page,'desktop billing cycle chooser');
+  expect(problems,'desktop billing browser console/network problems').toEqual([]);
+});
