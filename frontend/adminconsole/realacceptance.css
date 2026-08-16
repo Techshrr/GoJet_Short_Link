@@ -29,8 +29,8 @@ td>.adminCyclePrices{grid-template-columns:repeat(2,minmax(82px,1fr))!important;
 .sidebar-account{grid-template-columns:38px minmax(0,1fr)!important;grid-template-areas:"avatar identity" "avatar role"!important;column-gap:10px!important;row-gap:4px!important;padding:14px 9px!important;border-top:1px solid #e6ece8!important;align-items:center!important}
 .adminAvatar{grid-area:avatar!important;width:38px!important;height:38px!important;border-radius:11px!important;font-size:12px!important;font-weight:850!important}
 .adminIdentity{grid-area:identity!important;min-width:0!important}
-.adminIdentity strong{display:block!important;font-size:12.5px!important;line-height:1.35!important;color:#1f322a!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
-.adminIdentity span{display:block!important;margin-top:2px!important;font-size:10.5px!important;line-height:1.35!important;color:#6f7e76!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.adminIdentity strong{display:block!important;font-size:13px!important;line-height:1.35!important;color:#1f322a!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.adminIdentity span{display:block!important;margin-top:2px!important;font-size:11px!important;line-height:1.35!important;color:#617067!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
 .role-pill{grid-area:role!important;justify-self:start!important;min-height:23px!important;padding:0 8px!important;border:1px solid #dce6e1!important;background:#f6f9f7!important;color:#3b5448!important;font-size:10.5px!important;font-weight:720!important}
 .sidebar nav button:focus-visible,.ah-settings-nav button:focus-visible{outline:3px solid rgba(16,122,80,.16)!important;outline-offset:2px!important;background:#f4f8f6!important;color:#17382b!important}.sidebar nav button.active:focus-visible,.ah-settings-nav button.active:focus-visible{background:#edf8f2!important;color:#08784b!important}
 
