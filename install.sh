@@ -11,9 +11,9 @@ fi
 
 find_cmd(){
   local name=$1; shift
-  if command -v "$name" >/dev/null 2>&1; then command -v "$name"; return 0; fi
   local p
   for p in "$@"; do [[ -x "$p" ]] && { printf '%s\n' "$p"; return 0; }; done
+  if command -v "$name" >/dev/null 2>&1; then command -v "$name"; return 0; fi
   return 1
 }
 
