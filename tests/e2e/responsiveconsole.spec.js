@@ -31,7 +31,7 @@ function observeBrowserProblems(page){
   const problems=[];
   page.on('pageerror',error=>problems.push(`pageerror: ${error.message}`));
   page.on('console',message=>{
-    if(message.type()==='error')problems.push(`console.error: ${message.text()}`);
+    if(message.type()==='error')problems.push(`console.error: ${message.text()}`));
   });
   page.on('requestfailed',request=>{
     const failure=request.failure();
@@ -262,4 +262,74 @@ test('desktop billing cycle chooser is compact, selectable and updates the payab
 
   await assertViewportHealthy(page,'desktop billing cycle chooser');
   expect(problems,'desktop billing browser console/network problems').toEqual([]);
+});
+
+test('desktop customer and administrator account areas stay readable and keyboard-obvious',async({page,request})=>{
+  await page.setViewportSize({width:1440,height:1000});
+  const problems=observeBrowserProblems(page);
+  const token=await createUser(request,'sidebar-identity');
+  await page.addInitScript(value=>localStorage.setItem('gojet_token',value),token);
+  await page.goto(base+'/app/dashboard',{waitUntil:'networkidle'});
+
+  const profile=page.locator('#shell aside .profile');
+  await expect(profile).toBeVisible();
+  const customerName=profile.locator('.profileIdentity b');
+  const customerEmail=profile.locator('.profileIdentity small');
+  await expect(customerName).toContainText('GoJet Responsive');
+  await expect(customerEmail).toContainText('@example.test');
+  const customerType=await customerName.evaluate(node=>parseFloat(getComputedStyle(node).fontSize));
+  const customerMeta=await customerEmail.evaluate(node=>{
+    const style=getComputedStyle(node);
+    return{fontSize:parseFloat(style.fontSize),opacity:Number(style.opacity),color:style.color};
+  });
+  expect(customerType).toBeGreaterThanOrEqual(13);
+  expect(customerMeta.fontSize).toBeGreaterThanOrEqual(11);
+  expect(customerMeta.opacity).toBe(1);
+  expect(customerMeta.color).not.toMatch(/rgba\([^)]*,\s*0\s*\)$/);
+
+  const customerLogout=profile.locator('#logoutButton');
+  const logoutBox=await customerLogout.boundingBox();
+  expect(logoutBox,'customer logout button box').toBeTruthy();
+  expect(logoutBox.width).toBeGreaterThanOrEqual(60);
+  expect(logoutBox.height).toBeGreaterThanOrEqual(32);
+  await page.keyboard.press('Tab');
+  await customerLogout.focus();
+  const customerFocus=await customerLogout.evaluate(node=>{
+    const style=getComputedStyle(node);
+    return{shadow:style.boxShadow,outlineWidth:parseFloat(style.outlineWidth||'0')};
+  });
+  expect(customerFocus.shadow!=='none'||customerFocus.outlineWidth>=2).toBe(true);
+
+  await adminLogin(page);
+  const adminAccount=page.locator('.sidebar .sidebar-account');
+  await expect(adminAccount).toBeVisible();
+  const adminName=adminAccount.locator('.adminIdentity strong');
+  const adminEmail=adminAccount.locator('.adminIdentity span');
+  const adminType=await adminName.evaluate(node=>parseFloat(getComputedStyle(node).fontSize));
+  const adminMeta=await adminEmail.evaluate(node=>{
+    const style=getComputedStyle(node);
+    return{fontSize:parseFloat(style.fontSize),color:style.color};
+  });
+  expect(adminType).toBeGreaterThanOrEqual(13);
+  expect(adminMeta.fontSize).toBeGreaterThanOrEqual(11);
+  expect(adminMeta.color).not.toMatch(/rgba\([^)]*,\s*0\s*\)$/);
+  await expect(adminAccount.locator('.role-pill')).toBeVisible();
+
+  const adminSettings=page.locator('.sidebar #nav [data-view="settings"]');
+  await page.keyboard.press('Tab');
+  await adminSettings.focus();
+  const adminFocus=await adminSettings.evaluate(node=>{
+    const style=getComputedStyle(node);
+    return{shadow:style.boxShadow,outlineWidth:parseFloat(style.outlineWidth||'0')};
+  });
+  expect(adminFocus.shadow!=='none'||adminFocus.outlineWidth>=2).toBe(true);
+  const adminLogout=page.locator('#logout');
+  await expect(adminLogout).toBeVisible();
+  const adminLogoutBox=await adminLogout.boundingBox();
+  expect(adminLogoutBox,'administrator logout button box').toBeTruthy();
+  expect(adminLogoutBox.width).toBeGreaterThanOrEqual(60);
+  expect(adminLogoutBox.height).toBeGreaterThanOrEqual(30);
+
+  await assertViewportHealthy(page,'desktop customer and administrator account areas');
+  expect(problems,'sidebar identity browser console/network problems').toEqual([]);
 });
