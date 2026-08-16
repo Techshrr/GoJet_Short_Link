@@ -54,7 +54,15 @@ jobs:
           grep -Fq "WHERE provider='migration_legacy'" database/migrations/linkdestinationriskbaseline.sql
           grep -Fq "SET decision='review'" database/migrations/linkdestinationriskbaseline.sql
           grep -Fq 'next_scan_at=UTC_TIMESTAMP()' database/migrations/linkdestinationriskbaseline.sql
-          tail -n 1 database/migrations/migrationcatalog.txt | grep -Fxq 'linkdestinationriskbaseline.sql'
+          python3 - <<'PY'
+          from pathlib import Path
+          catalog = [line.strip() for line in Path('database/migrations/migrationcatalog.txt').read_text().splitlines() if line.strip()]
+          first = 'linkdestinationrisk.sql'
+          baseline = 'linkdestinationriskbaseline.sql'
+          assert catalog.count(first) == 1, f'{first} must appear exactly once in migration catalog'
+          assert catalog.count(baseline) == 1, f'{baseline} must appear exactly once in migration catalog'
+          assert catalog.index(baseline) > catalog.index(first), 'risk baseline must run after initial destination-risk migration'
+          PY
           if grep -n -A18 'legacy migration baseline' database/migrations/linkdestinationrisk.sql | grep -Fq "'allow'"; then
             echo 'destination-risk migration baseline must never grant ALLOW' >&2
             exit 1
