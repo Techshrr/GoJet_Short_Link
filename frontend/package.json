@@ -9,7 +9,8 @@
     "dev:docs": "pnpm --filter @gojet/docs dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "check": "pnpm typecheck && pnpm build"
+    "verify:brand": "node scripts/verify-brand-foundation.mjs",
+    "check": "pnpm verify:brand && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "typescript": "^5.9.0"
