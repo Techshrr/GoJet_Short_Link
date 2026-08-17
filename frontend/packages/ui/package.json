@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./css": "./src/ui.css"
+    "./css": "./src/ui.css",
+    "./patterns": "./src/patterns.tsx",
+    "./patterns.css": "./src/patterns.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
