@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import "@gojet/tokens/css";
 import "@gojet/ui/css";
+import "@gojet/ui/patterns.css";
 import "./styles.css";
 import { router } from "./router";
 
