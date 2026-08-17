@@ -40,9 +40,14 @@ jobs:
       - name: Install dependencies and create lockfile
         run: pnpm install --no-frozen-lockfile
 
-      - name: Verify no browser auth-token persistence in V5 apps/packages
+      - name: Verify no browser auth-token persistence in V5 source
         run: |
-          if grep -R -n -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' apps packages; then
+          if grep -R -n \
+            --exclude-dir=node_modules \
+            --exclude-dir=dist \
+            --exclude-dir=.astro \
+            -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' \
+            apps packages; then
             echo 'V5 auth/session persistence must not use browser Web Storage.' >&2
             exit 1
           fi
