@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
-html { background: var(--canvas); color: var(--foreground); font-family: InterVariable, Inter, ui-sans-serif, system-ui, sans-serif; }
-body { margin: 0; min-width: 320px; }
+html { background: var(--canvas); color: var(--foreground); font-family: var(--font-product); }
+body { margin: 0; min-width: 320px; background: var(--canvas); }
 .foundation { max-width: 760px; margin: 0 auto; padding: 96px 24px; }
-.eyebrow { color: var(--brand-blue); font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+.eyebrow { color: var(--brand-blue); font-size: var(--type-compact); font-weight: var(--weight-bold); letter-spacing: .08em; }
 h1 { margin: 12px 0 16px; font-size: clamp(34px, 5vw, 52px); line-height: 1.08; }
 p { color: var(--foreground-secondary); line-height: 1.65; }
+
+.dev-ui { max-width: 1180px; margin: 0 auto; padding: var(--space-10) var(--space-8) var(--space-20); }
+.dev-ui-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.dev-ui-stack { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.dev-ui-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); margin-bottom: var(--space-5); }
+.dev-ui-state-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.dev-ui .gj-section { padding: var(--space-6); border: var(--border-width) solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-e1); }
+
+@media (max-width: 767px) {
+  .dev-ui { padding: var(--space-6) var(--space-4) var(--space-16); }
+  .dev-ui-grid, .dev-ui-state-grid { grid-template-columns: 1fr; }
+}
