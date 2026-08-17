@@ -40,6 +40,14 @@ jobs:
       - name: Install dependencies and create lockfile
         run: pnpm install --no-frozen-lockfile
 
+      - name: Capture generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-pnpm-lock-${{ github.sha }}
+          path: frontend/pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Verify no browser auth-token persistence in V5 source
         run: |
           if grep -R -n \
@@ -57,3 +65,23 @@ jobs:
 
       - name: Build independent applications
         run: pnpm build
+
+      - name: Verify P01 static and split boundaries
+        run: |
+          test -f apps/docs/dist/en/index.html
+          test -f apps/docs/dist/zh-CN/index.html
+          node <<'NODE'
+          const fs = require('node:fs');
+          const checks = [
+            ['workspace', 'src/routes/LinksBoundary.tsx'],
+            ['admin', 'src/routes/UsersBoundary.tsx'],
+          ];
+          for (const [app, source] of checks) {
+            const file = `apps/${app}/dist/.vite/manifest.json`;
+            const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const entry = Object.values(manifest).find((item) => item && item.src === source);
+            if (!entry || entry.isDynamicEntry !== true) {
+              throw new Error(`${app} route ${source} is not a dynamic entry`);
+            }
+          }
+          NODE
