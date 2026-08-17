@@ -1,0 +1,78 @@
+/* GoJet V5 Motion Foundation — GJ-V5-002 */
+
+:root {
+  --motion-feedback-fast: 120ms;
+  --motion-feedback: 160ms;
+  --motion-feedback-slow: 180ms;
+  --motion-transition-fast: 180ms;
+  --motion-transition: 240ms;
+  --motion-transition-slow: 320ms;
+  --motion-product-fast: 350ms;
+  --motion-product: 500ms;
+  --motion-product-slow: 650ms;
+  --motion-ambient-a: 8s;
+  --motion-ambient-b: 10s;
+  --motion-float: 6s;
+  --motion-jet-path: 5.5s;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+  --ease-ambient: ease-in-out;
+}
+
+@keyframes gojet-brand-breathe-a {
+  from { transform: translate3d(0, 0, 0) scale(0.98); opacity: 0.48; }
+  to { transform: translate3d(6px, 4px, 0) scale(1.035); opacity: 0.68; }
+}
+
+@keyframes gojet-brand-breathe-b {
+  from { transform: translate3d(0, 4px, 0) scale(0.98); opacity: 0.48; }
+  to { transform: translate3d(-5px, -2px, 0) scale(1.035); opacity: 0.68; }
+}
+
+@keyframes gojet-product-float {
+  0%, 100% { transform: translate3d(0, -8px, 0) rotate(-0.2deg); }
+  50% { transform: translate3d(0, 8px, 0) rotate(0.2deg); }
+}
+
+@keyframes gojet-jet-path-progress {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+.gojet-motion-breathe-a {
+  animation: gojet-brand-breathe-a var(--motion-ambient-a) var(--ease-ambient) infinite alternate;
+  will-change: transform, opacity;
+}
+
+.gojet-motion-breathe-b {
+  animation: gojet-brand-breathe-b var(--motion-ambient-b) var(--ease-ambient) -2.5s infinite alternate;
+  will-change: transform, opacity;
+}
+
+.gojet-motion-product-float {
+  animation: gojet-product-float var(--motion-float) var(--ease-ambient) infinite;
+  will-change: transform;
+}
+
+.gojet-motion-jet-path {
+  animation: gojet-jet-path-progress var(--motion-jet-path) linear infinite;
+  will-change: offset-distance;
+}
+
+/* Reduced motion is an information-preserving mode, not a visual disable switch. */
+@media (prefers-reduced-motion: reduce) {
+  .gojet-motion-breathe-a,
+  .gojet-motion-breathe-b,
+  .gojet-motion-product-float,
+  .gojet-motion-jet-path {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+
+  :where([data-gojet-motion]) {
+    scroll-behavior: auto !important;
+    transition-property: opacity !important;
+    transition-duration: var(--motion-feedback-fast) !important;
+  }
+}
