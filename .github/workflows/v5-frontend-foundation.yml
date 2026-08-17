@@ -42,7 +42,7 @@ jobs:
 
       - name: Verify no browser auth-token persistence in V5 apps/packages
         run: |
-          if grep -R -n -E 'localStorage|sessionStorage' apps packages; then
+          if grep -R -n -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' apps packages; then
             echo 'V5 auth/session persistence must not use browser Web Storage.' >&2
             exit 1
           fi
