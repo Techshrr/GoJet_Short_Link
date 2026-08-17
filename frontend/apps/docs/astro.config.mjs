@@ -10,7 +10,7 @@ export default defineConfig({
       defaultLocale: "en",
       locales: { en: { label: "English", lang: "en" }, "zh-CN": { label: "简体中文", lang: "zh-CN" } },
       sidebar: [
-        { label: "Overview", items: [{ label: "V5 Documentation Foundation", slug: "en/" }] }
+        { label: "Overview", items: [{ label: "V5 Documentation Foundation", slug: "en" }] }
       ]
     })
   ]
