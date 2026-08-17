@@ -1,3 +1,48 @@
+import type { LucideIcon, LucideProps } from "lucide-react";
+
+export type { LucideIcon, LucideProps };
+
+export {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Copy,
+  Download,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  File,
+  Filter,
+  Folder,
+  Globe2,
+  Info,
+  KeyRound,
+  Link2,
+  LoaderCircle,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  QrCode,
+  Search,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Trash2,
+  Upload,
+  User,
+  Users,
+  X
+} from "lucide-react";
+
 export const functionalIconPolicy = {
   library: "lucide",
   strokeWidth: 1.75,
@@ -22,8 +67,4 @@ export const customProductIconPolicy = {
   linejoin: "round"
 } as const;
 
-/**
- * P02 freezes the source and geometry policy only. P03 owns React icon
- * primitives and will bind Lucide components without changing these rules.
- */
 export type FunctionalIconSize = keyof typeof functionalIconPolicy.sizes;
