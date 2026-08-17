@@ -57,6 +57,9 @@ jobs:
       - name: Verify P02 brand foundation
         run: pnpm verify:brand
 
+      - name: Verify P03 design system foundation
+        run: pnpm verify:ui
+
       - name: Typecheck
         run: pnpm typecheck
 
