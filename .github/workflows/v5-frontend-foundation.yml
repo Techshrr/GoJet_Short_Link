@@ -54,6 +54,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify P02 brand foundation
+        run: pnpm verify:brand
+
       - name: Typecheck
         run: pnpm typecheck
 
