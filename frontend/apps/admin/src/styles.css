@@ -1,0 +1,6 @@
+@import "tailwindcss";
+html { background: var(--canvas); color: var(--foreground); font-family: InterVariable, Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+body { margin: 0; min-width: 320px; }
+.foundation { max-width: 980px; margin: 0 auto; padding: 48px 28px; }
+.foundation span { color: var(--brand-blue); font-size: 13px; font-weight: 700; }
+h1 { font-size: 24px; margin: 12px 0; } p { color: var(--foreground-secondary); line-height: 1.65; }

@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+html { background: var(--canvas); color: var(--foreground); font-family: InterVariable, Inter, ui-sans-serif, system-ui, sans-serif; }
+body { margin: 0; min-width: 320px; }
+.foundation { max-width: 760px; margin: 0 auto; padding: 96px 24px; }
+.eyebrow { color: var(--brand-blue); font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+h1 { margin: 12px 0 16px; font-size: clamp(34px, 5vw, 52px); line-height: 1.08; }
+p { color: var(--foreground-secondary); line-height: 1.65; }

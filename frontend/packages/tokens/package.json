@@ -1,0 +1,7 @@
+{
+  "name": "@gojet/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./css": "./src/tokens.css" }
+}

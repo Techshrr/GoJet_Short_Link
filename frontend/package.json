@@ -1,0 +1,17 @@
+{
+  "name": "gojet-v5-frontend",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev:site": "pnpm --filter @gojet/site dev",
+    "dev:workspace": "pnpm --filter @gojet/workspace dev",
+    "dev:admin": "pnpm --filter @gojet/admin dev",
+    "dev:docs": "pnpm --filter @gojet/docs dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "check": "pnpm typecheck && pnpm build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

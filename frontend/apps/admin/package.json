@@ -1,0 +1,25 @@
+{
+  "name": "@gojet/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@gojet/api-client": "workspace:*",
+    "@gojet/auth": "workspace:*",
+    "@gojet/tokens": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-router": "^1.170.18",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.0",
+    "vite": "^8.2.0"
+  }
+}
