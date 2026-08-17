@@ -36,17 +36,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install dependencies and create lockfile
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Capture generated lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-pnpm-lock-${{ github.sha }}
-          path: frontend/pnpm-lock.yaml
-          if-no-files-found: error
-          retention-days: 1
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Verify no browser auth-token persistence in V5 source
         run: |
