@@ -14,8 +14,8 @@ export interface ApiErrorPayload {
 
 export class ApiError extends Error {
   readonly status: number;
-  readonly code?: string;
-  readonly details?: unknown;
+  readonly code: string | undefined;
+  readonly details: unknown;
 
   constructor(status: number, payload: ApiErrorPayload = {}) {
     super(payload.message ?? `API request failed with status ${status}`);
@@ -36,6 +36,12 @@ async function decodeBody(response: Response): Promise<unknown> {
   return text || undefined;
 }
 
+function withJsonBody(method: string, body: unknown, init?: RequestInit): RequestInit {
+  const next: RequestInit = { ...init, method };
+  if (body !== undefined) next.body = JSON.stringify(body);
+  return next;
+}
+
 export function createApiClient(options: ApiClientOptions = {}) {
   const transport = options.transport ?? globalThis.fetch.bind(globalThis);
   const baseUrl = options.baseUrl?.replace(/\/$/, "") ?? "";
@@ -45,7 +51,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     const headers = new Headers(init.headers);
     headers.set("Accept", "application/json");
 
-    if (init.body !== undefined && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    if (init.body !== undefined && init.body !== null && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
 
@@ -74,12 +80,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
   return {
     request,
     get: <T>(path: string, init?: RequestInit) => request<T>(path, { ...init, method: "GET" }),
-    post: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, { ...init, method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
-    put: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, { ...init, method: "PUT", body: body === undefined ? undefined : JSON.stringify(body) }),
-    patch: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, { ...init, method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) }),
+    post: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, withJsonBody("POST", body, init)),
+    put: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, withJsonBody("PUT", body, init)),
+    patch: <T>(path: string, body?: unknown, init?: RequestInit) => request<T>(path, withJsonBody("PATCH", body, init)),
     delete: <T>(path: string, init?: RequestInit) => request<T>(path, { ...init, method: "DELETE" })
   };
 }
 
 // V5 invariant: authentication credentials are cookie/session based.
-// This package deliberately exposes no localStorage/sessionStorage token persistence API.
+// This package deliberately exposes no browser Web Storage token persistence API.
