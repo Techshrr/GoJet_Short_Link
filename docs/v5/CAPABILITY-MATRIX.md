@@ -1,0 +1,99 @@
+# GoJet V5 Capability Matrix
+
+**Baseline:** `rebuild/v4-rc12-real-install-fixes@43c49f8bcf761c88dfd27e94a69fba7756bd8486`  
+**V5 branch:** `rebuild/v5-specification-rebuild`  
+**Rule:** a row is DONE only when Backend + API + UI + RBAC + States + Browser + Security + Release are all accepted on the same V5 exact HEAD.
+
+Legend:
+
+- `V4` — capability exists in the frozen V4 baseline and is a migration obligation.
+- `PENDING` — V5 implementation/verification not yet accepted.
+- `N/A` — column is not applicable to that capability.
+- `DONE` — accepted by the corresponding V5 gate; do not use before evidence exists.
+
+| Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |
+|---|---|---|---|---|---|---|---|---|
+| Link create/list/detail/edit/delete | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Custom short code | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Official short-link domains | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Custom domains / DNS verification | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Redirect status 301/302/307/308 | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Password-protected links | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Link expiration | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Click limit | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| One-time access | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| UTM | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Geo routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Device routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Language routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Source routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| A/B testing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Link version history / reason / restore | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Bulk link operations | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| QR create/style/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| QR tracking / analytics | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Text sharing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| File upload/share/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| File quarantine / ClamAV / publish state | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Link in Bio | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Analytics overview | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Resource analytics | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Workspace | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Members / invitations | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Roles / permissions / RBAC | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Campaigns | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Folders | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Tags | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Plans / quotas | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Billing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Orders / invoices | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Payment channels / callbacks | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| FX / rate history / override | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Support tickets | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Ticket attachments | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Mail queue / delivery | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Mail templates / variables / preview | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Register / email verify / login | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Forgot / reset password | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| OAuth / social login / binding | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Session management / revoke | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| TOTP / backup codes | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Turnstile policy / verification | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Destination Risk | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Abuse reports | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Security events | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Audit log | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Admin users | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Admin workspaces | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Admin resource governance | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Admin roles / permissions | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Announcements | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| System settings | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Service status / operations monitor | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Storage configuration | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| API keys | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Webhooks | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Redirect engine | V4 | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Analytics worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Analytics reconciler | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| File worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Mail worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Operations monitor | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Log receiver | V4 | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
+| PHP 8.3 web installer | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Native systemd deployment | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Nginx production routing | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| MySQL migration catalog | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Authenticated Redis production runtime | PENDING | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Website SSG / SEO | PENDING | N/A | PENDING | N/A | PENDING | PENDING | PENDING | PENDING |
+| Docs static build / Pagefind | PENDING | N/A | PENDING | N/A | PENDING | PENDING | PENDING | PENDING |
+
+## Phase ownership
+
+- P05 is the first phase allowed to turn the Links rows from `PENDING` into evidence-backed V5 states.
+- P06–P17 own the corresponding product/admin capability rows.
+- P18 owns Docs.
+- P19 owns final Website exact-HEAD product visuals and final public SSG acceptance.
+- P20–P22 own whole-product, package and fresh-install closure.
+
+Historical V4 CI success never converts a `PENDING` V5 cell to `DONE`.
