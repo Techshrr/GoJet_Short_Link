@@ -10,7 +10,8 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:brand": "node scripts/verify-brand-foundation.mjs",
-    "check": "pnpm verify:brand && pnpm typecheck && pnpm build"
+    "verify:ui": "node scripts/verify-design-system.mjs",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "typescript": "^5.9.0"
