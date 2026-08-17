@@ -1,0 +1,19 @@
+.gj-overlay-positioner { z-index:90; outline:0; }
+.gj-overlay-popup, .gj-menu-popup, .gj-preview-popup { min-width:220px; max-width:min(360px,calc(100vw - 24px)); border:var(--border-width) solid var(--border); border-radius:var(--radius-lg); background:var(--surface-elevated); color:var(--foreground); box-shadow:var(--shadow-e2); }
+.gj-overlay-popup { padding:var(--space-4); }
+.gj-overlay-title { margin:0; font-size:var(--type-product-body); font-weight:var(--weight-bold); }
+.gj-overlay-description { margin:var(--space-1) 0 0; color:var(--foreground-muted); font-size:var(--type-compact); line-height:var(--line-meta); }
+.gj-overlay-body { margin-top:var(--space-3); }
+.gj-menu-popup { padding:var(--space-1); }
+.gj-menu-item { display:flex; width:100%; min-height:34px; align-items:center; padding:0 var(--space-3); border-radius:var(--radius-md); color:var(--foreground-secondary); font-size:var(--type-product-body); cursor:default; outline:0; }
+.gj-menu-item[data-highlighted] { background:var(--surface-muted); color:var(--foreground); }
+.gj-menu-item[data-destructive] { color:var(--danger); }
+.gj-menu-item[data-disabled] { opacity:.48; }
+.gj-menu-separator { display:block; height:var(--border-width); margin:var(--space-1) var(--space-2); background:var(--border); }
+.gj-context-trigger { display:block; }
+.gj-preview-trigger { color:var(--brand-blue); text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:3px; }
+.gj-preview-popup { padding:var(--space-4); }
+.gj-drawer-viewport { position:fixed; inset:0; z-index:100; display:flex; justify-content:flex-start; overflow:hidden; }
+.gj-drawer-popup { width:min(360px,88vw); height:100%; background:var(--surface-elevated); border-right:var(--border-width) solid var(--border); box-shadow:var(--shadow-e3); transform:translateX(var(--drawer-swipe-movement-x,0)); }
+.gj-drawer-content { height:100%; overflow:auto; }
+@media (prefers-reduced-motion: reduce) { .gj-overlay-popup, .gj-menu-popup, .gj-preview-popup, .gj-drawer-popup { transition:none; } }
