@@ -22,6 +22,10 @@ on:
       - 'docs/v5/P05_LINKS_CONTRACT.md'
       - '.github/workflows/v5-frontend-foundation.yml'
 
+concurrency:
+  group: v5-frontend-foundation-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
