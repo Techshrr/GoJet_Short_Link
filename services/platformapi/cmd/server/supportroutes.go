@@ -6,6 +6,7 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/turnstile", s.publicBotProtection)
 	mux.HandleFunc("POST /api/public/abuse-reports", s.createPublicAbuseReport)
 	s.registerEmailCodeRoutes(mux)
+	s.registerP15AccountRoutes(mux)
 
 	mux.HandleFunc("GET /api/support/departments", s.user(s.supportDepartments))
 	mux.HandleFunc("GET /api/support/tickets", s.user(s.listSupportTickets))

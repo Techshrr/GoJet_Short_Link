@@ -1,0 +1,85 @@
+name: V5 P15 Auth Account Gate
+on:
+  push:
+    branches: ['rebuild/v5-*']
+    paths: ['frontend/**','app/identity/**','services/platformapi/cmd/server/**','database/migrations/**','docs/v5/P15_AUTH_ACCOUNT_CONTRACT.md','docs/v5/CAPABILITY-MATRIX.md','.github/workflows/v5-p15-auth-account.yml','go.mod','go.sum']
+  pull_request:
+    paths: ['frontend/**','app/identity/**','services/platformapi/cmd/server/**','database/migrations/**','docs/v5/P15_AUTH_ACCOUNT_CONTRACT.md','docs/v5/CAPABILITY-MATRIX.md','.github/workflows/v5-p15-auth-account.yml','go.mod','go.sum']
+concurrency:
+  group: v5-p15-auth-account-${{ github.ref }}
+  cancel-in-progress: true
+permissions: { contents: read, issues: write }
+jobs:
+  auth-account:
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with: { version: 10.15.0, run_install: false }
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with: { go-version: '1.23.x', cache-dependency-path: go.sum }
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify no browser auth-token persistence
+        run: |
+          if grep -R -n --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.astro -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' apps packages; then echo 'V5 auth/session persistence must not use browser Web Storage.' >&2; exit 1; fi
+      - name: Run P01-P15 contract TypeScript and build gates
+        run: pnpm check
+      - name: Test P15 identity and platform runtime
+        working-directory: .
+        run: go test ./app/identity ./services/platformapi/cmd/server
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run P04-P15 fixed-viewport Browser Gate regressions
+        run: |
+          pnpm test:shells
+          pnpm test:links
+          pnpm test:domains
+          pnpm test:analytics
+          pnpm test:qr
+          pnpm test:files
+          pnpm test:text
+          pnpm test:bio
+          pnpm test:workspace
+          pnpm test:billing
+          pnpm test:commerce
+          pnpm test:support
+          pnpm test:mail-ops
+          pnpm test:auth
+          pnpm test:account
+          pnpm test:oauth
+      - name: Upload P15 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: 'p15-auth-account-evidence-${{ github.sha }}', path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+      - name: Persist P15 exact-head CI evidence to issue 8
+        if: always() && github.event_name == 'push'
+        continue-on-error: true
+        env: { GH_TOKEN: '${{ github.token }}', REPO: '${{ github.repository }}', RUN_ID: '${{ github.run_id }}', RUN_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}', HEAD_SHA: '${{ github.sha }}', HEAD_BRANCH: '${{ github.ref_name }}', JOB_STATUS: '${{ job.status }}' }
+        run: |
+          set -euo pipefail
+          current_sha="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | awk '{print $1}' | head -n 1)"
+          if [ -z "$current_sha" ] || [ "$current_sha" != "$HEAD_SHA" ]; then echo "Skipping stale P15 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."; exit 0; fi
+          marker='<!-- v5-p15-ci-evidence-v1 -->'
+          if [ "$JOB_STATUS" = "success" ]; then state='✅ success'; else state="❌ $JOB_STATUS"; fi
+          cat > /tmp/v5-p15-evidence.md <<EOF
+          $marker
+          ## P15 Auth / OAuth / Account — exact-head evidence v1
+          - Status: **$state**
+          - Branch: \`$HEAD_BRANCH\`
+          - Tested SHA: \`$HEAD_SHA\`
+          - Workflow run: $RUN_URL
+          - Run ID: \`$RUN_ID\`
+          - Scope: P01–P14 regressions + P15 auth/account contract + strict TS/build + Go Identity/platform tests + Auth/Settings/Sessions/Connected Accounts/Admin OAuth desktop-tablet-mobile Browser Gates + cookie/CSRF + no-Web-Storage + write-only-secret invariants
+          This marker is written only when the tested SHA is still the exact current branch HEAD. P15 matrix rows must not move to DONE unless this exact-head result is successful.
+          EOF
+          comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
+          if [ -n "$comment_id" ]; then gh api --method PATCH "repos/$REPO/issues/comments/$comment_id" --raw-field body="$(cat /tmp/v5-p15-evidence.md)" >/dev/null; else gh api --method POST "repos/$REPO/issues/8/comments" --raw-field body="$(cat /tmp/v5-p15-evidence.md)" >/dev/null; fi

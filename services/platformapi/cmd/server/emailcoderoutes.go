@@ -21,9 +21,9 @@ func (s *server) registerEmailCodeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/auth/rainbow/start", noStoreHandler(sanitizeSocialRedirect(s.socialRegistrationStart(s.rainbowAuthStart))))
 	mux.HandleFunc("GET /api/public/auth/rainbow/callback", noStoreHandler(s.rainbowCallbackPolicy(s.socialRegistrationCallbackRouter("rainbow", s.socialCallbackRouter("rainbow", s.rainbowAuthCallback)))))
 	mux.HandleFunc("GET /api/public/auth/rainbow/bind-launch", noStoreHandler(s.rainbowBindLaunch))
-	mux.HandleFunc("POST /api/public/auth/handoff", noStoreHandler(s.socialAuthHandoff))
+	mux.HandleFunc("POST /api/public/auth/handoff", noStoreHandler(s.p15SocialAuthHandoff))
 	mux.HandleFunc("GET /api/public/auth/social-registration", noStoreHandler(s.socialRegistrationInfo))
-	mux.HandleFunc("POST /api/public/auth/social-registration/complete", noStoreHandler(s.socialRegistrationComplete))
+	mux.HandleFunc("POST /api/public/auth/social-registration/complete", noStoreHandler(s.p15SocialRegistrationComplete))
 	mux.HandleFunc("GET /api/admin/auth/providers", noStoreHandler(s.admin("settings.manage", s.adminSocialProviders)))
 	mux.HandleFunc("GET /api/me/social-identities", noStoreHandler(s.user(s.mySocialIdentities)))
 	mux.HandleFunc("POST /api/me/social/{provider}/bind/start", noStoreHandler(s.user(s.socialBindStart)))
@@ -37,12 +37,10 @@ func (s *server) githubAuthStart(w http.ResponseWriter, r *http.Request) {
 	r.SetPathValue("provider", "github")
 	s.socialAuthStart(w, r)
 }
-
 func (s *server) githubAuthCallback(w http.ResponseWriter, r *http.Request) {
 	r.SetPathValue("provider", "github")
 	s.socialAuthCallback(w, r)
 }
-
 func noStoreHandler(next http.HandlerFunc)http.HandlerFunc{return func(w http.ResponseWriter,r *http.Request){w.Header().Set("Cache-Control","no-store");w.Header().Set("Pragma","no-cache");next(w,r)}}
 func sanitizeSocialRedirect(next http.HandlerFunc)http.HandlerFunc{return func(w http.ResponseWriter,r *http.Request){target:=r.URL.Query().Get("redirect");if target==""||!unsafeAuthRedirect(target){next(w,r);return};clone:=r.Clone(r.Context());clonedURL:=*r.URL;query:=clonedURL.Query();query.Del("redirect");clonedURL.RawQuery=query.Encode();clone.URL=&clonedURL;next(w,clone)}}
 func unsafeAuthRedirect(target string)bool{if strings.Contains(target,`\`){return true};return strings.IndexFunc(target,func(r rune)bool{return r<0x20||r==0x7f})>=0}
