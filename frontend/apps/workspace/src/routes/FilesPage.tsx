@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { useState, type DragEvent, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
 import { ApiError, createFilesClient, resourceAccess, type FileShareRecord, type WorkspaceSummary } from "@gojet/api-client";
@@ -71,12 +71,12 @@ function UploadFileForm({ workspaceId, canEdit }: { workspaceId: number; canEdit
     setClientError("");
     if (next && next.size > MAX_FILE_BYTES) {
       setFile(null);
-      setClientError("File too large · 单文件不能超过 100 MB。" );
+      setClientError("File too large · 单文件不能超过 100 MB。");
       return;
     }
     if (next && next.size === 0) {
       setFile(null);
-      setClientError("Empty files cannot be uploaded." );
+      setClientError("Empty files cannot be uploaded.");
       return;
     }
     setFile(next);
@@ -151,7 +151,7 @@ function UploadFileForm({ workspaceId, canEdit }: { workspaceId: number; canEdit
   </form>;
 }
 
-function FileRow({ item, workspaceId, canEdit, onDelete }: { item: FileShareRecord; workspaceId: number; canEdit: boolean; onDelete: () => void }) {
+function FileRow({ item, canEdit, onDelete }: { item: FileShareRecord; canEdit: boolean; onDelete: () => void }) {
   const state = authoritativeFileState(item);
   const publishable = canPublish(item);
   const expiry = item.expires_at ? formatDate(item.expires_at) : "No expiry";
@@ -182,7 +182,7 @@ export default function FilesPage() {
   if (!workspace || !access) return <Page className="resources-page"><EmptyState title="还没有工作区" description="创建工作区后才能管理文件分享。" /></Page>;
 
   const rows = files.data?.data ?? [];
-  const stateCounts = useMemo(() => rows.reduce<Record<FileState, number>>((counts, item) => { counts[authoritativeFileState(item)] += 1; return counts; }, { processing: 0, scanning: 0, safe: 0, review: 0, blocked: 0, failed: 0 }), [rows]);
+  const stateCounts = rows.reduce<Record<FileState, number>>((counts, item) => { counts[authoritativeFileState(item)] += 1; return counts; }, { processing: 0, scanning: 0, safe: 0, review: 0, blocked: 0, failed: 0 });
   const attention = stateCounts.review + stateCounts.blocked + stateCounts.failed;
   const listState = requestState(files.error);
 
@@ -205,7 +205,7 @@ export default function FilesPage() {
 
     <section className="resource-section" aria-labelledby="files-list-title">
       <div className="resource-section-head"><div><span className="resource-eyebrow">SECURE SHARING</span><h2 id="files-list-title">File library</h2><p>File, size, status, downloads, expiry and created time are returned by the Go API.</p></div></div>
-      {files.isPending ? <div className="resources-centered"><Spinner label="正在加载文件" /></div> : listState ? <ErrorState title={listState.title} description={listState.body} action={<Button type="button" onClick={() => files.refetch()}>重试</Button>} /> : files.isError ? <ErrorState title="无法加载文件" description={errorMessage(files.error)} action={<Button type="button" onClick={() => files.refetch()}>重试</Button>} /> : rows.length ? <div className="file-resource-list"><div className="file-resource-head" aria-hidden="true"><span>File</span><span>Size</span><span>Status</span><span>Downloads</span><span>Expiry</span><span>Created</span><span>Actions</span></div>{rows.map((item) => <FileRow key={item.id} item={item} workspaceId={workspace.id} canEdit={access.can_edit} onDelete={() => remove.mutate(item.id)} />)}</div> : <EmptyState title="No files" description={access.can_edit ? "Upload a file to begin. It will remain quarantined until the backend safety scan completes." : "当前工作区还没有文件。"} />}
+      {files.isPending ? <div className="resources-centered"><Spinner label="正在加载文件" /></div> : listState ? <ErrorState title={listState.title} description={listState.body} action={<Button type="button" onClick={() => files.refetch()}>重试</Button>} /> : files.isError ? <ErrorState title="无法加载文件" description={errorMessage(files.error)} action={<Button type="button" onClick={() => files.refetch()}>重试</Button>} /> : rows.length ? <div className="file-resource-list"><div className="file-resource-head" aria-hidden="true"><span>File</span><span>Size</span><span>Status</span><span>Downloads</span><span>Expiry</span><span>Created</span><span>Actions</span></div>{rows.map((item) => <FileRow key={item.id} item={item} canEdit={access.can_edit} onDelete={() => remove.mutate(item.id)} />)}</div> : <EmptyState title="No files" description={access.can_edit ? "Upload a file to begin. It will remain quarantined until the backend safety scan completes." : "当前工作区还没有文件。"} />}
     </section>
   </Page>;
 }
