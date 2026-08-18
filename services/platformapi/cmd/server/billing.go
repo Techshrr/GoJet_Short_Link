@@ -50,6 +50,10 @@ func (s *server) requestInvoice(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "工作区编号无效"})
 		return
 	}
+	if err = s.billing.ValidatePlanSelection(r.Context(), in.PlanCode, in.Type, in.BillingCycle); err != nil {
+		jsonResponse(w, 422, map[string]string{"error": err.Error()})
+		return
+	}
 	invoice, err := s.billing.Request(r.Context(), currentUser(r).ID, wid, in.PlanCode, in.Type, in.BillingCycle)
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
