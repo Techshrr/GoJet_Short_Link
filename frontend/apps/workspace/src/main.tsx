@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import "@gojet/tokens/css";
+import "@gojet/ui/css";
+import "@gojet/ui/patterns.css";
+import "@gojet/ui/overlays.css";
+import "@gojet/ui/shells.css";
 import "./styles.css";
 import { router } from "./router";
 
