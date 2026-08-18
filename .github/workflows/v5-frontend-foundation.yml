@@ -7,19 +7,23 @@ on:
     paths:
       - 'frontend/**'
       - 'app/links/**'
+      - 'app/domains/**'
       - 'services/platformapi/cmd/server/**'
       - 'go.mod'
       - 'go.sum'
       - 'docs/v5/P05_LINKS_CONTRACT.md'
+      - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - '.github/workflows/v5-frontend-foundation.yml'
   pull_request:
     paths:
       - 'frontend/**'
       - 'app/links/**'
+      - 'app/domains/**'
       - 'services/platformapi/cmd/server/**'
       - 'go.mod'
       - 'go.sum'
       - 'docs/v5/P05_LINKS_CONTRACT.md'
+      - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - '.github/workflows/v5-frontend-foundation.yml'
 
 concurrency:
@@ -33,7 +37,7 @@ permissions:
 jobs:
   foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend
@@ -87,6 +91,9 @@ jobs:
       - name: Verify P05 Links vertical slice contract
         run: pnpm verify:links
 
+      - name: Verify P06 Domains vertical slice contract
+        run: pnpm verify:domains
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -102,6 +109,7 @@ jobs:
           const checks = [
             ['workspace', 'src/routes/LinksPage.tsx'],
             ['workspace', 'src/routes/LinkDetailPage.tsx'],
+            ['workspace', 'src/routes/DomainsPage.tsx'],
             ['admin', 'src/routes/UsersBoundary.tsx'],
           ];
           for (const [app, source] of checks) {
@@ -114,9 +122,9 @@ jobs:
           }
           NODE
 
-      - name: Test P05 Go Links backend
+      - name: Test P05-P06 Go backend
         working-directory: .
-        run: go test ./app/links ./services/platformapi/cmd/server
+        run: go test ./app/links ./app/domains ./services/platformapi/cmd/server
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
@@ -145,7 +153,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Persist exact-head CI evidence to issue 8
+      - name: Run P06 fixed-viewport browser gate
+        run: pnpm test:domains
+
+      - name: Upload P06 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p06-domains-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Persist P06 exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
         continue-on-error: true
         env:
@@ -160,11 +180,11 @@ jobs:
           set -euo pipefail
           current_sha="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | awk '{print $1}' | head -n 1)"
           if [ -z "$current_sha" ] || [ "$current_sha" != "$HEAD_SHA" ]; then
-            echo "Skipping stale evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
+            echo "Skipping stale P06 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
             exit 0
           fi
 
-          marker='<!-- v5-p05-ci-evidence-v2 -->'
+          marker='<!-- v5-p06-ci-evidence-v1 -->'
           if [ "$JOB_STATUS" = "success" ]; then
             state='✅ success'
           else
@@ -173,16 +193,16 @@ jobs:
 
           cat > /tmp/v5-ci-evidence.md <<EOF
           $marker
-          ## P05 Links — final exact-head evidence v2
+          ## P06 Domains / URL System — exact-head evidence v1
 
           - Status: **$state**
           - Branch: \`$HEAD_BRANCH\`
           - Tested SHA: \`$HEAD_SHA\`
           - Workflow run: $RUN_URL
           - Run ID: \`$RUN_ID\`
-          - Scope: P01–P04 regression gates + P05 Links contract + strict TS/build + Go Links/server tests + P04/P05 fixed-viewport browser gates
+          - Scope: P01–P05 regression gates + P06 Domains contract + strict TS/build + Go Links/Domains/server tests + P04/P05/P06 fixed-viewport browser gates
 
-          This v2 marker is isolated from pre-guard workflow runs. It records only an exact current branch HEAD and does not mark P06 or later phases complete.
+          This marker is written only when the tested SHA is still the exact current branch HEAD. P07 remains locked unless this P06 exact-head run is successful.
           EOF
 
           comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"

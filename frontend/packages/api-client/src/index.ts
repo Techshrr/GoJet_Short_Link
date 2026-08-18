@@ -91,3 +91,4 @@ export function createApiClient(options: ApiClientOptions = {}) {
 // V5 invariant: authentication credentials are cookie/session based.
 // This package deliberately exposes no browser Web Storage token persistence API.
 export * from "./links";
+export * from "./domains";

@@ -10,6 +10,7 @@ import "@gojet/ui/shells.css";
 import "@gojet/ui/shells-responsive.css";
 import "./styles.css";
 import "./links.css";
+import "./domains.css";
 import { router } from "./router";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } });
