@@ -1,0 +1,48 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root = process.cwd();
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const requireAll = (label, text, values) => { for (const value of values) if (!text.includes(value)) throw new Error(`${label} missing: ${value}`); };
+const forbid = (label, text, values) => { for (const value of values) if (text.includes(value)) throw new Error(`${label} forbidden at P04: ${value}`); };
+
+const uiPackage = JSON.parse(read('packages/ui/package.json'));
+if (uiPackage.exports?.['./shells'] !== './src/shells.tsx') throw new Error('P04 shell export missing');
+if (uiPackage.exports?.['./shells.css'] !== './src/shells.css') throw new Error('P04 shell CSS export missing');
+if (uiPackage.exports?.['./shells-responsive.css'] !== './src/shells-responsive.css') throw new Error('P04 tablet shell CSS export missing');
+
+const shells = read('packages/ui/src/shells.tsx');
+requireAll('P04 shell primitives', shells, ['export function WebsiteShell', 'export function AuthShell', 'export function ProductShell', 'variant: "workspace" | "admin"', 'window.scrollY >= 80', '<MobileDrawer']);
+const shellCss = read('packages/ui/src/shells.css');
+requireAll('P04 frozen dimensions', shellCss, ['height:64px', 'grid-template-columns:46% 54%', 'grid-template-columns:248px minmax(0,1fr)', '--shell-header-height:58px', 'grid-template-columns:256px minmax(0,1fr)', '--shell-header-height:56px']);
+const responsiveCss = read('packages/ui/src/shells-responsive.css');
+requireAll('P04 tablet collapse', responsiveCss, ['max-width:1279px', 'min-width:768px', '.gj-product-sidebar{display:none}', '.gj-product-mobile-trigger{display:block}', '.gj-website-nav{display:none}']);
+
+const siteRouter = read('apps/site/src/router.tsx');
+const sitePreview = read('apps/site/src/routes/ShellPreviews.tsx');
+requireAll('Website/Auth routes', siteRouter, ['WebsiteShellPreview', 'LoginShellPreview', 'RegisterShellPreview', 'path: "/login"', 'path: "/register"']);
+requireAll('Website frozen nav', sitePreview, ['Products', 'Solutions', 'Developers', 'Pricing', 'Docs', '<WebsiteShell', '<AuthShell']);
+
+const workspaceShell = read('apps/workspace/src/WorkspaceShell.tsx');
+requireAll('Workspace frozen navigation', workspaceShell, ['Overview', 'CREATE', 'Links', 'QR Codes', 'Files', 'Text', 'Bio Pages', 'INSIGHTS', 'Analytics', 'MANAGE', 'Domains', 'Campaigns', 'Tags', 'DEVELOPER', 'API Keys', 'Webhooks', 'WORKSPACE', 'Members', 'Billing', 'Settings']);
+forbid('Workspace first-level IA', workspaceShell, ['label: "Folders"', 'label: "UTM"', 'label: "A/B"', 'label: "Routing"', 'label: "Access"']);
+requireAll('Workspace shell mount', read('apps/workspace/src/router.tsx'), ['<WorkspaceShell', 'basepath: "/app"']);
+
+const adminShell = read('apps/admin/src/AdminShell.tsx');
+requireAll('Admin frozen navigation', adminShell, ['CUSTOMERS', 'Users', 'Workspaces', 'Memberships', 'RESOURCES', 'TRUST & SAFETY', 'Destination Risk', 'File Security', 'Abuse Reports', 'Security Events', 'OPERATIONS', 'Tickets', 'Announcements', 'Mail', 'Jobs', 'Services', 'COMMERCE', 'Plans', 'Billing', 'Payments', 'FX', 'ACCESS', 'Administrators', 'Roles', 'Permissions', 'Audit', 'PLATFORM', 'General', 'Official Domains', 'OAuth', 'Turnstile', 'Mail Settings', 'Templates', 'Storage', 'Integrations']);
+requireAll('Admin shell mount', read('apps/admin/src/router.tsx'), ['<AdminShell', 'basepath: "/admin"']);
+
+const docsConfig = read('apps/docs/astro.config.mjs');
+const docsCss = read('apps/docs/src/styles/p04-shell.css');
+requireAll('Docs shell config', docsConfig, ['base: "/docs"', 'output: "static"', 'GoJet Docs', 'GoJet 文档', '@gojet/tokens/css', './src/styles/p04-shell.css', 'SocialIcons: "./src/components/WorkspaceLink.astro"']);
+requireAll('Docs frozen dimensions', docsCss, ['--sl-nav-height: var(--docs-header-height)', '--sl-sidebar-width: var(--docs-sidebar-width)', '--sl-content-width: var(--docs-article-max)', 'width: var(--docs-toc-width)']);
+requireAll('Docs workspace action', read('apps/docs/src/components/WorkspaceLink.astro'), ['href="/app"', 'Go to Workspace']);
+
+const rootPackage = JSON.parse(read('package.json'));
+if (rootPackage.devDependencies?.['@playwright/test'] !== '1.62.1') throw new Error('P04 browser gate must pin @playwright/test 1.62.1');
+const playwright = read('playwright.shells.config.ts');
+requireAll('P04 browser config', playwright, ['browserName: "chromium"', 'playwright test -c', '4173', '4174', '4175', '4176']);
+const browser = read('tests/shells/p04-shells.spec.ts');
+requireAll('P04 fixed viewport gate', browser, ['width: 1440, height: 900', 'width: 1024, height: 768', 'width: 390, height: 844', 'pageerror', 'message.type() === "error"', 'scrollWidth', 'clientWidth', 'page.screenshot']);
+
+console.log('P04 five-surface shell foundation contract verified.');
