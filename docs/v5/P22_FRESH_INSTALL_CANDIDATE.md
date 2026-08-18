@@ -6,6 +6,8 @@
 
 P22 may consume only the immutable P21 / G11 Native artifact produced for the exact same Git commit SHA. Rebuilding a production package from the checkout inside P22 is not acceptance evidence.
 
+The immutable artifact identity check is the frozen P21 manifest contract: `schema=gojet-v5-native-version-manifest-v1`, `phase=P21`, `gate=G11`, `git_sha=<exact tested SHA>`, and `fresh_install_claimed=false`. P22 must reject a package when any of those fields or the archive checksum does not match.
+
 ## G12 — Fresh Install
 
 The Gate provisions a clean aaPanel/BT-compatible Native host contract and requires:
