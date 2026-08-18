@@ -8,7 +8,7 @@ const viewports = [
 
 type Role = "owner" | "admin" | "editor" | "analyst" | "viewer";
 interface Options { role?: Role; }
-interface State { requests: string[]; invites: number; roleChanges: number; campaignCreates: number; folderCreates: number; tagCreates: number; }
+interface State { requests: string[]; invites: number; roleChanges: number; campaignCreates: number; folderCreates: number; tagCreates: number; lastTagColor?: string; }
 
 async function fixture(page: Page, options: Options = {}): Promise<State> {
   const role = options.role ?? "owner";
@@ -33,7 +33,7 @@ async function fixture(page: Page, options: Options = {}): Promise<State> {
     if (method === "POST" && path === "/api/workspaces/1/campaigns") { state.campaignCreates += 1; return json(route, { id: 12, name: "Campaign", status: "active", conversions: 0, links: 0, clicks: 0 }, 201); }
     if (method === "PATCH" && path === "/api/workspaces/1/campaigns/11") return json(route, { updated: true });
     if (method === "POST" && path === "/api/workspaces/1/folders") { state.folderCreates += 1; return json(route, { id: 22, name: "Folder", links: 0 }, 201); }
-    if (method === "POST" && path === "/api/workspaces/1/tags") { state.tagCreates += 1; return json(route, { id: 32, name: "Tag", color: "#4f46e5", links: 0 }, 201); }
+    if (method === "POST" && path === "/api/workspaces/1/tags") { const body = req.postDataJSON() as { color?: string }; state.tagCreates += 1; state.lastTagColor = body.color; return json(route, { id: 32, name: "Tag", color: body.color ?? "#2563eb", links: 0 }, 201); }
     return json(route, { error: `Unhandled P12 route: ${method} ${path}` }, 404);
   });
   return state;
@@ -57,6 +57,13 @@ for (const viewport of viewports) {
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({ path: `test-results/p12-organization-${viewport.name}.png`, fullPage: true });
   });
 }
+
+test("P12 tag creation uses only the frozen token palette", async ({ page }) => {
+  const state = await fixture(page); await page.goto("/app/tags?workspace=1"); await page.getByRole("button", { name: "New tag" }).click();
+  const sheet = page.locator(".gj-side-sheet-popup"); const palette = sheet.getByRole("radiogroup", { name: "Tag color token palette" }); await expect(palette).toBeVisible(); await expect(palette.getByRole("radio")).toHaveCount(7); await expect(sheet.locator('input[type="color"]')).toHaveCount(0);
+  await palette.getByRole("radio", { name: "Cyan" }).click(); await sheet.getByLabel("Name").fill("Docs"); await sheet.getByRole("button", { name: "Create tag" }).click();
+  expect(state.tagCreates).toBe(1); expect(state.lastTagColor).toBe("#06b6d4");
+});
 
 test("P12 member RBAC is read-only for viewer", async ({ page }) => { await fixture(page, { role: "viewer" }); await page.goto("/app/members?workspace=1"); await expect(page.getByText("Read-only member access")).toBeVisible(); await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0); await expect(page.getByLabel("Role for editor@gojet.cc")).toHaveCount(0); });
 test("P12 organization RBAC is read-only for analyst", async ({ page }) => { await fixture(page, { role: "analyst" }); await page.goto("/app/tags?workspace=1"); await expect(page.getByText("Read-only organization access")).toBeVisible(); await expect(page.getByRole("button", { name: "New campaign" })).toHaveCount(0); await expect(page.getByRole("button", { name: "New tag" })).toHaveCount(0); });
