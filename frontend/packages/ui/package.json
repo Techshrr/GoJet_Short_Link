@@ -9,13 +9,16 @@
     "./patterns": "./src/patterns.tsx",
     "./patterns.css": "./src/patterns.css",
     "./overlays": "./src/overlays.tsx",
-    "./overlays.css": "./src/overlays.css"
+    "./overlays.css": "./src/overlays.css",
+    "./data": "./src/data.tsx",
+    "./data.css": "./src/data.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@gojet/icons": "workspace:*",
     "@gojet/tokens": "workspace:*",
+    "@tanstack/react-table": "^8.21.3",
     "react": "^19.2.8"
   },
   "devDependencies": {
