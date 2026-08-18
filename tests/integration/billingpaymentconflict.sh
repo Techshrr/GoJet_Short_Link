@@ -20,7 +20,7 @@ user=$(printf '%s' "$user_body"|field "['token']")
 spaces=$(expect 200 "$(req GET /api/workspaces '' "$user")" workspaces)
 wid=$(printf '%s' "$spaces"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
 
-invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$user")" request-invoice)
+invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$user")" request-invoice)
 invoice_id=$(printf '%s' "$invoice_body"|field "['id']")
 amount=$(mysqlq "SELECT amount_cents FROM billing_invoices WHERE id=$invoice_id;")
 currency=$(mysqlq "SELECT currency FROM billing_invoices WHERE id=$invoice_id;")
