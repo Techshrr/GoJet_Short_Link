@@ -22,7 +22,7 @@ type SocialInfo = {
 };
 
 async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const init: RequestInit = {
     method,
     credentials: "include",
     cache: "no-store",
@@ -30,8 +30,9 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
       Accept: "application/json",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  const res = await fetch(path, init);
   const data = res.status === 204 ? undefined : await res.json().catch(() => undefined);
   if (!res.ok) {
     throw new Error((data as { error?: string } | undefined)?.error ?? `Request failed (${res.status})`);
