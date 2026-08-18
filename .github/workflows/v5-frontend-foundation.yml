@@ -93,28 +93,21 @@ jobs:
 
       - name: Verify P02 brand foundation
         run: pnpm verify:brand
-
       - name: Verify P03 design system foundation
         run: pnpm verify:ui
-
       - name: Verify P04 five-surface shell contract
         run: pnpm verify:shells
-
       - name: Verify P05 Links vertical slice contract
         run: pnpm verify:links
-
       - name: Verify P06 Domains vertical slice contract
         run: pnpm verify:domains
-
       - name: Verify P07 Analytics vertical slice contract
         run: pnpm verify:analytics
-
       - name: Verify P08 QR vertical slice contract
         run: pnpm verify:qr
 
       - name: Typecheck
         run: pnpm typecheck
-
       - name: Build independent applications
         run: pnpm build
 
@@ -152,35 +145,55 @@ jobs:
       - name: Upload P04 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: p04-shell-evidence-${{ github.sha }}, path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+        with:
+          name: p04-shell-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Run P05 fixed-viewport browser gate
         run: pnpm test:links
       - name: Upload P05 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: p05-links-evidence-${{ github.sha }}, path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+        with:
+          name: p05-links-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Run P06 fixed-viewport browser gate
         run: pnpm test:domains
       - name: Upload P06 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: p06-domains-evidence-${{ github.sha }}, path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+        with:
+          name: p06-domains-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Run P07 fixed-viewport browser gate
         run: pnpm test:analytics
       - name: Upload P07 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: p07-analytics-evidence-${{ github.sha }}, path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+        with:
+          name: p07-analytics-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Run P08 fixed-viewport browser gate
         run: pnpm test:qr
       - name: Upload P08 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: p08-qr-evidence-${{ github.sha }}, path: frontend/test-results, if-no-files-found: warn, retention-days: 7 }
+        with:
+          name: p08-qr-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Persist P08 exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
@@ -216,4 +229,8 @@ jobs:
           This marker is written only when the tested SHA is still the exact current branch HEAD. P09 remains locked unless this P08 exact-head run is successful.
           EOF
           comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
-          if [ -n "$comment_id" ]; then gh api --method PATCH "repos/$REPO/issues/comments/$comment_id" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null; else gh api --method POST "repos/$REPO/issues/8/comments" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null; fi
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$comment_id" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/8/comments" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null
+          fi
