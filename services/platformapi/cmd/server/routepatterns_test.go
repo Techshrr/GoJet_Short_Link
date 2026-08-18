@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestLiteralServeMuxPatternsAreValid(t *testing.T) {
+func TestLiteralServeMuxPatternsAreValidAndConflictFree(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -16,6 +16,7 @@ func TestLiteralServeMuxPatternsAreValid(t *testing.T) {
 	literal := regexp.MustCompile(`HandleFunc\("([^"]+)"`)
 	testFile := regexp.MustCompile(`_test\.go$`)
 	checked := 0
+	mux := http.NewServeMux()
 
 	for _, file := range files {
 		if testFile.MatchString(file) {
@@ -31,10 +32,9 @@ func TestLiteralServeMuxPatternsAreValid(t *testing.T) {
 			func() {
 				defer func() {
 					if recovered := recover(); recovered != nil {
-						t.Errorf("invalid ServeMux pattern %q in %s: %v", pattern, file, recovered)
+						t.Errorf("invalid or conflicting ServeMux pattern %q in %s: %v", pattern, file, recovered)
 					}
 				}()
-				mux := http.NewServeMux()
 				mux.HandleFunc(pattern, func(http.ResponseWriter, *http.Request) {})
 			}()
 		}
