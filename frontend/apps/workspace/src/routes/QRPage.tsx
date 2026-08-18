@@ -2,19 +2,15 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
 import { ApiError, createQRClient, resourceAccess, type LinkRiskPresentation, type QRCodeRecord, type WorkspaceSummary } from "@gojet/api-client";
-import { Alert, Badge, Button, EmptyState, ErrorState, Field, Input, Page, PageHeader, Spinner } from "@gojet/ui";
+import { Alert, Badge, Button, Dialog, EmptyState, ErrorState, Field, Input, Page, PageHeader, Spinner } from "@gojet/ui";
 import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, formatDate, linksClient, normalizeWorkspaces, requestedWorkspaceId, shortUrl } from "../links/client";
 
 const qrClient = createQRClient(api);
-
 type ExportFormat = "png" | "svg" | "pdf";
 
 function useWorkspace() {
-  const workspaces = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[])
-  });
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
   const requested = requestedWorkspaceId();
   const workspace = workspaces.data?.find((item) => item.id === requested) ?? workspaces.data?.[0];
   return { workspaces, workspace };
@@ -31,10 +27,7 @@ function requestState(error: unknown) {
 
 function safeLinks(risks: LinkRiskPresentation[] | undefined) {
   const byLink = new Map((risks ?? []).map((item) => [item.link_id, item]));
-  return (linkId: number) => {
-    const risk = byLink.get(linkId);
-    return risk ? !risk.pending && risk.effective_decision === "allow" : false;
-  };
+  return (linkId: number) => { const risk = byLink.get(linkId); return risk ? !risk.pending && risk.effective_decision === "allow" : false; };
 }
 
 function QRCreateForm({ workspaceId, canEdit }: { workspaceId: number; canEdit: boolean }) {
@@ -50,31 +43,17 @@ function QRCreateForm({ workspaceId, canEdit }: { workspaceId: number; canEdit: 
   const riskAllows = useMemo(() => safeLinks(risks.data?.data), [risks.data]);
   const allowedLinks = (links.data?.data ?? []).filter((item) => riskAllows(item.id));
   const previewUrl = linkId ? linksClient.qrUrl(workspaceId, linkId, { format: "png", size, foreground, background }) : "";
-
-  const mutation = useMutation({
-    mutationFn: () => qrClient.create(workspaceId, { link_id: linkId, name: name.trim(), size, foreground, background }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["qr-codes", workspaceId] });
-      setName("");
-    }
-  });
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (canEdit && linkId > 0 && name.trim()) mutation.mutate();
-  };
+  const mutation = useMutation({ mutationFn: () => qrClient.create(workspaceId, { link_id: linkId, name: name.trim(), size, foreground, background }), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["qr-codes", workspaceId] }); setName(""); } });
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (canEdit && linkId > 0 && name.trim()) mutation.mutate(); };
   const special = requestState(mutation.error);
 
   return <form className="resource-create-form" onSubmit={submit} data-qr-create-form>
     {!canEdit ? <Alert tone="warning" title="Read-only">当前角色可以查看二维码，但不能创建或删除。</Alert> : null}
     {links.isError || risks.isError ? <Alert tone="danger" title="无法确认可创建短链">安全状态由服务端决定；风险信息不可用时不会放行二维码创建。</Alert> : null}
     {special ? <Alert tone="danger" title={special.title}>{special.body}</Alert> : mutation.isError ? <Alert tone="danger" title="创建失败">{errorMessage(mutation.error)}</Alert> : null}
-    {mutation.isSuccess ? <Alert tone="success" title="QR created">二维码已保存，列表与扫描统计会从服务端重新读取。</Alert> : null}
-
+    {mutation.isSuccess ? <Alert tone="info" title="QR created">二维码已保存，列表与扫描统计会从服务端重新读取。</Alert> : null}
     <Field label="Destination link" htmlFor="qr-link" required help="仅列出当前处于 active 且风险状态明确 allow 的短链接；服务端仍会再次校验。">
-      <select id="qr-link" className="resource-select" value={linkId || ""} onChange={(event) => setLinkId(Number(event.target.value))} required>
-        <option value="">Select a safe link</option>
-        {allowedLinks.map((item) => <option key={item.id} value={item.id}>{item.title || item.code} · {shortUrl(item.domain, item.code)}</option>)}
-      </select>
+      <select id="qr-link" className="resource-select" value={linkId || ""} onChange={(event) => setLinkId(Number(event.target.value))} required><option value="">Select a safe link</option>{allowedLinks.map((item) => <option key={item.id} value={item.id}>{item.title || item.code} · {shortUrl(item.domain, item.code)}</option>)}</select>
     </Field>
     <Field label="Name" htmlFor="qr-name" required><Input id="qr-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Campaign QR" required /></Field>
     <div className="resource-form-grid">
@@ -95,19 +74,11 @@ function QRDetail({ item, workspaceId, canEdit, onDelete }: { item: QRCodeRecord
   const target = shortUrl(item.domain ?? "", item.code ?? "");
   return <article className="qr-detail-panel" data-qr-detail>
     <div className="resource-detail-head"><div><span className="resource-eyebrow">QR DETAIL</span><h2>{item.name}</h2><p>{target}</p></div><Badge tone="success">Active</Badge></div>
-    <div className="qr-detail-grid">
-      <img src={item.image_url} alt={`${item.name} QR code`} />
-      <dl>
-        <div><dt>Scans</dt><dd>{item.qr_visits}</dd></div>
-        <div><dt>Size</dt><dd>{item.size}px</dd></div>
-        <div><dt>Created</dt><dd>{formatDate(item.created_at)}</dd></div>
-        <div><dt>Target</dt><dd>{target}</dd></div>
-      </dl>
-    </div>
+    <div className="qr-detail-grid"><img src={item.image_url} alt={`${item.name} QR code`} /><dl><div><dt>Scans</dt><dd>{item.qr_visits}</dd></div><div><dt>Size</dt><dd>{item.size}px</dd></div><div><dt>Created</dt><dd>{formatDate(item.created_at)}</dd></div><div><dt>Target</dt><dd>{target}</dd></div></dl></div>
     <div className="resource-actions">
       {(["png", "svg", "pdf"] as ExportFormat[]).map((format) => <a key={format} className="resource-download-link" href={linksClient.qrUrl(workspaceId, item.link_id, { format, size: item.size, foreground: item.foreground, background: item.background, download: true })}>Download {format.toUpperCase()}</a>)}
       <a className="resource-download-link" href={`/app/analytics?link=${item.link_id}`}>Open analytics</a>
-      {canEdit ? <Button variant="destructive" size="sm" type="button" onClick={onDelete}>Delete QR</Button> : null}
+      {canEdit ? <Dialog triggerLabel="Delete QR" title="Delete QR code?" description="This removes the stored QR resource. The underlying short link remains unchanged." confirmLabel="Delete QR" destructive onConfirm={onDelete}><p>This action is destructive and cannot restore the generated QR asset.</p></Dialog> : null}
     </div>
   </article>;
 }
@@ -120,11 +91,9 @@ export default function QRPage() {
   const qrs = useQuery({ queryKey: ["qr-codes", workspaceId], queryFn: () => qrClient.list(workspaceId!), enabled: Boolean(workspaceId) });
   const access = workspace ? resourceAccess(workspace.role) : null;
   const remove = useMutation({ mutationFn: (qrId: number) => qrClient.delete(workspaceId!, qrId), onSuccess: async () => { setSelectedId(null); await queryClient.invalidateQueries({ queryKey: ["qr-codes", workspaceId] }); } });
-
   if (workspaces.isPending) return <Page className="resources-page"><div className="resources-centered"><Spinner label="正在读取工作区" /></div></Page>;
   if (workspaces.isError) return <Page className="resources-page"><ErrorState title="无法读取工作区" description={errorMessage(workspaces.error)} action={<Button type="button" onClick={() => workspaces.refetch()}>重试</Button>} /></Page>;
   if (!workspace || !access) return <Page className="resources-page"><EmptyState title="还没有工作区" description="创建工作区后才能管理二维码。" /></Page>;
-
   const rows = qrs.data?.data ?? [];
   const selected = rows.find((item) => item.id === selectedId) ?? null;
   const listState = requestState(qrs.error);
@@ -133,9 +102,7 @@ export default function QRPage() {
     <PageHeader title="QR Codes" description={`Create, style, export and measure QR distribution · ${workspace.name}`} actions={access.can_edit ? <SideSheet triggerLabel="Create QR" title="Create QR code" description="Destination safety is enforced again by the Go API before a QR can be created."><QRCreateForm workspaceId={workspace.id} canEdit={access.can_edit} /></SideSheet> : undefined} />
     {!access.can_edit ? <Alert tone="warning" title="Read-only QR access">当前角色为 {workspace.role}。可以查看二维码与扫描统计，但创建和删除由 RBAC 禁止。</Alert> : null}
     {remove.isError ? <Alert tone="danger" title="无法删除二维码">{errorMessage(remove.error)}</Alert> : null}
-
     <section className="resource-summary-grid" aria-label="QR summary"><article><span>QR codes</span><strong>{rows.length}</strong><small>当前工作区</small></article><article><span>Total scans</span><strong>{rows.reduce((sum, item) => sum + item.qr_visits, 0)}</strong><small>visit_type = qr</small></article><article><span>Export</span><strong>3</strong><small>PNG · SVG · PDF</small></article></section>
-
     <section className="resource-section" aria-labelledby="qr-list-title">
       <div className="resource-section-head"><div><span className="resource-eyebrow">DISTRIBUTION</span><h2 id="qr-list-title">QR library</h2><p>预览、目标、扫描量与样式均来自真实资源；安全放行权仍在服务端。</p></div></div>
       {qrs.isPending ? <div className="resources-centered"><Spinner label="正在加载二维码" /></div> : listState ? <ErrorState title={listState.title} description={listState.body} action={<Button type="button" onClick={() => qrs.refetch()}>重试</Button>} /> : qrs.isError ? <ErrorState title="无法加载二维码" description={errorMessage(qrs.error)} action={<Button type="button" onClick={() => qrs.refetch()}>重试</Button>} /> : rows.length ? <div className="qr-resource-list">{rows.map((item) => <button type="button" key={item.id} className="qr-resource-row" onClick={() => setSelectedId(item.id)}><img src={item.image_url} alt="" /><span><strong>{item.name}</strong><small>{shortUrl(item.domain ?? "", item.code ?? "")}</small></span><span><strong>{item.qr_visits}</strong><small>scans</small></span><span><strong>{formatDate(item.created_at)}</strong><small>updated</small></span></button>)}</div> : <EmptyState title="No QR codes" description={access.can_edit ? "Create a QR from an active link that has passed destination risk review." : "当前工作区还没有二维码。"} />}
