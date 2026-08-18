@@ -27,7 +27,7 @@ function usagePercent(value: number, limit: number) { return limit <= 0 ? 0 : Ma
 
 function PlanRequest({ plan, currentCode, workspaceId, onDone }: { plan: BillingPlan; currentCode: string; workspaceId: number; onDone: () => void }) {
   const allowedCycles = cycles.filter((item) => plan.billing_periods.includes(item.value));
-  const [cycle, setCycle] = useState(allowedCycles[0]?.value ?? "monthly");
+  const [cycle, setCycle] = useState<string>(allowedCycles[0]?.value ?? "monthly");
   const mutation = useMutation({ mutationFn: () => billingClient.createInvoice(workspaceId, plan.code, plan.code === currentCode ? "renewal" : "upgrade", cycle), onSuccess: onDone });
   return <div className="billing-plan-request">
     <p>Generate a server-side invoice for <strong>{plan.name}</strong>. Payment remains pending until a verified provider callback or an audited admin settlement updates the invoice.</p>
