@@ -16,6 +16,8 @@ if (!uiPackage.dependencies?.['@base-ui/react']) throw new Error('@gojet/ui must
 if (uiPackage.exports?.['.'] !== './src/index.tsx') throw new Error('@gojet/ui root export must point at the GoJet wrapper surface');
 if (uiPackage.exports?.['./patterns'] !== './src/patterns.tsx') throw new Error('@gojet/ui patterns export is missing');
 if (uiPackage.exports?.['./patterns.css'] !== './src/patterns.css') throw new Error('@gojet/ui pattern styles export is missing');
+if (uiPackage.exports?.['./overlays'] !== './src/overlays.tsx') throw new Error('@gojet/ui overlays export is missing');
+if (uiPackage.exports?.['./overlays.css'] !== './src/overlays.css') throw new Error('@gojet/ui overlay styles export is missing');
 
 const iconPackage = JSON.parse(read('packages/icons/package.json'));
 if (!iconPackage.dependencies?.['lucide-react']) throw new Error('@gojet/icons must bind the Lucide React package');
@@ -42,6 +44,16 @@ requireAll('P03 patterns', patterns, [
 ]);
 requireAll('P03 product-state semantics', patterns, ['role="progressbar"', 'aria-label="分页"', 'role="region"', 'aria-current={active ? "page" : undefined}', 'aria-label="切换工作区"']);
 
+const overlays = read('packages/ui/src/overlays.tsx');
+requireAll('P03 overlays', overlays, [
+  'export function AlertDialog', 'export function Popover', 'export function DropdownMenu', 'export function SelectMenu',
+  'export function ContextMenu', 'export function HoverCard', 'export function MobileDrawer', 'export function UserMenu'
+]);
+requireAll('Base UI overlay wrappers', overlays, [
+  '@base-ui/react/alert-dialog', '@base-ui/react/context-menu', '@base-ui/react/drawer', '@base-ui/react/menu',
+  '@base-ui/react/popover', '@base-ui/react/preview-card'
+]);
+
 const css = read('packages/ui/src/ui.css');
 requireAll('UI states', css, [
   '.gj-button:focus-visible', '[data-variant="destructive"]', '.gj-input[aria-invalid="true"]',
@@ -58,12 +70,19 @@ requireAll('pattern states', patternCss, [
 ]);
 forbidRawHex('@gojet/ui patterns', patternCss);
 
+const overlayCss = read('packages/ui/src/overlays.css');
+requireAll('overlay states', overlayCss, [
+  '.gj-overlay-popup', '.gj-menu-item[data-highlighted]', '.gj-menu-item[data-destructive]', '.gj-preview-popup',
+  '.gj-drawer-viewport', '.gj-drawer-popup', '@media (prefers-reduced-motion: reduce)'
+]);
+forbidRawHex('@gojet/ui overlays', overlayCss);
+
 const siteMain = read('apps/site/src/main.tsx');
-requireAll('UI verification style wiring', siteMain, ['@gojet/ui/css', '@gojet/ui/patterns.css']);
+requireAll('UI verification style wiring', siteMain, ['@gojet/ui/css', '@gojet/ui/patterns.css', '@gojet/ui/overlays.css']);
 const devRoute = read('apps/site/src/router.tsx');
 const devPage = read('apps/site/src/routes/DevUi.tsx');
 requireAll('internal UI route', devRoute, ['path: "/dev/ui"', 'lazy(() => import("./routes/DevUi"))']);
-requireAll('internal UI verification surface', devPage, ['Buttons / Actions', 'Forms', 'Status / Feedback', 'Data / Tabs', 'Overlay / Destructive', 'Resource States']);
+requireAll('internal UI verification surface', devPage, ['Buttons / Actions', 'Forms / Controls', 'Status / Feedback', 'Data / Tabs / Filtering', 'Overlay / Destructive / Command', 'Shell Building Blocks', 'Resource States', '@gojet/ui/overlays']);
 
 if (fs.existsSync(path.join(root, 'packages/ui/src/index.ts'))) throw new Error('stale P01 packages/ui/src/index.ts must not shadow the P03 TSX entry');
 
