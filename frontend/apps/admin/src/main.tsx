@@ -12,6 +12,7 @@ import "@gojet/ui/shells-responsive.css";
 import "./styles.css";
 import "./commerce.css";
 import "./trust-safety.css";
+import "./p17-admin.css";
 import { router } from "./router";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false } } });
