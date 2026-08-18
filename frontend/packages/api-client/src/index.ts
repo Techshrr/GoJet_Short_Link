@@ -94,3 +94,4 @@ export * from "./links";
 export * from "./domains";
 export * from "./analytics";
 export * from "./resources";
+export * from "./workspace";
