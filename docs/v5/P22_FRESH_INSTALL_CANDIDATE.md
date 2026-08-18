@@ -23,6 +23,10 @@ The Gate provisions a clean aaPanel/BT-compatible Native host contract and requi
 
 A source-tree development server, Docker/Compose environment, PM2, Node runtime, direct migration shortcut, or hand-written `gojet.env` is not a substitute for G12.
 
+### Hosted-runner bootstrap invariant
+
+A CI runner may arrive with infrastructure packages preinstalled and locally provisioned credentials. The P22 harness may use runner-only bootstrap credentials solely to normalize the host before the candidate is installed; those credentials are not production configuration, must not enter the Native artifact, and must not replace the Web Installer's own fresh MySQL application-user and authenticated-Redis verification. The installed candidate must still satisfy every G12 requirement above.
+
 ## G13 — Production Validation
 
 Validation runs against the G12-installed product and requires:
