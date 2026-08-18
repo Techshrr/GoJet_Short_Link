@@ -32,6 +32,7 @@ type FileShare struct {
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	MaxDownloads *int64     `json:"max_downloads,omitempty"`
 	Downloads    int64      `json:"downloads"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 type Download struct {
@@ -43,7 +44,7 @@ func (s *Service) ListFiles(ctx context.Context, user, workspaceID int64) ([]Fil
 	if _, err := s.workspaces.Role(ctx, workspaceID, user); err != nil {
 		return nil, errors.New("forbidden")
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace_id,slug,original_name,mime_type,size_bytes,scan_status,COALESCE(scan_result,''),status,expires_at,max_downloads,downloads FROM file_shares WHERE workspace_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100`, workspaceID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace_id,slug,original_name,mime_type,size_bytes,scan_status,COALESCE(scan_result,''),status,expires_at,max_downloads,downloads,created_at FROM file_shares WHERE workspace_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func (s *Service) ListFiles(ctx context.Context, user, workspaceID int64) ([]Fil
 	items := []FileShare{}
 	for rows.Next() {
 		var item FileShare
-		if err = rows.Scan(&item.ID, &item.WorkspaceID, &item.Slug, &item.OriginalName, &item.MIMEType, &item.SizeBytes, &item.ScanStatus, &item.ScanResult, &item.Status, &item.ExpiresAt, &item.MaxDownloads, &item.Downloads); err != nil {
+		if err = rows.Scan(&item.ID, &item.WorkspaceID, &item.Slug, &item.OriginalName, &item.MIMEType, &item.SizeBytes, &item.ScanStatus, &item.ScanResult, &item.Status, &item.ExpiresAt, &item.MaxDownloads, &item.Downloads, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -109,8 +110,8 @@ func (s *Service) CreateFile(ctx context.Context, user, workspaceID int64, origi
 		return FileShare{}, err
 	}
 	_ = file.Close()
-	item := FileShare{WorkspaceID: workspaceID, Slug: randomSlug(), OriginalName: name, StorageName: storageName, MIMEType: mime, SizeBytes: written, ScanStatus: "pending", Status: "quarantined", ExpiresAt: expiresAt, MaxDownloads: maxDownloads}
-	result, err := s.db.ExecContext(ctx, `INSERT INTO file_shares(workspace_id,created_by,slug,original_name,storage_name,mime_type,size_bytes,expires_at,max_downloads) VALUES(?,?,?,?,?,?,?,?,?)`, workspaceID, user, item.Slug, name, storageName, mime, written, expiresAt, maxDownloads)
+	item := FileShare{WorkspaceID: workspaceID, Slug: randomSlug(), OriginalName: name, StorageName: storageName, MIMEType: mime, SizeBytes: written, ScanStatus: "pending", Status: "quarantined", ExpiresAt: expiresAt, MaxDownloads: maxDownloads, CreatedAt: time.Now().UTC()}
+	result, err := s.db.ExecContext(ctx, `INSERT INTO file_shares(workspace_id,created_by,slug,original_name,storage_name,mime_type,size_bytes,expires_at,max_downloads,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, workspaceID, user, item.Slug, name, storageName, mime, written, expiresAt, maxDownloads, item.CreatedAt)
 	if err != nil {
 		_ = s.files.Delete(ctx, "quarantine/"+storageName)
 		return FileShare{}, err
