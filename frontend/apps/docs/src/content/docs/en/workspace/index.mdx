@@ -1,0 +1,28 @@
+---
+title: Workspace & Teams
+description: Operate GoJet workspaces, members, billing, domains, campaigns, tags, API keys, webhooks, and settings.
+sidebar:
+  order: 4
+---
+
+# Workspace & Teams
+
+## Navigation
+The primary navigation is Overview; Create: Links, QR Codes, Files, Text, Bio Pages; Insights: Analytics; Manage: Domains, Campaigns, Tags; Developer: API Keys, Webhooks; Workspace: Members, Billing, Settings; Support.
+
+## Overview
+Overview prioritizes creation, recent resources, a concise performance trend, items needing attention, and recent activity instead of a KPI-card wall.
+
+## Members and roles
+Invite members with an explicit workspace role. Permission checks are enforced by the server. Role presentation in the browser is not an authorization boundary.
+
+## Billing and quotas
+Plan, invoice, payment, quota, and FX presentation come from server-owned billing truth. Do not duplicate prices as a second static source of truth.
+
+## API keys and webhooks
+API keys are shown once at creation and stored hash-only where applicable. Webhook secrets are write-only after creation; deliveries are signed and outbound delivery enforces SSRF protections.
+
+## Settings and audit
+Workspace settings and governance actions feed audit context. High-risk administrative actions require explicit reason/evidence where the product contract requires it.
+
+**Last updated:** 2026-08-18

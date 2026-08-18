@@ -1,0 +1,22 @@
+---
+title: 开发者
+description: API 鉴权、约定、Webhook、错误处理与自动化。
+sidebar:
+  order: 5
+---
+
+# 开发者
+
+## 鉴权
+通过 HTTPS 发送有范围限制的 Bearer Token。不要把 API Key 放进 URL、前端 Bundle、Analytics 参数或源码仓库。
+
+## API 约定
+使用 JSON 请求体、服务端返回的资源 ID 和明确分页。`401/403` 表示鉴权/权限问题，`409` 表示状态冲突，`422` 表示验证失败，`429` 表示限流。
+
+## Webhook
+处理前校验 GoJet HMAC 签名；消费端需要可重试，并使用 delivery identifier 去重。
+
+## 自动化
+优先使用 API + Webhook 组合，而不是浏览器自动化。路由、安全判定、计费和权限始终以服务端为准。
+
+**最后更新：** 2026-08-18

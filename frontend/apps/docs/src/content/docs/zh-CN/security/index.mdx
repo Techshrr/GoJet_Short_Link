@@ -1,0 +1,26 @@
+---
+title: 安全
+subtitle: Account, platform, destination, file, abuse and audit security behavior.
+description: 账号、平台、目标地址、文件、滥用与审计安全行为。
+sidebar:
+  order: 6
+---
+
+# 安全
+
+## 账号安全
+使用强密码、邮箱验证、会话控制、可用时启用 MFA，并对 OAuth/工作区权限执行最小权限原则。
+
+## 平台安全
+权限、CSRF、Secret、限流和高风险治理由服务端执行；“前端不显示按钮”不构成安全边界。
+
+## Destination Risk
+风险判定由服务端 Provider/Evidence 流程完成；客户侧只展示可行动状态，不泄露会削弱检测能力的内部证据。
+
+## 文件扫描
+上传文件是否可公开下载跟随扫描状态；ClamAV 与 File Worker 结果是服务端事实。
+
+## Abuse 与审计
+Abuse reports、Security events、Audit 形成运营轨迹；需要理由的管理员动作必须记录治理原因。
+
+**最后更新：** 2026-08-18

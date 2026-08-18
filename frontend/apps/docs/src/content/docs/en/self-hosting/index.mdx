@@ -1,0 +1,31 @@
+---
+title: Self-hosting
+description: Requirements and production installation for GoJet.
+sidebar:
+  order: 7
+---
+
+# Self-hosting
+
+## Requirements
+Use a supported Linux host, Nginx, PHP 8.3 for the installer boundary, MySQL 8, Redis, Go services, Node only for build-time frontend tooling, and enough storage for uploads/logs/backups.
+
+## aaPanel / BT installation
+Create the site and databases with least privilege, set the public web root to the documented public directory, configure TLS, and do not expose database/Redis ports to the public Internet.
+
+## Nginx
+Terminate TLS, forward only intended application/API routes, preserve trusted proxy headers deliberately, set upload/body limits intentionally, and configure immutable caching for fingerprinted static assets.
+
+## PHP 8.3 installer
+Use the browser installer only for installation/bootstrap. It must not turn the Go runtime into a PHP monolith.
+
+## MySQL 8 and Redis
+Use dedicated credentials, backups, and private networking. Redis is infrastructure for cache/session/queue concerns as configured; it is not a public endpoint.
+
+## Workers, cron, mail, and ClamAV
+Run required workers under a process supervisor, configure scheduled jobs, validate mail delivery, and verify ClamAV/file-worker health before enabling public file sharing.
+
+## Production boundary
+Website and Docs are deployed as static output. Workspace and Admin are independently built applications; Go services remain the runtime authority.
+
+**Last updated:** 2026-08-18

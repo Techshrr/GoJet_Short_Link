@@ -1,0 +1,31 @@
+---
+title: 自托管
+description: GoJet 的运行要求与生产安装边界。
+sidebar:
+  order: 7
+---
+
+# 自托管
+
+## Requirements
+使用受支持 Linux、Nginx、安装器边界所需 PHP 8.3、MySQL 8、Redis、Go Services；Node 只用于前端构建阶段，并预留上传、日志和备份空间。
+
+## aaPanel / 宝塔
+按最小权限创建站点和数据库；Web Root 指向规定的公开目录；配置 TLS；不要把数据库或 Redis 端口暴露到公网。
+
+## Nginx
+终止 TLS，只转发需要的应用/API 路由，明确可信代理头、上传大小，并对带指纹静态资源配置不可变缓存。
+
+## PHP 8.3 Installer
+PHP 只承担浏览器安装/Bootstrap 边界，不把 Go runtime 改造成 PHP 单体应用。
+
+## MySQL 8 / Redis
+使用专用凭证、备份和私有网络。Redis 按配置承担 Cache/Session/Queue 等基础设施职责，不作为公网服务。
+
+## Worker / Cron / Mail / ClamAV
+使用进程守护运行 Worker，配置计划任务，验证邮件投递，并在开放 Files 分享前确认 ClamAV/File Worker 健康。
+
+## Production boundary
+Website 与 Docs 必须部署为静态产物；Workspace 与 Admin 独立构建；Go Services 保持运行时权威。
+
+**最后更新：** 2026-08-18

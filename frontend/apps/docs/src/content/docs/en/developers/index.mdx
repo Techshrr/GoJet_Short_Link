@@ -1,0 +1,24 @@
+---
+title: Developers
+description: Authentication, API conventions, webhooks, idempotency, errors, and automation.
+sidebar:
+  order: 5
+---
+
+# Developers
+
+## Authentication
+Send a scoped bearer token over HTTPS. Never place API keys in URLs, analytics properties, client bundles, or source control.
+
+## API conventions
+Use JSON request bodies, stable resource IDs, explicit pagination, and server-returned status. Treat 401/403 as authorization failures, 409 as a state conflict where documented, 422 as validation failure, and 429 as rate limiting.
+
+## Webhooks
+Validate the GoJet HMAC signature before processing a webhook. Make consumers retry-safe and de-duplicate deliveries by delivery identifier.
+
+## Automation
+Prefer API and webhook composition over browser automation. Route decisions, security verdicts, billing, and permissions remain server-authoritative.
+
+See **API Reference** for request and response examples.
+
+**Last updated:** 2026-08-18

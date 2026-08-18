@@ -1,0 +1,22 @@
+---
+title: 运维、备份与回滚
+description: 自托管 GoJet 的健康检查、升级、备份验证与回滚。
+sidebar:
+  order: 2
+---
+
+# 运维、备份与回滚
+
+## 健康检查
+基于真实证据检查 Redirect、Platform API、Analytics Worker/Reconciler、File Worker、Mail Worker、Operations Monitor、Log Receiver、MySQL、Redis、Storage 和扫描服务，禁止硬编码“全绿”状态。
+
+## 备份
+备份 MySQL 与持久化资源；独立保护加密材料和配置；必须验证恢复能力，不能把“备份任务成功”当作可恢复证明。
+
+## 升级
+阅读 Release Notes、完成可验证备份、只执行一次迁移、发布不可变静态资产、重启必要服务，并 Smoke Test Redirect/Auth/Workspace/Admin/Billing Callback/File Scan/Mail。
+
+## 回滚
+同时考虑应用版本与 Schema 兼容；不可安全逆向的迁移应采用文档规定的 Forward Fix 或 Backup Restore，而不是盲目降级数据库结构。
+
+**最后更新：** 2026-08-18
