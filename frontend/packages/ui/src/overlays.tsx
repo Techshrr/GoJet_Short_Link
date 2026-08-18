@@ -89,7 +89,8 @@ export function ContextMenu({ children, actions }: { children: ReactNode; action
     <BaseContextMenu.Root>
       <BaseContextMenu.Trigger className="gj-context-trigger">{children}</BaseContextMenu.Trigger>
       <BaseContextMenu.Portal>
-        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Positioner></BaseContextMenu.Portal>
+        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Popup></BaseContextMenu.Positioner>
+      </BaseContextMenu.Portal>
     </BaseContextMenu.Root>
   );
 }
