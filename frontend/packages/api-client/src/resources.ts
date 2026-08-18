@@ -93,6 +93,14 @@ export interface BioTheme {
   Surface?: string | undefined;
 }
 
+export const DEFAULT_BIO_THEME: BioTheme = {
+  Primary: "#16a66a",
+  Background: "#f5faf7",
+  Ink: "#14231d",
+  Muted: "#66766f",
+  Surface: "#ffffff"
+};
+
 export interface BioBlock {
   Label: string;
   URL: string;
