@@ -1,3 +1,4 @@
+# P18/P19 same-exact-HEAD closure trigger; no Gate semantics changed.
 name: V5 P18 Docs Gate
 
 on:
