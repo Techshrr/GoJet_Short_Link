@@ -22,7 +22,7 @@ const expectedExports = {
 for (const [key, value] of Object.entries(expectedExports)) if (uiPackage.exports?.[key] !== value) throw new Error(`@gojet/ui export ${key} must be ${value}`);
 
 const lockfile = read('pnpm-lock.yaml');
-requireAll('P03 locked dependencies', lockfile, ['@tanstack/react-table:', '8.21.3']);
+requireAll('P03 locked dependencies', lockfile, ["'@tanstack/react-table':", 'specifier: ^8.21.3', 'version: 8.21.3']);
 
 const iconPackage = JSON.parse(read('packages/icons/package.json'));
 if (!iconPackage.dependencies?.['lucide-react']) throw new Error('@gojet/icons must bind the Lucide React package');
@@ -74,20 +74,14 @@ requireAll('P03 Toast foundation', feedback, [
 ]);
 
 const cssFiles = [
-  ['@gojet/ui', 'packages/ui/src/ui.css'],
-  ['@gojet/ui patterns', 'packages/ui/src/patterns.css'],
-  ['@gojet/ui overlays', 'packages/ui/src/overlays.css'],
-  ['@gojet/ui data', 'packages/ui/src/data.css'],
-  ['@gojet/ui feedback', 'packages/ui/src/feedback.css'],
-  ['@gojet/ui layout', 'packages/ui/src/layout.css'],
+  ['@gojet/ui', 'packages/ui/src/ui.css'], ['@gojet/ui patterns', 'packages/ui/src/patterns.css'],
+  ['@gojet/ui overlays', 'packages/ui/src/overlays.css'], ['@gojet/ui data', 'packages/ui/src/data.css'],
+  ['@gojet/ui feedback', 'packages/ui/src/feedback.css'], ['@gojet/ui layout', 'packages/ui/src/layout.css'],
 ];
 for (const [label, file] of cssFiles) forbidRawHex(label, read(file));
 
 const css = read('packages/ui/src/ui.css');
-requireAll('UI states', css, [
-  '.gj-button:focus-visible', '[data-variant="destructive"]', '[data-variant="link"]', '.gj-input[aria-invalid="true"]',
-  '.gj-checkbox[data-checked]', '.gj-switch[data-checked]', '.gj-dialog-backdrop', '@media (max-width: 639px)', '@media (prefers-reduced-motion: reduce)'
-]);
+requireAll('UI states', css, ['.gj-button:focus-visible', '[data-variant="destructive"]', '[data-variant="link"]', '.gj-input[aria-invalid="true"]', '.gj-checkbox[data-checked]', '.gj-switch[data-checked]', '.gj-dialog-backdrop', '@media (max-width: 639px)', '@media (prefers-reduced-motion: reduce)']);
 const patternCss = read('packages/ui/src/patterns.css');
 requireAll('pattern states', patternCss, ['.gj-progress', '.gj-filter-bar', '.gj-bulk-bar', '.gj-chart-frame', '.gj-split-pane', '.gj-app-header', '.gj-sidebar[data-collapsed]', '.gj-sidebar-item[data-active]', '.gj-sheet', '.gj-command-list', '@media (max-width: 767px)', '@media (prefers-reduced-motion: reduce)']);
 const overlayCss = read('packages/ui/src/overlays.css');
