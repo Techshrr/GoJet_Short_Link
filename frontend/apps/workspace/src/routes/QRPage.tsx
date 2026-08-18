@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
 import { ApiError, createQRClient, resourceAccess, type LinkRiskPresentation, type QRCodeRecord, type WorkspaceSummary } from "@gojet/api-client";
+import { qrPaletteDefaults } from "@gojet/tokens";
 import { Alert, Badge, Button, Dialog, EmptyState, ErrorState, Field, Input, Page, PageHeader, Spinner } from "@gojet/ui";
 import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, formatDate, linksClient, normalizeWorkspaces, requestedWorkspaceId, shortUrl } from "../links/client";
@@ -37,8 +38,8 @@ function QRCreateForm({ workspaceId, canEdit }: { workspaceId: number; canEdit: 
   const [linkId, setLinkId] = useState(0);
   const [name, setName] = useState("");
   const [size, setSize] = useState(1024);
-  const [foreground, setForeground] = useState("#10233f");
-  const [background, setBackground] = useState("#ffffff");
+  const [foreground, setForeground] = useState(qrPaletteDefaults.foreground);
+  const [background, setBackground] = useState(qrPaletteDefaults.background);
   const [format, setFormat] = useState<ExportFormat>("png");
   const riskAllows = useMemo(() => safeLinks(risks.data?.data), [risks.data]);
   const allowedLinks = (links.data?.data ?? []).filter((item) => riskAllows(item.id));
