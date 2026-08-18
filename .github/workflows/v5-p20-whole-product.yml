@@ -1,0 +1,217 @@
+name: V5 P20 Whole Product Gate
+
+on:
+  push:
+    branches: ["rebuild/v5-*"]
+    paths:
+      - "frontend/**"
+      - "app/**"
+      - "services/**"
+      - "database/**"
+      - "scripts/**"
+      - "tests/integration/**"
+      - "deploy/**"
+      - "installer/**"
+      - "public/install/**"
+      - "docs/v5/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/fullstackp0.yml"
+      - ".github/workflows/v5-p20-whole-product.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: v5-p20-whole-product-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: G0-G9 source build security SEO performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install frozen frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: G0-G2 and P01-P19 frozen source contracts
+        working-directory: frontend
+        run: pnpm check
+
+      - name: G0 capability matrix and five-surface inventory
+        run: |
+          set -euo pipefail
+          test -s docs/v5/CAPABILITY-MATRIX.md
+          grep -Fq '| Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |' docs/v5/CAPABILITY-MATRIX.md
+          for surface in site docs workspace admin; do test -d "frontend/apps/$surface"; done
+          test -d frontend/apps/site/src/auth
+          for contract in P05_LINKS_CONTRACT.md P06_DOMAINS_CONTRACT.md P07_ANALYTICS_CONTRACT.md P08_QR_CONTRACT.md P09_FILES_CONTRACT.md P10_TEXT_CONTRACT.md P20_WHOLE_PRODUCT_GATE.md; do test -s "docs/v5/$contract"; done
+
+      - name: G1 production architecture boundary
+        run: |
+          set -euo pipefail
+          test -s deploy/native/gojet@.service
+          test -s public/install/index.php
+          test -s scripts/runmigrations.sh
+          if grep -R -n -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' frontend/apps frontend/packages --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.astro; then
+            echo 'official V5 auth/session persistence leaked into Web Storage' >&2
+            exit 1
+          fi
+
+      - name: G3/G6 Go tests and static analysis
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+
+      - name: G0/G3 build all eight Go runtime commands
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gojet-p20-bin
+          go build -o /tmp/gojet-p20-bin/redirectengine ./services/redirectengine/cmd/server
+          go build -o /tmp/gojet-p20-bin/platformapi ./services/platformapi/cmd/server
+          go build -o /tmp/gojet-p20-bin/analyticsworker ./services/analyticsworker/cmd/worker
+          go build -o /tmp/gojet-p20-bin/analyticsreconciler ./services/analyticsreconciler/cmd/reconciler
+          go build -o /tmp/gojet-p20-bin/fileworker ./services/platformapi/cmd/fileworker
+          go build -o /tmp/gojet-p20-bin/mailworker ./services/platformapi/cmd/mailworker
+          go build -o /tmp/gojet-p20-bin/operationsmonitor ./services/platformapi/cmd/operationsmonitor
+          go build -o /tmp/gojet-p20-bin/logreceiver ./services/logreceiver/cmd/server
+          test "$(find /tmp/gojet-p20-bin -maxdepth 1 -type f | wc -l)" -eq 8
+
+      - name: G7 static SEO and indexation artifacts
+        run: |
+          set -euo pipefail
+          test -s frontend/apps/site/dist/index.html
+          test -s frontend/apps/site/dist/sitemap.xml
+          test -s frontend/apps/site/dist/robots.txt
+          test -s frontend/apps/docs/dist/pagefind/pagefind.js
+          grep -Fq 'canonical' frontend/apps/site/dist/index.html
+          grep -Fq 'application/ld+json' frontend/apps/site/dist/index.html
+          if grep -E '/(app|admin|install)(/|<|$)' frontend/apps/site/dist/sitemap.xml; then
+            echo 'sensitive application/install route leaked into public sitemap' >&2
+            exit 1
+          fi
+
+      - name: G9 Website initial JavaScript budget
+        working-directory: frontend
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');
+          const path=require('node:path');
+          const zlib=require('node:zlib');
+          const root=path.resolve('apps/site/dist');
+          const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+          const refs=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(m=>m[1]).filter(x=>!/^https?:/.test(x));
+          let total=0;
+          for(const ref of refs){
+            const clean=ref.split('?')[0].replace(/^\//,'');
+            const file=path.join(root,clean);
+            if(!fs.existsSync(file)) throw new Error(`missing Website script ${ref}`);
+            total+=zlib.gzipSync(fs.readFileSync(file)).length;
+          }
+          console.log(`Website initial JS gzip bytes: ${total}`);
+          if(total>150*1024) throw new Error(`Website initial JS exceeds frozen 150 KiB gzip target: ${total}`);
+          NODE
+
+  browser:
+    name: G4/G5/G8 complete browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frozen frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: P04-P19 complete fixed-viewport Browser Gate
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          pnpm test:shells
+          pnpm test:links
+          pnpm test:domains
+          pnpm test:analytics
+          pnpm test:qr
+          pnpm test:files
+          pnpm test:text
+          pnpm test:bio
+          pnpm test:workspace
+          pnpm test:billing
+          pnpm test:commerce
+          pnpm test:support
+          pnpm test:mail-ops
+          pnpm test:auth
+          pnpm test:account
+          pnpm test:oauth
+          pnpm test:trust-safety
+          pnpm test:admin
+          pnpm test:docs
+          pnpm test:site-final
+      - name: Upload P20 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-p20-browser-${{ github.sha }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  fullstack:
+    name: G10 real full-stack P0
+    uses: ./.github/workflows/fullstackp0.yml
+
+  close:
+    if: always()
+    needs: [source, browser, fullstack]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish exact-head P20 closure evidence
+        uses: actions/github-script@v7
+        env:
+          SOURCE_RESULT: ${{ needs.source.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          FULLSTACK_RESULT: ${{ needs.fullstack.result }}
+        with:
+          script: |
+            const branch=context.ref.replace('refs/heads/','');
+            const ref=await github.rest.repos.getBranch({owner:context.repo.owner,repo:context.repo.repo,branch});
+            if(ref.data.commit.sha!==context.sha){core.info(`Skip stale P20 evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`);return;}
+            const success=process.env.SOURCE_RESULT==='success' && process.env.BROWSER_RESULT==='success' && process.env.FULLSTACK_RESULT==='success';
+            const marker='<!-- v5-p20-ci-evidence-v1 -->';
+            const body=`${marker}\n## P20 Whole Product Gate — exact-head evidence v1\n\n- Status: **${success?'✅ success':'❌ failure'}**\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- G0-G9 source/build/security/SEO/performance: **${process.env.SOURCE_RESULT}**\n- G4/G5/G8 P04-P19 complete Browser regression: **${process.env.BROWSER_RESULT}**\n- G10 real MySQL/Redis/Go full-stack P0: **${process.env.FULLSTACK_RESULT}**\n- Scope: G0 Scope → G10 Full-stack P0 on one V5 exact HEAD; complete P01-P19 regression, eight Go runtime commands, Website/Docs static artifacts, security contracts and all frozen Playwright gates.\n\nP21 Native Package remains locked unless this exact-head P20 run is successful. P22 and G11-G13 are not marked complete by this run.\n`;
+            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
+            const existing=comments.find(c=>c.body?.includes(marker));
+            if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
+            if(!success)core.setFailed('P20 closure failed; see source/browser/fullstack results above.');
