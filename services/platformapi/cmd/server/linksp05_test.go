@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"image/color"
 	"net/http/httptest"
 	"strings"
@@ -65,13 +66,35 @@ func TestP05LinkPresentationMarshalJSON(t *testing.T) {
 	}
 }
 
+func TestP05QRContentDisposition(t *testing.T) {
+	if got := p05QRContentDisposition("gojet-link-11.svg", false); got != `inline; filename="gojet-link-11.svg"` {
+		t.Fatalf("unexpected inline content disposition: %q", got)
+	}
+	if got := p05QRContentDisposition("gojet-link-11.pdf", true); got != `attachment; filename="gojet-link-11.pdf"` {
+		t.Fatalf("unexpected attachment content disposition: %q", got)
+	}
+}
+
 func TestP05QRSVG(t *testing.T) {
 	bitmap := [][]bool{{true, false}, {false, true}}
-	payload := string(p05QRSVG(bitmap, 512, "#111111", "#eeeeee"))
-	if !strings.HasPrefix(payload, `<svg`) || !strings.Contains(payload, `viewBox="0 0 2 2"`) {
-		t.Fatalf("invalid SVG payload: %s", payload)
+	payload := p05QRSVG(bitmap, 512, "#111111", "#eeeeee")
+	var root struct {
+		XMLName xml.Name
 	}
-	if count := strings.Count(payload, `<rect`); count != 3 {
+	if err := xml.Unmarshal(payload, &root); err != nil {
+		t.Fatalf("SVG must be valid XML: %v; payload=%s", err, string(payload))
+	}
+	if root.XMLName.Local != "svg" {
+		t.Fatalf("unexpected SVG root: %s", root.XMLName.Local)
+	}
+	text := string(payload)
+	if strings.Contains(text, `\"`) {
+		t.Fatalf("SVG contains escaped quote bytes instead of XML quotes: %s", text)
+	}
+	if !strings.Contains(text, `viewBox="0 0 2 2"`) {
+		t.Fatalf("SVG missing expected viewBox: %s", text)
+	}
+	if count := strings.Count(text, `<rect`); count != 3 {
 		t.Fatalf("expected background plus two dark modules, got %d rects", count)
 	}
 }
