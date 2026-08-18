@@ -13,6 +13,13 @@ func (s *server) registerBillingPresentationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/invoices/{invoice}/pdf", s.user(s.invoicePDF))
 	mux.HandleFunc("POST /api/workspaces/{id}/billing/invoices/{invoice}/download-ticket", s.user(s.prepareInvoicePDFDownload))
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payments/{payment}/qr.png", s.user(s.paymentQRPNG))
+
+	mux.HandleFunc("POST /api/admin/plans", s.admin("billing.manage", s.adminCreatePlan))
+	mux.HandleFunc("POST /api/admin/plans/{id}/archive", s.admin("billing.manage", s.adminArchivePlan))
+	mux.HandleFunc("GET /api/admin/payments", s.admin("billing.manage", s.adminPayments))
+	mux.HandleFunc("GET /api/admin/payments/{id}", s.admin("billing.manage", s.adminPaymentDetail))
+	mux.HandleFunc("GET /api/admin/fx", s.admin("billing.manage", s.adminFX))
+	mux.HandleFunc("PUT /api/admin/fx", s.admin("billing.manage", s.adminUpdateFX))
 }
 
 func (s *server) publicPlans(w http.ResponseWriter, r *http.Request) {
