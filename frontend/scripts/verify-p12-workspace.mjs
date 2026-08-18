@@ -21,7 +21,8 @@ mustContain("apps/workspace/src/routes/MembersPage.tsx", [
   "data-p12-members", "Invite member", "Active members", "Pending invitations", "Read-only member access", "Remove member", "Owner / Admin"
 ]);
 mustContain("apps/workspace/src/routes/OrganizationPage.tsx", [
-  "data-p12-organization", "Campaign performance groups", "Folders", "Tags", "Read-only organization access", "New campaign", "New folder", "New tag"
+  "data-p12-organization", "Campaign performance groups", "Folders", "Tags", "Read-only organization access", "New campaign", "New folder", "New tag",
+  "tagPalette", "Tag color token palette", "var(--brand-blue)", "var(--brand-cyan)", "var(--brand-sky)", "var(--success)", "var(--warning)", "var(--danger)"
 ]);
 mustContain("packages/api-client/src/workspace.ts", [
   "createWorkspaceClient", "/members", "/invitations", "/organization", "/campaigns", "/folders", "/tags", "WorkspaceMembersPayload", "WorkspaceOrganizationSnapshot"
@@ -36,10 +37,10 @@ mustContain("../services/platformapi/cmd/server/main.go", [
   'GET /api/workspaces/{id}/members', 'POST /api/workspaces/{id}/invitations', 'GET /api/workspaces/{id}/organization', 'POST /api/workspaces/{id}/campaigns', 'POST /api/workspaces/{id}/folders', 'POST /api/workspaces/{id}/tags'
 ]);
 
-const forbidden = ["mockMembers", "fakeMembers", "mockOrganization", "fakeOrganization", "Math.random()", "localStorage.setItem", "sessionStorage.setItem"];
+const forbidden = ["mockMembers", "fakeMembers", "mockOrganization", "fakeOrganization", "Math.random()", "localStorage.setItem", "sessionStorage.setItem", 'type="color"'];
 for (const file of ["apps/workspace/src/routes/MembersPage.tsx", "apps/workspace/src/routes/OrganizationPage.tsx", "packages/api-client/src/workspace.ts"]) {
   const source = read(file);
   for (const marker of forbidden) if (source.includes(marker)) throw new Error(`P12 forbidden implementation marker in ${file}: ${marker}`);
 }
 
-console.log("P12 Workspace contract verified: real member/invitation RBAC, campaigns/folders/tags organization surfaces, quota-aware server authority, responsive UI and no fabricated persistence.");
+console.log("P12 Workspace contract verified: real member/invitation RBAC, campaigns/folders/tags organization surfaces, frozen tag token palette, quota-aware server authority, responsive UI and no fabricated persistence.");
