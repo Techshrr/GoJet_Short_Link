@@ -23,7 +23,7 @@ func (s *server) registerBillingPresentationRoutes(mux *http.ServeMux) {
 }
 
 func (s *server) publicPlans(w http.ResponseWriter, r *http.Request) {
-	plans, err := s.billing.Plans(r.Context(), false)
+	plans, err := s.billing.PublicPlans(r.Context())
 	if err != nil {
 		jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "套餐信息暂时不可用"})
 		return
