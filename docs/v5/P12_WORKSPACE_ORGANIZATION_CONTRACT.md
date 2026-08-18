@@ -20,7 +20,7 @@ P12 closes the workspace collaboration and organization surfaces required by the
 - Real `/api/workspaces/{id}/organization` snapshot.
 - Campaign create and status lifecycle (`active`, `paused`, `completed`).
 - Folder create.
-- Tag create with server-validated `#RRGGBB` color.
+- Tag creation is restricted by the V5 UI to a fixed GoJet Design Token palette; arbitrary browser color-picker values are forbidden. The selected token is persisted through the existing server-validated `#RRGGBB` contract.
 - Campaign links/clicks/conversions are rendered from the server snapshot and are never fabricated client counters.
 - Owner/Admin/Editor receive edit actions; Analyst/Viewer remain read-only.
 
@@ -43,7 +43,7 @@ Fixed viewports:
 - 1024×768
 - 390×844
 
-Hard failures include horizontal overflow, page errors, console errors, broken navigation, clipped controls and permission actions exposed to read-only roles.
+Hard failures include horizontal overflow, page errors, console errors, broken navigation, clipped controls, arbitrary Tag color pickers and permission actions exposed to read-only roles.
 
 ## Completion rule
 
