@@ -26,8 +26,9 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments", s.admin("tickets.manage", s.adminListSupportAttachments))
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments/{attachment}", s.admin("tickets.manage", s.adminDownloadSupportAttachment))
 
-	mux.HandleFunc("GET /api/workspaces/{id}/link-domains", s.user(s.workspaceLinkDomains))
-	mux.HandleFunc("POST /api/workspaces/{id}/links/official", s.user(s.createOfficialLink))
+	// Workspace link-domain and official-link creation routes are owned by
+	// registerProductRoutes. Keeping a single registration point prevents
+	// net/http ServeMux startup panics on the V5 runtime.
 	mux.HandleFunc("GET /api/admin/official-domains", s.admin("domains.manage", s.adminOfficialShortDomains))
 	mux.HandleFunc("POST /api/admin/official-domains", s.admin("domains.manage", s.adminCreateOfficialShortDomain))
 	mux.HandleFunc("PATCH /api/admin/official-domains/{domain}", s.admin("domains.manage", s.adminUpdateOfficialShortDomain))
