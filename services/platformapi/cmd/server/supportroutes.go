@@ -14,11 +14,16 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/support/tickets/{ticket}", s.user(s.supportTicketDetailCustomer))
 	mux.HandleFunc("POST /api/support/tickets/{ticket}/replies", s.user(s.turnstileGuard("ticket_reply", "support_ticket_reply", s.replySupportTicket)))
 	mux.HandleFunc("PATCH /api/support/tickets/{ticket}/state", s.user(s.setSupportTicketState))
+	mux.HandleFunc("GET /api/support/tickets/{ticket}/attachments", s.user(s.listSupportAttachments))
+	mux.HandleFunc("POST /api/support/tickets/{ticket}/attachments", s.user(s.uploadSupportAttachment))
+	mux.HandleFunc("GET /api/support/tickets/{ticket}/attachments/{attachment}", s.user(s.downloadSupportAttachment))
 
 	mux.HandleFunc("GET /api/admin/support/tickets", s.admin("tickets.manage", s.adminSupportTickets))
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}", s.admin("tickets.manage", s.adminSupportTicketDetail))
 	mux.HandleFunc("POST /api/admin/support/tickets/{ticket}/replies", s.admin("tickets.manage", s.adminReplySupportTicket))
 	mux.HandleFunc("PATCH /api/admin/support/tickets/{ticket}", s.admin("tickets.manage", s.adminUpdateSupportTicket))
+	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments", s.admin("tickets.manage", s.adminListSupportAttachments))
+	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments/{attachment}", s.admin("tickets.manage", s.adminDownloadSupportAttachment))
 
 	mux.HandleFunc("GET /api/workspaces/{id}/link-domains", s.user(s.workspaceLinkDomains))
 	mux.HandleFunc("POST /api/workspaces/{id}/links/official", s.user(s.createOfficialLink))
