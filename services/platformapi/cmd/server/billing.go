@@ -28,7 +28,12 @@ func (s *server) workspaceBilling(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 503, map[string]string{"error": "订阅信息暂时不可用"})
 		return
 	}
-	jsonResponse(w, 200, map[string]any{"plans": plans, "subscription": sub, "invoices": invoices})
+	usage, err := s.billing.Usage(r.Context(), wid)
+	if err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "套餐用量暂时不可用"})
+		return
+	}
+	jsonResponse(w, 200, map[string]any{"plans": plans, "subscription": sub, "usage": usage, "invoices": invoices})
 }
 
 func (s *server) requestInvoice(w http.ResponseWriter, r *http.Request) {
