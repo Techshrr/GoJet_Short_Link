@@ -36,6 +36,7 @@ export interface FileShareRecord {
   max_downloads?: number | null;
   downloads: number;
   protected: boolean;
+  created_at: string;
 }
 
 export interface FileUploadInput {
