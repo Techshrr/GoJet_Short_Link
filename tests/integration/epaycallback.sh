@@ -26,7 +26,7 @@ registration=$(expect 201 "$(req POST /api/auth/register "{\"email\":\"epay-$suf
 token=$(printf '%s' "$registration"|field "['token']")
 spaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$spaces"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
-invoice=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" create-invoice)
+invoice=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$token")" create-invoice)
 invoice_id=$(printf '%s' "$invoice"|field "['id']")
 amount_cents=$(mysqlq "SELECT amount_cents FROM billing_invoices WHERE id=$invoice_id;")
 amount=$(python3 - "$amount_cents" <<'PY'
