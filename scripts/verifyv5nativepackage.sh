@@ -25,12 +25,20 @@ for path in \
   database/migrations/migrationcatalog.txt \
   public/index.html public/docs/index.html public/app/index.html public/admin/index.html public/install/index.php \
   installer/index.php install.sh \
-  scripts/runmigrations.sh scripts/nativeinstallerapply.sh scripts/installgeoip.sh \
-  deploy/native/gojet@.service deploy/native/gojet.env.example \
+  scripts/runmigrations.sh scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh scripts/installgeoip.sh \
+  deploy/native/gojet@.service deploy/native/gojet.env.example deploy/native/gojetinstaller.service deploy/native/gojetinstaller.path \
   deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf \
   VERSION VERSION-MANIFEST.json SBOM.cdx.json MANIFEST.sha256; do
   [[ -s "$PKG/$path" ]] || { echo "required G11 payload missing: $path" >&2; exit 1; }
 done
+
+for helper in install.sh scripts/runmigrations.sh scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh scripts/installgeoip.sh; do
+  [[ -x "$PKG/$helper" ]] || { echo "required G11 executable helper missing execute bit: $helper" >&2; exit 1; }
+done
+grep -Fq 'ExecStart=__GOJET_ROOT__/scripts/nativeinstallerrun.sh' "$PKG/deploy/native/gojetinstaller.service" || {
+  echo 'gojetinstaller.service ExecStart is not bound to packaged privileged installer runner' >&2
+  exit 1
+}
 
 while IFS= read -r migration || [[ -n "$migration" ]]; do
   [[ -n "$migration" ]] || continue
