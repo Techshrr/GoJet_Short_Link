@@ -26,8 +26,10 @@ mustContain("packages/api-client/src/analytics.ts", [
   "/api/workspaces/${workspaceId}/fileshares",
   "/api/workspaces/${workspaceId}/text-shares",
   "/api/workspaces/${workspaceId}/bio-pages",
+  '"qr_visits"',
   "Promise.allSettled"
 ]);
+mustContain("tests/analytics/p07-analytics.spec.ts", ["qr_visits: 15"]);
 mustContain("apps/workspace/src/routes/AnalyticsPage.tsx", [
   "data-p07-analytics",
   "Resource filter",
@@ -45,6 +47,7 @@ mustContain("apps/workspace/src/routes/AnalyticsPage.tsx", [
 mustContain("../services/platformapi/cmd/server/overview.go", ["workspaceOverview", "redis-realtime+mysql-history"]);
 mustContain("../services/platformapi/cmd/server/links.go", ["linkAnalytics", "AnalyticsSafe"]);
 mustContain("../app/links/analyticssafe.go", ['workspace.Allowed(role, "analytics")', "analytics_events", "COUNT(DISTINCT"]);
+mustContain("../frontend/userconsole/analytics.js", ["x.qr_visits||0"]);
 mustContain("../services/platformapi/cmd/server/main.go", [
   'GET /api/workspaces/{id}/overview',
   'GET /api/workspaces/{id}/links/{link}/analytics',
@@ -60,4 +63,4 @@ for (const file of ["apps/workspace/src/routes/AnalyticsPage.tsx", "packages/api
   for (const marker of forbidden) if (source.includes(marker)) throw new Error(`P07 forbidden implementation marker in ${file}: ${marker}`);
 }
 
-console.log("P07 Analytics contract verified: real overview/link/resource APIs, analytics RBAC, explicit filter semantics, compare/export, partial resource error handling, and no fabricated metrics.");
+console.log("P07 Analytics contract verified: real overview/link/resource APIs, production qr_visits mapping, analytics RBAC, explicit filter semantics, compare/export, partial resource error handling, and no fabricated metrics.");
