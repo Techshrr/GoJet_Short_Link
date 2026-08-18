@@ -14,27 +14,24 @@ const BioPage = lazy(() => import("./routes/BioPage"));
 const MembersPage = lazy(() => import("./routes/MembersPage"));
 const OrganizationPage = lazy(() => import("./routes/OrganizationPage"));
 const BillingPage = lazy(() => import("./routes/BillingPage"));
+const SupportPage = lazy(() => import("./routes/SupportPage"));
 
-function RootLayout() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return <WorkspaceShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet</span><p>正在加载…</p></main>}><Outlet /></Suspense></WorkspaceShell>;
-}
-
-const rootRoute = createRootRoute({ component: RootLayout });
-const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: WorkspaceFoundation });
-const linksRoute = createRoute({ getParentRoute: () => rootRoute, path: "/links", component: LinksPage });
-const linkDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/links/$linkId", component: LinkDetailPage });
-const domainsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/domains", component: DomainsPage });
-const analyticsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/analytics", component: AnalyticsPage });
-const qrRoute = createRoute({ getParentRoute: () => rootRoute, path: "/qr", component: QRPage });
-const filesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/files", component: FilesPage });
-const textRoute = createRoute({ getParentRoute: () => rootRoute, path: "/text", component: TextPage });
-const bioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/bio", component: BioPage });
-const campaignsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/campaigns", component: OrganizationPage });
-const tagsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/tags", component: OrganizationPage });
-const membersRoute = createRoute({ getParentRoute: () => rootRoute, path: "/members", component: MembersPage });
-const billingRoute = createRoute({ getParentRoute: () => rootRoute, path: "/billing", component: BillingPage });
-const routeTree = rootRoute.addChildren([indexRoute, linksRoute, linkDetailRoute, domainsRoute, analyticsRoute, qrRoute, filesRoute, textRoute, bioRoute, campaignsRoute, tagsRoute, membersRoute, billingRoute]);
-export const router = createRouter({ routeTree, basepath: "/app" });
-
+function RootLayout() { const pathname = useRouterState({ select: (state) => state.location.pathname }); return <WorkspaceShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet</span><p>正在加载…</p></main>}><Outlet /></Suspense></WorkspaceShell>; }
+const rootRoute=createRootRoute({component:RootLayout});
+const indexRoute=createRoute({getParentRoute:()=>rootRoute,path:"/",component:WorkspaceFoundation});
+const linksRoute=createRoute({getParentRoute:()=>rootRoute,path:"/links",component:LinksPage});
+const linkDetailRoute=createRoute({getParentRoute:()=>rootRoute,path:"/links/$linkId",component:LinkDetailPage});
+const domainsRoute=createRoute({getParentRoute:()=>rootRoute,path:"/domains",component:DomainsPage});
+const analyticsRoute=createRoute({getParentRoute:()=>rootRoute,path:"/analytics",component:AnalyticsPage});
+const qrRoute=createRoute({getParentRoute:()=>rootRoute,path:"/qr",component:QRPage});
+const filesRoute=createRoute({getParentRoute:()=>rootRoute,path:"/files",component:FilesPage});
+const textRoute=createRoute({getParentRoute:()=>rootRoute,path:"/text",component:TextPage});
+const bioRoute=createRoute({getParentRoute:()=>rootRoute,path:"/bio",component:BioPage});
+const campaignsRoute=createRoute({getParentRoute:()=>rootRoute,path:"/campaigns",component:OrganizationPage});
+const tagsRoute=createRoute({getParentRoute:()=>rootRoute,path:"/tags",component:OrganizationPage});
+const membersRoute=createRoute({getParentRoute:()=>rootRoute,path:"/members",component:MembersPage});
+const billingRoute=createRoute({getParentRoute:()=>rootRoute,path:"/billing",component:BillingPage});
+const supportRoute=createRoute({getParentRoute:()=>rootRoute,path:"/support",component:SupportPage});
+const routeTree=rootRoute.addChildren([indexRoute,linksRoute,linkDetailRoute,domainsRoute,analyticsRoute,qrRoute,filesRoute,textRoute,bioRoute,campaignsRoute,tagsRoute,membersRoute,billingRoute,supportRoute]);
+export const router=createRouter({routeTree,basepath:"/app"});
 declare module "@tanstack/react-router" { interface Register { router: typeof router } }

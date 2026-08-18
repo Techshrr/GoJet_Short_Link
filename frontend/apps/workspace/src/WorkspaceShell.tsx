@@ -1,42 +1,5 @@
 import type { ReactNode } from "react";
 import { BarChart3, ExternalLink, File, Folder, Globe2, KeyRound, Link2, QrCode, Settings, SlidersHorizontal, User, Users } from "@gojet/icons";
 import { ProductShell, type ShellNavGroup } from "@gojet/ui/shells";
-
-const workspaceGroups: ShellNavGroup[] = [
-  { items: [{ label: "Overview", href: "/app", icon: BarChart3 }] },
-  { label: "CREATE", items: [
-    { label: "Links", href: "/app/links", icon: Link2 },
-    { label: "QR Codes", href: "/app/qr", icon: QrCode },
-    { label: "Files", href: "/app/files", icon: File },
-    { label: "Text", href: "/app/text", icon: File },
-    { label: "Bio Pages", href: "/app/bio", icon: User },
-  ] },
-  { label: "INSIGHTS", items: [{ label: "Analytics", href: "/app/analytics", icon: BarChart3 }] },
-  { label: "MANAGE", items: [
-    { label: "Domains", href: "/app/domains", icon: Globe2 },
-    { label: "Campaigns", href: "/app/campaigns", icon: Folder },
-    { label: "Tags", href: "/app/tags", icon: SlidersHorizontal },
-  ] },
-  { label: "DEVELOPER", items: [
-    { label: "API Keys", href: "/app/api-keys", icon: KeyRound },
-    { label: "Webhooks", href: "/app/webhooks", icon: ExternalLink },
-  ] },
-  { label: "WORKSPACE", items: [
-    { label: "Members", href: "/app/members", icon: Users },
-    { label: "Billing", href: "/app/billing", icon: BarChart3 },
-    { label: "Settings", href: "/app/settings", icon: Settings },
-  ] },
-];
-
-function normalizePath(pathname: string) { return pathname.startsWith("/app") ? pathname : `/app${pathname === "/" ? "" : pathname}`; }
-function contextFor(pathname: string) {
-  const path = normalizePath(pathname);
-  if (path === "/app") return "Overview";
-  const item = workspaceGroups.flatMap((group) => group.items).find((entry) => path === entry.href || path.startsWith(`${entry.href}/`));
-  return item?.label ?? "Workspace";
-}
-
-export function WorkspaceShell({ pathname, children }: { pathname: string; children: ReactNode }) {
-  const activeHref = normalizePath(pathname);
-  return <ProductShell variant="workspace" groups={workspaceGroups} activeHref={activeHref} context={<><span className="shell-context-muted">Workspace</span><span aria-hidden="true"> / </span><strong>{contextFor(pathname)}</strong></>} createHref="/app/links?create=1">{children}</ProductShell>;
-}
+const workspaceGroups:ShellNavGroup[]=[{items:[{label:"Overview",href:"/app",icon:BarChart3}]},{label:"CREATE",items:[{label:"Links",href:"/app/links",icon:Link2},{label:"QR Codes",href:"/app/qr",icon:QrCode},{label:"Files",href:"/app/files",icon:File},{label:"Text",href:"/app/text",icon:File},{label:"Bio Pages",href:"/app/bio",icon:User}]},{label:"INSIGHTS",items:[{label:"Analytics",href:"/app/analytics",icon:BarChart3}]},{label:"MANAGE",items:[{label:"Domains",href:"/app/domains",icon:Globe2},{label:"Campaigns",href:"/app/campaigns",icon:Folder},{label:"Tags",href:"/app/tags",icon:SlidersHorizontal}]},{label:"DEVELOPER",items:[{label:"API Keys",href:"/app/api-keys",icon:KeyRound},{label:"Webhooks",href:"/app/webhooks",icon:ExternalLink}]},{label:"WORKSPACE",items:[{label:"Members",href:"/app/members",icon:Users},{label:"Billing",href:"/app/billing",icon:BarChart3},{label:"Settings",href:"/app/settings",icon:Settings},{label:"Support",href:"/app/support",icon:ExternalLink}]}];
+function normalizePath(pathname:string){return pathname.startsWith("/app")?pathname:`/app${pathname==="/"?"":pathname}`}function contextFor(pathname:string){const path=normalizePath(pathname);if(path==="/app")return"Overview";const item=workspaceGroups.flatMap(g=>g.items).find(e=>path===e.href||path.startsWith(`${e.href}/`));return item?.label??"Workspace"}export function WorkspaceShell({pathname,children}:{pathname:string;children:ReactNode}){const activeHref=normalizePath(pathname);return <ProductShell variant="workspace" groups={workspaceGroups} activeHref={activeHref} context={<><span className="shell-context-muted">Workspace</span><span aria-hidden="true"> / </span><strong>{contextFor(pathname)}</strong></>} createHref="/app/links?create=1">{children}</ProductShell>}
