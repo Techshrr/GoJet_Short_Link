@@ -158,6 +158,12 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
+          current_sha="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | awk '{print $1}' | head -n 1)"
+          if [ -z "$current_sha" ] || [ "$current_sha" != "$HEAD_SHA" ]; then
+            echo "Skipping stale evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
+            exit 0
+          fi
+
           marker='<!-- v5-frontend-ci-evidence -->'
           if [ "$JOB_STATUS" = "success" ]; then
             state='✅ success'
