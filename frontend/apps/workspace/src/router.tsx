@@ -6,6 +6,7 @@ const WorkspaceFoundation = lazy(() => import("./routes/WorkspaceFoundation"));
 const LinksPage = lazy(() => import("./routes/LinksPage"));
 const LinkDetailPage = lazy(() => import("./routes/LinkDetailPage"));
 const DomainsPage = lazy(() => import("./routes/DomainsPage"));
+const AnalyticsPage = lazy(() => import("./routes/AnalyticsPage"));
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -17,7 +18,8 @@ const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", com
 const linksRoute = createRoute({ getParentRoute: () => rootRoute, path: "/links", component: LinksPage });
 const linkDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/links/$linkId", component: LinkDetailPage });
 const domainsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/domains", component: DomainsPage });
-const routeTree = rootRoute.addChildren([indexRoute, linksRoute, linkDetailRoute, domainsRoute]);
+const analyticsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/analytics", component: AnalyticsPage });
+const routeTree = rootRoute.addChildren([indexRoute, linksRoute, linkDetailRoute, domainsRoute, analyticsRoute]);
 export const router = createRouter({ routeTree, basepath: "/app" });
 
 declare module "@tanstack/react-router" { interface Register { router: typeof router } }

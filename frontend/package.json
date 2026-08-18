@@ -14,10 +14,12 @@
     "verify:shells": "node scripts/verify-shell-foundation.mjs",
     "verify:links": "node scripts/verify-p05-links.mjs",
     "verify:domains": "node scripts/verify-p06-domains.mjs",
+    "verify:analytics": "node scripts/verify-p07-analytics.mjs",
     "test:shells": "playwright test -c playwright.shells.config.ts",
     "test:links": "playwright test -c playwright.links.config.ts",
     "test:domains": "playwright test -c playwright.domains.config.ts",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm typecheck && pnpm build"
+    "test:analytics": "playwright test -c playwright.analytics.config.ts",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

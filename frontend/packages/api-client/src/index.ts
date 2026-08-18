@@ -92,3 +92,4 @@ export function createApiClient(options: ApiClientOptions = {}) {
 // This package deliberately exposes no browser Web Storage token persistence API.
 export * from "./links";
 export * from "./domains";
+export * from "./analytics";
