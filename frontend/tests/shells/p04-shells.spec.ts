@@ -34,7 +34,7 @@ async function screenshot(page: Page, testInfo: TestInfo, target: string, viewpo
 
 for (const target of targets) {
   for (const viewport of viewports) {
-    test(`${target} shell @ ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    test(`${target.name} shell @ ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const runtime = attachRuntimeGuards(page);
       await page.goto(target.url, { waitUntil: "networkidle" });
