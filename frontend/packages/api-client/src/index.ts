@@ -9,6 +9,7 @@ export interface ApiClientOptions {
 export interface ApiErrorPayload {
   code?: string;
   message?: string;
+  error?: string;
   details?: unknown;
 }
 
@@ -18,7 +19,7 @@ export class ApiError extends Error {
   readonly details: unknown;
 
   constructor(status: number, payload: ApiErrorPayload = {}) {
-    super(payload.message ?? `API request failed with status ${status}`);
+    super(payload.message ?? payload.error ?? `API request failed with status ${status}`);
     this.name = "ApiError";
     this.status = status;
     this.code = payload.code;
@@ -89,3 +90,4 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
 // V5 invariant: authentication credentials are cookie/session based.
 // This package deliberately exposes no browser Web Storage token persistence API.
+export * from "./links";
