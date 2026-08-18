@@ -12,6 +12,7 @@ Accepted phase evidence:
 - **P08 QR:** `2bdd1ed44d959c9b13960c70dd66570f565b8837` / Actions `32103132651` success. This exact HEAD re-ran P01–P07 regressions, strict TypeScript/build, Go resource/platform/analytics tests, and the P04/P05/P06/P07/P08 fixed-viewport browser gates.
 - **P09 Files:** `a44c85210dfef89a328e5cc093d3102d4dab0d96` / Actions `32104800662` success. This exact HEAD re-ran P01–P08 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09 fixed-viewport browser gates.
 - **P10 Text:** `cceda41131e3ce1c2e260bd47198bb3f5b553972` / Actions `32108885612` success. This exact HEAD re-ran P01–P09 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates.
+- **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
 
 Legend:
 
@@ -44,7 +45,7 @@ Legend:
 | Text sharing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | File upload/share/download | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | File quarantine / ClamAV / publish state | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Link in Bio | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Link in Bio | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Analytics overview | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Resource analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Workspace | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
