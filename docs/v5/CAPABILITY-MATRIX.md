@@ -13,6 +13,7 @@ Accepted phase evidence:
 - **P09 Files:** `a44c85210dfef89a328e5cc093d3102d4dab0d96` / Actions `32104800662` success. This exact HEAD re-ran P01–P08 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09 fixed-viewport browser gates.
 - **P10 Text:** `cceda41131e3ce1c2e260bd47198bb3f5b553972` / Actions `32108885612` success. This exact HEAD re-ran P01–P09 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates.
 - **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
+- **P12 Workspace / Members / Organization:** `a07d0b5d58edccdc8133d417ed58fcd2e9d6684b` / Actions `32115929397` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Go workspace/organization/billing/platform API tests, and the P04–P12 fixed-viewport browser gates.
 
 Legend:
 
@@ -48,12 +49,12 @@ Legend:
 | Link in Bio | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Analytics overview | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Resource analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Workspace | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Members / invitations | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Roles / permissions / RBAC | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Campaigns | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Folders | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Tags | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Workspace | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Members / invitations | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Roles / permissions / RBAC | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Campaigns | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Folders | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Tags | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Plans / quotas | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Billing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Orders / invoices | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
