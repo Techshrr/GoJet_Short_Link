@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LinkRecord, LinkWriteInput, WorkspaceSummary } from "@gojet/api-client";
 import { Alert, Badge, Button, ErrorState, Page, SettingsSection, Spinner, Tabs } from "@gojet/ui";
@@ -57,12 +56,16 @@ function StatusBadge({ status }: { status: LinkRecord["status"] }) {
   return <Badge tone={status === "active" ? "success" : status === "paused" ? "warning" : "neutral"}>{status}</Badge>;
 }
 
+function activateTab(label: string) {
+  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>(".gj-tab")).find((node) => node.textContent?.trim() === label);
+  tab?.click();
+}
+
 export default function LinkDetailPage() {
   const queryClient = useQueryClient();
   const linkId = currentLinkId();
   const { workspaces, workspace } = useDetailWorkspace();
   const workspaceId = workspace?.id;
-  const [activeTab, setActiveTab] = useState("overview");
 
   const capabilities = useQuery({
     queryKey: ["link-capabilities", workspaceId],
@@ -129,9 +132,9 @@ export default function LinkDetailPage() {
   return <Page className="links-page link-detail-page" data-p05-link-detail>
     <div className="link-detail-header">
       <div><a className="links-back" href={`/app/links?workspace=${workspace.id}`}>← Links</a><div className="link-title-row"><h1>{short}</h1><StatusBadge status={item.status} /></div><p>{item.title || "Untitled link"}</p></div>
-      <div className="link-header-actions"><Button variant="outline" type="button" onClick={() => navigator.clipboard.writeText(short)}>Copy</Button><Button variant="outline" type="button" onClick={() => window.open(short, "_blank", "noopener,noreferrer")}>Visit</Button>{canEdit ? <Button type="button" onClick={() => setActiveTab("settings")}>Edit</Button> : null}<DropdownMenu actions={[{ id: "copy-destination", label: "Copy destination", onSelect: () => navigator.clipboard.writeText(item.destination) }, { id: "history", label: "Open history", onSelect: () => setActiveTab("history") }]} /></div>
+      <div className="link-header-actions"><Button variant="outline" type="button" onClick={() => navigator.clipboard.writeText(short)}>Copy</Button><Button variant="outline" type="button" onClick={() => window.open(short, "_blank", "noopener,noreferrer")}>Visit</Button>{canEdit ? <Button type="button" onClick={() => activateTab("Settings")}>Edit</Button> : null}<DropdownMenu actions={[{ id: "copy-destination", label: "Copy destination", onSelect: () => navigator.clipboard.writeText(item.destination) }, { id: "history", label: "Open history", onSelect: () => activateTab("History") }]} /></div>
     </div>
     {capabilities.data && !canEdit ? <Alert tone="warning" title="Read-only link">当前角色为 {capabilities.data.role}。编辑、恢复和删除操作已禁用。</Alert> : null}
-    <Tabs items={tabs} defaultValue="overview" value={activeTab} onValueChange={setActiveTab} />
+    <Tabs items={tabs} defaultValue="overview" />
   </Page>;
 }
