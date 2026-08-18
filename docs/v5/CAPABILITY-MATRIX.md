@@ -17,6 +17,7 @@ Accepted phase evidence:
 - **P13 Billing / Payments / FX:** `e05e5af582153dae82dc8f4c695a75fb8d0be066` / Actions `32121771838` success. This exact HEAD re-ran P01–P12 regressions, strict TypeScript/build, Workspace Billing/Admin Commerce dynamic entries, Go billing/payments/platform API tests, redacted callback and audited FX invariants, and the P04–P13 fixed-viewport browser gates.
 - **P14 Tickets / Mail:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P13 regressions, P14 support/mail contract, strict TypeScript/build, Go mail/platform tests, Workspace Support/Admin Tickets/Admin Mail three-viewport Browser Gates, scanned ticket attachments, Turnstile ticket surfaces, and write-only SMTP secret invariants.
 - **P15 Auth / OAuth / Account:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P14 regressions, P15 auth/account contract, strict TypeScript/build, Go Identity/platform tests, Auth/Settings/Sessions/Connected Accounts/Admin OAuth three-viewport Browser Gates, cookie/CSRF, Turnstile, remembered-session UI contract, no-Web-Storage, MFA/backup-code and write-only OAuth secret invariants.
+- **P16 Trust & Safety:** `20b7fe4f6918f78c35d10666394c2333ca1b2927` / Actions `32145466061` success. This exact HEAD passed P01–P15 regressions, strict TypeScript/build, Go destination-risk/platform API tests, Destination Risk/File Security/Abuse/Security Events/Audit three-viewport Browser Gates, mandatory governance-reason contracts, and customer-facing risk provider/evidence isolation.
 
 Legend:
 
@@ -73,10 +74,10 @@ Legend:
 | Session management / revoke | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | TOTP / backup codes | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Turnstile policy / verification | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Destination Risk | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Abuse reports | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Security events | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Audit log | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Destination Risk | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Abuse reports | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Security events | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Audit log | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Admin users | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Admin workspaces | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Admin resource governance | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
