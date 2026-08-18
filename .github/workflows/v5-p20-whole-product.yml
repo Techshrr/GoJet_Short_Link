@@ -18,7 +18,7 @@ on:
       - "go.mod"
       - "go.sum"
       - ".github/workflows/fullstackp0.yml"
-      - ".github/workflows/v5-p20-whole-product.yml"
+      - ".github/workflows/v5-*.yml"
   workflow_dispatch:
 
 permissions:
@@ -172,13 +172,13 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Chromium without apt mirror dependency
         working-directory: frontend
-        timeout-minutes: 10
+        timeout-minutes: 12
         env:
           PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
         run: |
           set -euo pipefail
-          timeout -k 30s 8m pnpm exec playwright install chromium
           pnpm exec playwright --version
+          timeout -k 30s 10m pnpm exec playwright install chromium
       - name: Run frozen P04-P19 browser shard
         working-directory: frontend
         shell: bash
