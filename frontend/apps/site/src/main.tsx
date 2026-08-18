@@ -9,6 +9,7 @@ import "@gojet/ui/overlays.css";
 import "@gojet/ui/data.css";
 import "@gojet/ui/feedback.css";
 import "@gojet/ui/layout.css";
+import "@gojet/ui/shells.css";
 import "./styles.css";
 import { router } from "./router";
 
