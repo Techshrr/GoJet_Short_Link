@@ -13,7 +13,8 @@
     "./data": "./src/data.tsx",
     "./data.css": "./src/data.css",
     "./feedback": "./src/feedback.tsx",
-    "./feedback.css": "./src/feedback.css"
+    "./feedback.css": "./src/feedback.css",
+    "./layout.css": "./src/layout.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
