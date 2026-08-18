@@ -16,7 +16,8 @@
     "./feedback.css": "./src/feedback.css",
     "./layout.css": "./src/layout.css",
     "./shells": "./src/shells.tsx",
-    "./shells.css": "./src/shells.css"
+    "./shells.css": "./src/shells.css",
+    "./shells-responsive.css": "./src/shells-responsive.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
