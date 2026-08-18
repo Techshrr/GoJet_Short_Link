@@ -69,7 +69,7 @@ for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const runtimeErrors = observeRuntimeErrors(page);
     const state = await installApiFixture(page);
-    await page.goto("/domains?workspace=1");
+    await page.goto("/app/domains?workspace=1");
 
     await expect(page.getByRole("heading", { name: "Domains" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Available short-link domains" })).toBeVisible();
@@ -111,7 +111,7 @@ for (const viewport of viewports) {
 test("P06 Domains read-only RBAC", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { viewer: true });
-  await page.goto("/domains?workspace=1");
+  await page.goto("/app/domains?workspace=1");
   await expect(page.getByText("Read-only domain access")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add domain" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Verify now" })).toHaveCount(0);
@@ -121,7 +121,7 @@ test("P06 Domains read-only RBAC", async ({ page }) => {
 test("P06 Domains empty state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { empty: true });
-  await page.goto("/domains?workspace=1");
+  await page.goto("/app/domains?workspace=1");
   await expect(page.getByText("No custom domains")).toBeVisible();
   await expect(page.getByText("go.gt")).toBeVisible();
 });
@@ -129,7 +129,7 @@ test("P06 Domains empty state", async ({ page }) => {
 test("P06 Domains API error state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { failDomains: true });
-  await page.goto("/domains?workspace=1");
+  await page.goto("/app/domains?workspace=1");
   await expect(page.getByText("无法加载自定义域名")).toBeVisible();
   await expect(page.getByText("domains temporarily unavailable")).toBeVisible();
   await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
