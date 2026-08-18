@@ -10,6 +10,7 @@ Accepted phase evidence:
 - **P06 Domains:** `747cfac87616c5751280927045036b22c862402b` / Actions `32100295633` success. This exact HEAD also re-ran the P05 regression gates.
 - **P07 Analytics:** `2bae148abdb9abef169b1837cec19f39ae36c123` / Actions `32101231324` success. This exact HEAD re-ran P01–P06 regressions, analytics runtime tests, and the P04/P05/P06/P07 browser gates.
 - **P08 QR:** `2bdd1ed44d959c9b13960c70dd66570f565b8837` / Actions `32103132651` success. This exact HEAD re-ran P01–P07 regressions, strict TypeScript/build, Go resource/platform/analytics tests, and the P04/P05/P06/P07/P08 fixed-viewport browser gates.
+- **P09 Files:** `a44c85210dfef89a328e5cc093d3102d4dab0d96` / Actions `32104800662` success. This exact HEAD re-ran P01–P08 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09 fixed-viewport browser gates.
 
 Legend:
 
@@ -40,8 +41,8 @@ Legend:
 | QR create/style/download | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | QR tracking / analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Text sharing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| File upload/share/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| File quarantine / ClamAV / publish state | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| File upload/share/download | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| File quarantine / ClamAV / publish state | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Link in Bio | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Analytics overview | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Resource analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
@@ -83,7 +84,7 @@ Legend:
 | Redirect engine | V4 | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Analytics worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Analytics reconciler | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| File worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| File worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
 | Mail worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Operations monitor | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Log receiver | V4 | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
