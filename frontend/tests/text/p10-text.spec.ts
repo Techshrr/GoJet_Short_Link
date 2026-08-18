@@ -42,7 +42,7 @@ async function noOverflow(page: Page) { const size=await page.evaluate(()=>({scr
 for (const viewport of viewports) {
   test(`P10 Text vertical slice · ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({width:viewport.width,height:viewport.height}); const errors=runtimeErrors(page); const state=await fixture(page); await page.goto("/app/text?workspace=1");
-    await expect(page.getByRole("heading",{name:"Text"})).toBeVisible(); await expect(page.getByText("Release notes")).toBeVisible(); await expect(page.getByText("Single use log")).toBeVisible();
+    await expect(page.getByRole("heading",{name:"Text",exact:true})).toBeVisible(); await expect(page.getByText("Release notes")).toBeVisible(); await expect(page.getByText("Single use log")).toBeVisible();
     await page.getByRole("button",{name:"Release notes"}).click(); await expect(page.getByText("TEXT DETAIL")).toBeVisible(); await expect(page.getByLabel("Text live preview")).toContainText("Production");
     await page.getByRole("button",{name:"Create Text"}).click(); const sheet=page.locator(".gj-side-sheet-popup"); await expect(sheet).toBeVisible(); await sheet.getByLabel("Title").fill("Browser contract"); await sheet.getByLabel("Format").selectOption("markdown"); await sheet.getByLabel("Content").fill("# Browser\n\nP10 exact head"); await sheet.getByLabel("Custom code").fill("browser-contract"); await sheet.getByLabel(/One-time share/).click(); await sheet.getByRole("button",{name:"Create Text",exact:true}).click(); await expect(sheet.getByText("Text created")).toBeVisible(); expect(state.creates).toBe(1);
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({path:`test-results/p10-text-${viewport.name}.png`,fullPage:true});
