@@ -89,8 +89,7 @@ export function ContextMenu({ children, actions }: { children: ReactNode; action
     <BaseContextMenu.Root>
       <BaseContextMenu.Trigger className="gj-context-trigger">{children}</BaseContextMenu.Trigger>
       <BaseContextMenu.Portal>
-        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Popup></BaseContextMenu.Positioner>
-      </BaseContextMenu.Portal>
+        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Positioner></BaseContextMenu.Portal>
     </BaseContextMenu.Root>
   );
 }
@@ -115,6 +114,25 @@ export function MobileDrawer({ triggerLabel = "打开菜单", title, description
             <BaseDrawer.Content className="gj-drawer-content">
               <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label="关闭"><X size={16} /></IconButton>} /></div>
               <div className="gj-sheet-body">{children}</div>
+            </BaseDrawer.Content>
+          </BaseDrawer.Popup>
+        </BaseDrawer.Viewport>
+      </BaseDrawer.Portal>
+    </BaseDrawer.Root>
+  );
+}
+
+export function SideSheet({ triggerLabel, title, description, children }: { triggerLabel: string; title: string; description?: string; children: ReactNode }) {
+  return (
+    <BaseDrawer.Root swipeDirection="right">
+      <BaseDrawer.Trigger className="gj-button" data-variant="primary" data-size="md">{triggerLabel}</BaseDrawer.Trigger>
+      <BaseDrawer.Portal>
+        <BaseDrawer.Backdrop className="gj-dialog-backdrop" />
+        <BaseDrawer.Viewport className="gj-sheet-viewport">
+          <BaseDrawer.Popup className="gj-side-sheet-popup">
+            <BaseDrawer.Content className="gj-side-sheet-content">
+              <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label="关闭"><X size={16} /></IconButton>} /></div>
+              <div className="gj-side-sheet-body">{children}</div>
             </BaseDrawer.Content>
           </BaseDrawer.Popup>
         </BaseDrawer.Viewport>
