@@ -93,3 +93,4 @@ export function createApiClient(options: ApiClientOptions = {}) {
 export * from "./links";
 export * from "./domains";
 export * from "./analytics";
+export * from "./resources";
