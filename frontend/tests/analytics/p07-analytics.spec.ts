@@ -116,8 +116,10 @@ test("P07 resource analytics, compare, domain/campaign resource filtering and di
   await expect(page.getByLabel("Device filter")).toBeEnabled();
   await page.getByLabel("Country filter").selectOption("SG");
   await page.getByLabel("Device filter").selectOption("mobile");
-  await expect(page.getByText("SG").first()).toBeVisible();
-  await expect(page.getByText("mobile").first()).toBeVisible();
+  const countriesSection = page.locator('.analytics-dimension[aria-label="Countries"]');
+  const devicesSection = page.locator('.analytics-dimension[aria-label="Devices"]');
+  await expect(countriesSection.getByText("SG", { exact: true })).toBeVisible();
+  await expect(devicesSection.getByText("mobile", { exact: true })).toBeVisible();
   await page.locator(".analytics-compare input").check();
   await expect.poll(() => state.analyticsCalls).toBeGreaterThanOrEqual(2);
   await expect(page.getByText("+50.0% vs previous")).toBeVisible();
