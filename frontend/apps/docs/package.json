@@ -6,6 +6,7 @@
   "scripts": { "dev": "astro dev", "build": "astro check && astro build", "typecheck": "astro check" },
   "dependencies": {
     "@astrojs/starlight": "^0.41.6",
+    "@gojet/tokens": "workspace:*",
     "astro": "^7.1.6"
   },
   "devDependencies": { "@astrojs/check": "^0.9.10", "typescript": "^5.9.0" }
