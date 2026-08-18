@@ -8,6 +8,8 @@ P22 may consume only the immutable P21 / G11 Native artifact produced for the ex
 
 The immutable artifact identity check is the frozen P21 manifest contract: `schema=gojet-v5-native-version-manifest-v1`, `phase=P21`, `gate=G11`, `git_sha=<exact tested SHA>`, and `fresh_install_claimed=false`. P22 must reject a package when any of those fields or the archive checksum does not match.
 
+The G11 payload must also be self-contained for the privileged Web Installer hand-off: `deploy/native/gojetinstaller.service` and `deploy/native/gojetinstaller.path` must be shipped together with an executable `scripts/nativeinstallerrun.sh`, and the service `ExecStart` must resolve to that packaged runner. A package that references a helper it does not ship is invalid at G11 and must never advance to G12.
+
 ## G12 — Fresh Install
 
 The Gate provisions a clean aaPanel/BT-compatible Native host contract and requires:
