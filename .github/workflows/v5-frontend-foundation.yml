@@ -19,7 +19,7 @@ permissions:
 jobs:
   foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
@@ -61,6 +61,9 @@ jobs:
       - name: Verify P03 design system foundation
         run: pnpm verify:ui
 
+      - name: Verify P04 five-surface shell contract
+        run: pnpm verify:shells
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -86,6 +89,21 @@ jobs:
             }
           }
           NODE
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run P04 fixed-viewport browser gate
+        run: pnpm test:shells
+
+      - name: Upload P04 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p04-shell-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Persist exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
