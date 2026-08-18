@@ -11,9 +11,12 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:brand": "node scripts/verify-brand-foundation.mjs",
     "verify:ui": "node scripts/verify-design-system.mjs",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm typecheck && pnpm build"
+    "verify:shells": "node scripts/verify-shell-foundation.mjs",
+    "test:shells": "playwright test -c playwright.shells.config.ts",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "typescript": "^5.9.0"
   }
 }
