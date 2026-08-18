@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
-import { ApiError, createBioClient, resourceAccess, type BioBlock, type BioPageInput, type BioPageRecord, type BioPageStatus, type BioTheme, type WorkspaceSummary } from "@gojet/api-client";
+import { ApiError, DEFAULT_BIO_THEME, createBioClient, resourceAccess, type BioBlock, type BioPageInput, type BioPageRecord, type BioPageStatus, type BioTheme, type WorkspaceSummary } from "@gojet/api-client";
 import { Alert, Badge, Button, Dialog, EmptyState, ErrorState, Field, Input, Page, PageHeader, Select, Spinner, Textarea } from "@gojet/ui";
 import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } from "../links/client";
@@ -9,14 +9,6 @@ import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } 
 const bioClient = createBioClient(api);
 const tabs = ["Content", "Appearance", "Social", "Domain", "Analytics", "SEO", "Settings"] as const;
 type BioTab = (typeof tabs)[number];
-
-const defaultTheme: BioTheme = {
-  Primary: "#16a66a",
-  Background: "#f5faf7",
-  Ink: "#14231d",
-  Muted: "#66766f",
-  Surface: "#ffffff"
-};
 
 function useWorkspace() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
@@ -41,9 +33,9 @@ function statusTone(status: BioPageStatus): "success" | "warning" | "neutral" {
   return "neutral";
 }
 
-function color(theme: BioTheme, key: "Primary" | "Background" | "Ink" | "Muted" | "Surface", fallback: string) {
+function themeValue(theme: BioTheme, key: "Primary" | "Background" | "Ink" | "Muted" | "Surface", fallback: string) {
   const source = theme as BioTheme & Record<string, string | undefined>;
-  return source[key] ?? source[key.toLowerCase()] ?? fallback;
+  return source[key] || source[key.toLowerCase()] || fallback;
 }
 
 function safeURL(value: string) {
@@ -56,26 +48,32 @@ function safeURL(value: string) {
 }
 
 function PhonePreview({ title, bio, theme, blocks }: { title: string; bio: string; theme: BioTheme; blocks: BioBlock[] }) {
-  const primary = color(theme, "Primary", defaultTheme.Primary);
-  const background = color(theme, "Background", defaultTheme.Background);
-  const ink = color(theme, "Ink", defaultTheme.Ink ?? "#14231d");
-  const surface = color(theme, "Surface", defaultTheme.Surface ?? "#ffffff");
+  const primary = themeValue(theme, "Primary", DEFAULT_BIO_THEME.Primary);
+  const background = themeValue(theme, "Background", DEFAULT_BIO_THEME.Background);
+  const ink = themeValue(theme, "Ink", DEFAULT_BIO_THEME.Ink ?? DEFAULT_BIO_THEME.Primary);
+  const surface = themeValue(theme, "Surface", DEFAULT_BIO_THEME.Surface ?? DEFAULT_BIO_THEME.Background);
   return <div className="bio-phone-shell" aria-label="Bio live phone preview">
     <div className="bio-phone-speaker" aria-hidden="true" />
     <div className="bio-phone-screen" style={{ background, color: ink }}>
       <div className="bio-preview-avatar" style={{ background: primary }}>{(title.trim()[0] ?? "G").toUpperCase()}</div>
       <strong>{title || "Your Bio title"}</strong>
       <p>{bio || "Add a short introduction for your public page."}</p>
-      <div className="bio-preview-links">{blocks.length ? blocks.map((block, index) => {
-        const href = safeURL(block.URL);
-        return href ? <a key={`${index}-${block.Label}`} href={href} target="_blank" rel="noreferrer nofollow" style={{ background: surface, borderColor: primary }}>{block.Label || "Untitled link"}</a> : <span key={`${index}-${block.Label}`} style={{ background: surface }}>{block.Label || "Invalid link"}</span>;
-      }) : <span className="bio-preview-empty">Links appear here</span>}</div>
+      <div className="bio-preview-links">
+        {blocks.length ? blocks.map((block, index) => {
+          const href = safeURL(block.URL);
+          return href
+            ? <a key={`${index}-${block.Label}`} href={href} target="_blank" rel="noreferrer nofollow" style={{ background: surface, borderColor: primary }}>{block.Label || "Untitled link"}</a>
+            : <span key={`${index}-${block.Label}`} style={{ background: surface }}>{block.Label || "Invalid link"}</span>;
+        }) : <span className="bio-preview-empty">Links appear here</span>}
+      </div>
     </div>
   </div>;
 }
 
 function MiniPhone({ item }: { item: BioPageRecord }) {
-  return <div className="bio-mini-phone" aria-hidden="true" style={{ background: color(item.theme, "Background", defaultTheme.Background) }}><span style={{ background: color(item.theme, "Primary", defaultTheme.Primary) }}>{(item.title[0] ?? "G").toUpperCase()}</span><i /><i /><i /></div>;
+  return <div className="bio-mini-phone" aria-hidden="true" style={{ background: themeValue(item.theme, "Background", DEFAULT_BIO_THEME.Background) }}>
+    <span style={{ background: themeValue(item.theme, "Primary", DEFAULT_BIO_THEME.Primary) }}>{(item.title[0] ?? "G").toUpperCase()}</span><i /><i /><i />
+  </div>;
 }
 
 function CreateBioForm({ workspaceId, canEdit }: { workspaceId: number; canEdit: boolean }) {
@@ -84,8 +82,11 @@ function CreateBioForm({ workspaceId, canEdit }: { workspaceId: number; canEdit:
   const [bio, setBio] = useState("");
   const [slug, setSlug] = useState("");
   const mutation = useMutation({
-    mutationFn: () => bioClient.create(workspaceId, { title: title.trim(), bio: bio.trim(), slug: slug.trim() || undefined, status: "draft", theme: defaultTheme, blocks: [] }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["bio-pages", workspaceId] }); setTitle(""); setBio(""); setSlug(""); }
+    mutationFn: () => bioClient.create(workspaceId, { title: title.trim(), bio: bio.trim(), slug: slug.trim() || undefined, status: "draft", theme: DEFAULT_BIO_THEME, blocks: [] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["bio-pages", workspaceId] });
+      setTitle(""); setBio(""); setSlug("");
+    }
   });
   const special = requestState(mutation.error);
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (canEdit && title.trim()) mutation.mutate(); };
@@ -106,10 +107,10 @@ function BioBuilder({ item, workspaceId, canEdit, onDeleted }: { item: BioPageRe
   const [title, setTitle] = useState(item.title);
   const [bio, setBio] = useState(item.bio);
   const [status, setStatus] = useState<BioPageStatus>(item.status);
-  const [primary, setPrimary] = useState(color(item.theme, "Primary", defaultTheme.Primary));
-  const [background, setBackground] = useState(color(item.theme, "Background", defaultTheme.Background));
+  const [primary, setPrimary] = useState(themeValue(item.theme, "Primary", DEFAULT_BIO_THEME.Primary));
+  const [background, setBackground] = useState(themeValue(item.theme, "Background", DEFAULT_BIO_THEME.Background));
   const [blocks, setBlocks] = useState<BioBlock[]>(item.blocks ?? []);
-  const theme = useMemo<BioTheme>(() => ({ ...defaultTheme, Primary: primary, Background: background }), [primary, background]);
+  const theme = useMemo<BioTheme>(() => ({ ...DEFAULT_BIO_THEME, Primary: primary, Background: background }), [primary, background]);
   const input = useMemo<BioPageInput>(() => ({ title: title.trim(), bio, status, theme, blocks }), [title, bio, status, theme, blocks]);
   const update = useMutation({ mutationFn: () => bioClient.update(workspaceId, item.id, input), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["bio-pages", workspaceId] }); } });
   const remove = useMutation({ mutationFn: () => bioClient.delete(workspaceId, item.id), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["bio-pages", workspaceId] }); onDeleted(); } });
@@ -126,14 +127,27 @@ function BioBuilder({ item, workspaceId, canEdit, onDeleted }: { item: BioPageRe
     {update.isSuccess ? <Alert tone="info" title="Saved">Bio 页面已写入 Go API。</Alert> : null}
     <div className="bio-builder-grid">
       <div className="bio-builder-controls">
-        <div className="bio-tabs" role="tablist" aria-label="Bio builder sections">{tabs.map((name) => <button key={name} type="button" role="tab" aria-selected={tab === name} className={tab === name ? "is-active" : ""} onClick={() => setTab(name)}>{name}</button>)}</div>
+        <div className="bio-tabs" role="tablist" aria-label="Bio builder sections">
+          {tabs.map((name) => <button key={name} type="button" role="tab" aria-selected={tab === name} className={tab === name ? "is-active" : ""} onClick={() => setTab(name)}>{name}</button>)}
+        </div>
         <div className="bio-tab-panel" role="tabpanel">
           {tab === "Content" ? <div className="bio-control-stack">
             <Field label="Title" htmlFor={`bio-title-${item.id}`} required><Input id={`bio-title-${item.id}`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} disabled={!canEdit} /></Field>
             <Field label="Bio" htmlFor={`bio-copy-${item.id}`}><Textarea id={`bio-copy-${item.id}`} value={bio} onChange={(event) => setBio(event.target.value)} maxLength={2000} rows={5} disabled={!canEdit} /></Field>
-            <div className="bio-block-list"><div className="bio-control-head"><strong>Links</strong><Button type="button" size="sm" onClick={() => addBlock()} disabled={!canEdit || blocks.length >= 50}>Add link</Button></div>{blocks.length ? blocks.map((block, index) => <div className="bio-block-editor" key={`${index}-${block.Label}`}><Input aria-label={`Link ${index + 1} label`} value={block.Label} maxLength={120} disabled={!canEdit} onChange={(event) => changeBlock(index, { Label: event.target.value })} placeholder="Label" /><Input aria-label={`Link ${index + 1} URL`} value={block.URL} disabled={!canEdit} onChange={(event) => changeBlock(index, { URL: event.target.value })} placeholder="https://example.com" /><Button type="button" variant="ghost" size="sm" onClick={() => removeBlock(index)} disabled={!canEdit}>Remove</Button></div>) : <p className="bio-muted-copy">No links yet. Add up to 50 complete HTTP(S) links.</p>}</div>
+            <div className="bio-block-list">
+              <div className="bio-control-head"><strong>Links</strong><Button type="button" size="sm" onClick={() => addBlock()} disabled={!canEdit || blocks.length >= 50}>Add link</Button></div>
+              {blocks.length ? blocks.map((block, index) => <div className="bio-block-editor" key={`${index}-${block.Label}`}>
+                <Input aria-label={`Link ${index + 1} label`} value={block.Label} maxLength={120} disabled={!canEdit} onChange={(event) => changeBlock(index, { Label: event.target.value })} placeholder="Label" />
+                <Input aria-label={`Link ${index + 1} URL`} value={block.URL} disabled={!canEdit} onChange={(event) => changeBlock(index, { URL: event.target.value })} placeholder="https://example.com" />
+                <Button type="button" variant="ghost" size="sm" onClick={() => removeBlock(index)} disabled={!canEdit}>Remove</Button>
+              </div>) : <p className="bio-muted-copy">No links yet. Add up to 50 complete HTTP(S) links.</p>}
+            </div>
           </div> : null}
-          {tab === "Appearance" ? <div className="bio-control-stack"><Field label="Primary color" htmlFor={`bio-primary-${item.id}`}><Input id={`bio-primary-${item.id}`} type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} disabled={!canEdit} /></Field><Field label="Background color" htmlFor={`bio-background-${item.id}`}><Input id={`bio-background-${item.id}`} type="color" value={background} onChange={(event) => setBackground(event.target.value)} disabled={!canEdit} /></Field><p className="bio-muted-copy">Colors are persisted in the validated Theme JSON and revalidated by the public Go renderer.</p></div> : null}
+          {tab === "Appearance" ? <div className="bio-control-stack">
+            <Field label="Primary color" htmlFor={`bio-primary-${item.id}`}><Input id={`bio-primary-${item.id}`} type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} disabled={!canEdit} /></Field>
+            <Field label="Background color" htmlFor={`bio-background-${item.id}`}><Input id={`bio-background-${item.id}`} type="color" value={background} onChange={(event) => setBackground(event.target.value)} disabled={!canEdit} /></Field>
+            <p className="bio-muted-copy">Colors are persisted in the validated Theme JSON and revalidated by the public Go renderer.</p>
+          </div> : null}
           {tab === "Social" ? <div className="bio-control-stack"><h3>Social links</h3><p className="bio-muted-copy">V4 persists one validated link-block collection rather than a separate social schema. Social buttons therefore remain real Bio blocks.</p><div className="resource-actions"><Button type="button" size="sm" onClick={() => addBlock("GitHub", "https://github.com/")} disabled={!canEdit}>Add GitHub</Button><Button type="button" size="sm" onClick={() => addBlock("X", "https://x.com/")} disabled={!canEdit}>Add X</Button><Button type="button" size="sm" onClick={() => addBlock("LinkedIn", "https://www.linkedin.com/")} disabled={!canEdit}>Add LinkedIn</Button></div></div> : null}
           {tab === "Domain" ? <div className="bio-control-stack"><h3>Public address</h3><a className="resource-download-link" href={bioClient.publicUrl(item.slug)} target="_blank" rel="noreferrer">{bioClient.publicUrl(item.slug)}</a><p className="bio-muted-copy">Bio does not invent a per-page domain column that V4 does not persist. Domain ownership and DNS verification remain in the Domains pipeline.</p><a className="resource-download-link" href="/app/domains">Manage domains</a></div> : null}
           {tab === "Analytics" ? <div className="bio-control-stack"><h3>Page analytics</h3><div className="bio-metric"><strong>{item.views}</strong><span>views</span></div><p className="bio-muted-copy">This counter is returned by the Bio service and increments on successful published reads.</p><a className="resource-download-link" href="/app/analytics">Open Analytics</a></div> : null}
