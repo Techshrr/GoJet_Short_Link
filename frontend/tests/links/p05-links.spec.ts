@@ -107,7 +107,8 @@ for (const viewport of viewports) {
     await page.goto("/app/links?workspace=1");
 
     await expect(page.getByRole("heading", { name: "Links" })).toBeVisible();
-    await expect(page.getByText("Summer campaign").first()).toBeVisible();
+    const listSurface = viewport.name === "mobile" ? page.locator(".links-mobile-list") : page.locator(".links-desktop-table");
+    await expect(listSurface.getByText("Summer campaign").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Create link" })).toBeVisible();
     await expect(page.getByLabel("Search links")).toBeVisible();
     await expect(page.getByLabel("Status filter")).toBeVisible();
@@ -130,8 +131,8 @@ for (const viewport of viewports) {
       expect(box!.width).toBeGreaterThanOrEqual(520);
       expect(box!.width).toBeLessThanOrEqual(560);
     }
-    await expect(page.getByLabel("Destination")).toBeVisible();
-    await expect(page.getByLabel("Domain")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Destination *" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Domain" })).toBeVisible();
     await page.getByText("Advanced settings").click();
     await expect(page.getByLabel("Access password")).toBeVisible();
 
