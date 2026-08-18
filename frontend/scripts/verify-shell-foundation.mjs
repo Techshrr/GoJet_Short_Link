@@ -38,9 +38,13 @@ requireAll('Docs workspace action', read('apps/docs/src/components/WorkspaceLink
 const rootPackage = JSON.parse(read('package.json'));
 if (rootPackage.devDependencies?.['@playwright/test'] !== '1.62.1') throw new Error('P04 browser gate must pin @playwright/test 1.62.1');
 if (rootPackage.scripts?.['test:shells'] !== 'playwright test -c playwright.shells.config.ts') throw new Error('P04 browser test script missing');
+const lockfile = read('pnpm-lock.yaml');
+requireAll('P04 locked browser dependency', lockfile, ["'@playwright/test':", 'specifier: 1.62.1', 'version: 1.62.1']);
 const playwright = read('playwright.shells.config.ts');
 requireAll('P04 browser config', playwright, ['browserName: "chromium"', 'reducedMotion: "reduce"', '4173', '4174', '4175', '4176']);
 const browser = read('tests/shells/p04-shells.spec.ts');
 requireAll('P04 fixed viewport gate', browser, ['width: 1440, height: 900', 'width: 1024, height: 768', 'width: 390, height: 844', 'pageerror', 'message.type() === "error"', 'scrollWidth', 'clientWidth', 'page.screenshot', 'getByRole("button", { name: "Menu" })']);
+
+if (fs.existsSync(path.join(root, '../.github/workflows/v5-p04-lockfile-refresh.yml'))) throw new Error('one-time P04 lockfile refresh workflow must be removed after use');
 
 console.log('P04 five-surface shell foundation contract verified.');
