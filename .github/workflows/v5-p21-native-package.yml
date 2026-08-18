@@ -1,0 +1,125 @@
+name: V5 P21 Native Package
+
+on:
+  push:
+    branches: ["rebuild/v5-*"]
+    paths:
+      - "frontend/**"
+      - "app/**"
+      - "services/**"
+      - "database/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "installer/**"
+      - "public/install/**"
+      - "docs/v5/**"
+      - "install.sh"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/v5-p20-whole-product.yml"
+      - ".github/workflows/v5-p21-native-package.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: v5-p21-native-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p20-exact-head:
+    name: Require exact-head P20 success
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for authoritative P20 result for this SHA
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow='v5-p20-whole-product.yml';
+            const tested=context.sha;
+            for(let attempt=0;attempt<120;attempt++){
+              const runs=await github.rest.actions.listWorkflowRuns({owner:context.repo.owner,repo:context.repo.repo,workflow_id:workflow,branch:context.ref.replace('refs/heads/',''),per_page:50});
+              const exact=runs.data.workflow_runs.filter(r=>r.head_sha===tested && r.event==='push').sort((a,b)=>b.id-a.id)[0];
+              if(exact){
+                core.info(`P20 exact-head run ${exact.id}: ${exact.status}/${exact.conclusion}`);
+                if(exact.status==='completed'){
+                  if(exact.conclusion!=='success') core.setFailed(`P20 exact-head run ${exact.id} concluded ${exact.conclusion}`);
+                  else return;
+                  return;
+                }
+              }
+              await new Promise(resolve=>setTimeout(resolve,10000));
+            }
+            core.setFailed(`No successful completed P20 push run found for exact HEAD ${tested}`);
+
+  package:
+    name: G11 Native package
+    needs: p20-exact-head
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frozen frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build authoritative V5 Native archive
+        run: bash scripts/packagev5native.sh
+      - name: G11 package verification
+        env:
+          GOJET_EXPECTED_SHA: ${{ github.sha }}
+        run: bash scripts/verifyv5nativepackage.sh
+      - name: Upload Native archive, checksum and package manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v5-native-linux-amd64-${{ github.sha }}
+          path: |
+            dist/native/gojet-v5-native-linux-amd64.tar.gz
+            dist/native/gojet-v5-native-linux-amd64.tar.gz.sha256
+            dist/native/stage/gojet-v5-native-linux-amd64/VERSION-MANIFEST.json
+            dist/native/stage/gojet-v5-native-linux-amd64/SBOM.cdx.json
+            dist/native/stage/gojet-v5-native-linux-amd64/MANIFEST.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  close:
+    if: always()
+    needs: [p20-exact-head, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish exact-head P21 G11 evidence
+        uses: actions/github-script@v7
+        env:
+          P20_RESULT: ${{ needs.p20-exact-head.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        with:
+          script: |
+            const branch=context.ref.replace('refs/heads/','');
+            const ref=await github.rest.repos.getBranch({owner:context.repo.owner,repo:context.repo.repo,branch});
+            if(ref.data.commit.sha!==context.sha){core.info(`Skip stale P21 evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`);return;}
+            const success=process.env.P20_RESULT==='success' && process.env.PACKAGE_RESULT==='success';
+            const marker='<!-- v5-p21-ci-evidence-v1 -->';
+            const body=`${marker}\n## P21 Native Package — exact-head G11 evidence v1\n\n- Status: **${success?'✅ success':'❌ failure'}**\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- Exact-head P20 prerequisite: **${process.env.P20_RESULT}**\n- G11 Native Package: **${process.env.PACKAGE_RESULT}**\n- Artifact: \`gojet-v5-native-linux-amd64-${context.sha}\`\n- Payload: 8 Go binaries + migrations + Website/Auth + Docs + Workspace + Admin + installer + Native/systemd/Nginx + checksums + CycloneDX SBOM + version manifest.\n- Production exclusions: Docker/Compose/PM2/Node runtime/legacy consoles are not shipped.\n\nP22 Fresh Install Candidate / G12-G13 remains **unstarted** and is not claimed by this run.\n`;
+            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
+            const existing=comments.find(c=>c.body?.includes(marker));
+            if(existing) await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});
+            else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
+            if(!success) core.setFailed('P21 closure failed; see exact-head P20 prerequisite and G11 package results.');
