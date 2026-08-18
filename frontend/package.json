@@ -19,6 +19,7 @@
     "verify:files": "node scripts/verify-p09-files.mjs",
     "verify:text": "node scripts/verify-p10-text.mjs",
     "verify:bio": "node scripts/verify-p11-bio.mjs",
+    "verify:workspace": "node scripts/verify-p12-workspace.mjs",
     "test:shells": "playwright test -c playwright.shells.config.ts",
     "test:links": "playwright test -c playwright.links.config.ts",
     "test:domains": "playwright test -c playwright.domains.config.ts",
@@ -27,7 +28,8 @@
     "test:files": "playwright test -c playwright.files.config.ts",
     "test:text": "playwright test -c playwright.text.config.ts",
     "test:bio": "playwright test -c playwright.bio.config.ts",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm verify:files && pnpm verify:text && pnpm verify:bio && pnpm typecheck && pnpm build"
+    "test:workspace": "playwright test -c playwright.workspace.config.ts",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm verify:files && pnpm verify:text && pnpm verify:bio && pnpm verify:workspace && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
