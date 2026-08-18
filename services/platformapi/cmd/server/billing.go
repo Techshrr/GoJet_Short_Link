@@ -18,7 +18,7 @@ func (s *server) workspaceBilling(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 403, map[string]string{"error": "无权查看该工作区账单"})
 		return
 	}
-	plans, err := s.billing.Plans(r.Context(), false)
+	plans, err := s.billing.PublicPlans(r.Context())
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "套餐暂时不可用"})
 		return
@@ -78,7 +78,7 @@ func (s *server) cancelSubscription(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) adminPlans(w http.ResponseWriter, r *http.Request) {
-	plans, err := s.billing.Plans(r.Context(), true)
+	plans, err := s.billing.ManagedPlans(r.Context(), true)
 	if err != nil {
 		jsonResponse(w, 503, map[string]string{"error": "套餐列表暂时不可用"})
 		return
@@ -92,6 +92,10 @@ func (s *server) adminUpdatePlan(w http.ResponseWriter, r *http.Request) {
 		Name                   string          `json:"name"`
 		Description            string          `json:"description"`
 		Status                 string          `json:"status"`
+		Currency               string          `json:"currency"`
+		IsPublic               bool            `json:"is_public"`
+		DisplayOrder           int             `json:"display_order"`
+		BillingPeriods         json.RawMessage `json:"billing_periods"`
 		MonthlyPriceCents      int64           `json:"monthly_price_cents"`
 		LinkLimit              int64           `json:"link_limit"`
 		QRLimit                int64           `json:"qr_limit"`
@@ -109,8 +113,8 @@ func (s *server) adminUpdatePlan(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "套餐编号无效"})
 		return
 	}
-	in := billing.PlanInput{Name: raw.Name, Description: raw.Description, Status: raw.Status, MonthlyPriceCents: raw.MonthlyPriceCents, LinkLimit: raw.LinkLimit, QRLimit: raw.QRLimit, TextLimit: raw.TextLimit, BioLimit: raw.BioLimit, FileStorageBytes: raw.FileStorageBytes, MemberLimit: raw.MemberLimit, AnalyticsRetentionDays: raw.AnalyticsRetentionDays, Features: raw.Features}
-	if err = s.billing.UpdateManagedPlan(r.Context(), id, in); err != nil {
+	in := billing.ManagedPlanInput{Name: raw.Name, Description: raw.Description, Status: raw.Status, Currency: raw.Currency, IsPublic: raw.IsPublic, DisplayOrder: raw.DisplayOrder, BillingPeriods: raw.BillingPeriods, MonthlyPriceCents: raw.MonthlyPriceCents, LinkLimit: raw.LinkLimit, QRLimit: raw.QRLimit, TextLimit: raw.TextLimit, BioLimit: raw.BioLimit, FileStorageBytes: raw.FileStorageBytes, MemberLimit: raw.MemberLimit, AnalyticsRetentionDays: raw.AnalyticsRetentionDays, Features: raw.Features}
+	if err = s.billing.UpdateManagedPlanPresentation(r.Context(), id, in); err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
 		return
 	}
