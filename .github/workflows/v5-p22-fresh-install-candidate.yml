@@ -110,7 +110,11 @@ jobs:
           TESTED_SHA: ${{ github.sha }}
           P21_ARTIFACT_DIR: /tmp/p21-artifact
           SOURCE_ROOT: ${{ github.workspace }}
-        run: sudo --preserve-env=TESTED_SHA,P21_ARTIFACT_DIR,SOURCE_ROOT bash scripts/v5p22freshinstall.sh
+          # GitHub's Ubuntu image preconfigures the local MySQL root account
+          # with password "root". Preserve it only for the runner bootstrap;
+          # the installer still verifies and uses its own fresh application user.
+          MYSQL_PWD: root
+        run: sudo --preserve-env=TESTED_SHA,P21_ARTIFACT_DIR,SOURCE_ROOT,MYSQL_PWD bash scripts/v5p22freshinstall.sh
 
       - name: Upload P22 evidence
         if: always()
