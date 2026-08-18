@@ -47,7 +47,7 @@ mustContain("../app/resources/service.go", [
   'item.Format != "plain" && item.Format != "markdown" && item.Format != "code"',
   "bcrypt.GenerateFromPassword",
   "func (s *Service) ReadText",
-  'status="consumed"',
+  'nextStatus = "consumed"',
   "views=views+1"
 ]);
 mustContain("../app/resources/management.go", [
