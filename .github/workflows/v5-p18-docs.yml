@@ -14,73 +14,91 @@ permissions:
   issues: write
 
 jobs:
-  p18-docs:
+  contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with: { version: 10.15.0 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Verify P01-P18 source contracts and independent builds
+        working-directory: frontend
+        run: pnpm check
+      - name: Verify Pagefind static search output
+        working-directory: frontend
+        run: test -f apps/docs/dist/pagefind/pagefind.js
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core-product
+            command: pnpm test:shells && pnpm test:links && pnpm test:domains && pnpm test:analytics && pnpm test:qr
+          - name: resources-workspace
+            command: pnpm test:files && pnpm test:text && pnpm test:bio && pnpm test:workspace && pnpm test:billing && pnpm test:commerce
+          - name: support-identity
+            command: pnpm test:support && pnpm test:mail-ops && pnpm test:auth && pnpm test:account && pnpm test:oauth
+          - name: governance-docs
+            command: pnpm test:trust-safety && pnpm test:admin && pnpm test:docs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
-      - name: Verify P18 static Docs contract and all frontend builds
+      - name: Browser regression — ${{ matrix.name }}
         working-directory: frontend
-        run: pnpm check
-      - name: Browser regression P01-P18
-        working-directory: frontend
-        run: |
-          pnpm test:shells
-          pnpm test:links
-          pnpm test:domains
-          pnpm test:analytics
-          pnpm test:qr
-          pnpm test:files
-          pnpm test:text
-          pnpm test:bio
-          pnpm test:workspace
-          pnpm test:billing
-          pnpm test:commerce
-          pnpm test:support
-          pnpm test:mail-ops
-          pnpm test:auth
-          pnpm test:account
-          pnpm test:oauth
-          pnpm test:trust-safety
-          pnpm test:admin
-          pnpm test:docs
-      - name: Verify Pagefind static search output
-        working-directory: frontend
-        run: test -f apps/docs/dist/pagefind/pagefind.js
-      - name: Upload P18 browser evidence
+        run: ${{ matrix.command }}
+      - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v5-p18-docs-${{ github.sha }}
+          name: v5-p18-${{ matrix.name }}-${{ github.sha }}
           path: |
             frontend/test-results/
             frontend/playwright-report/
-            frontend/apps/docs/dist/pagefind/
           if-no-files-found: ignore
-      - name: Publish exact-head evidence to Issue 8
-        if: always()
+
+  close:
+    if: always()
+    needs: [contract, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish exact-head P18 closure evidence
         uses: actions/github-script@v7
         env:
-          JOB_STATUS: ${{ job.status }}
+          CONTRACT_RESULT: ${{ needs.contract.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
         with:
           script: |
             const branch=context.ref.replace('refs/heads/','');
             const ref=await github.rest.repos.getBranch({owner:context.repo.owner,repo:context.repo.repo,branch});
             if(ref.data.commit.sha!==context.sha){core.info(`Skip stale evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`);return;}
+            const success=process.env.CONTRACT_RESULT==='success' && process.env.BROWSER_RESULT==='success';
             const marker='<!-- v5-p18-ci-evidence-v1 -->';
-            const status=process.env.JOB_STATUS==='success'?'SUCCESS':'FAILURE';
-            const body=`${marker}\n### P18 Docs exact-HEAD CI evidence\n- **Status:** ${status}\n- **Branch:** \`${branch}\`\n- **Exact HEAD / tested SHA:** \`${context.sha}\`\n- **Actions run:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- **Run ID:** \`${context.runId}\`\n- **Scope:** P01–P17 browser regression + P18 Docs three-viewport browser gate + Starlight/Astro static build + Pagefind artifact + EN/zh-CN IA/API/self-hosting contracts.\n- **Invariants:** /docs is static output; 56/260/760/220 desktop shell; local Pagefind search; no personalization dependency; core API reference includes endpoint/auth/params/body/examples/response/errors/rate-limit and curl/JavaScript/PHP/Go examples.\n`;
+            const body=`${marker}\n### P18 Docs exact-HEAD CI evidence\n- **Status:** ${success?'SUCCESS':'FAILURE'}\n- **Branch:** \`${branch}\`\n- **Exact HEAD / tested SHA:** \`${context.sha}\`\n- **Actions run:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- **Run ID:** \`${context.runId}\`\n- **Contract job:** ${process.env.CONTRACT_RESULT}\n- **Browser matrix:** ${process.env.BROWSER_RESULT}\n- **Scope:** P01–P17 regression browser coverage + P18 Docs three-viewport browser gate + Starlight/Astro static build + Pagefind artifact + EN/zh-CN IA/API/self-hosting contracts.\n- **Invariants:** /docs is static output; frozen token-driven 56/260/760/220 shell; local Pagefind search; no personalization dependency; core API reference includes endpoint/auth/params/body/examples/response/errors/rate-limit and curl/JavaScript/PHP/Go examples.\n`;
             const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
             const existing=comments.find(c=>c.body?.includes(marker));
-            if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});
+            if(existing) await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});
             else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
+            if(!success) core.setFailed('P18 closure failed; see contract/browser results above.');
