@@ -46,3 +46,4 @@ billingcycles.sql
 linkdestinationriskbaseline.sql
 socialregistration.sql
 useraccountsecurity.sql
+p17adminintegrations.sql
