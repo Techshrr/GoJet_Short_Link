@@ -6,7 +6,7 @@ export type ToastTone = "info" | "success" | "warning" | "danger";
 export const toastManager = BaseToast.createToastManager();
 
 export function notify({ title, description, tone = "info" }: { title: string; description?: string; tone?: ToastTone }) {
-  return toastManager.add({ title, description, type: tone, priority: tone === "danger" ? "high" : "low" });
+  return toastManager.add({ title, ...(description ? { description } : {}), type: tone, priority: tone === "danger" ? "high" : "low" });
 }
 
 function ToastIcon({ tone }: { tone: ToastTone }) {
