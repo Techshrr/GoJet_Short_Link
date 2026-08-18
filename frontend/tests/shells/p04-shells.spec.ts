@@ -43,6 +43,11 @@ for (const target of targets) {
           contentType: "application/json",
           body: JSON.stringify({ providers: [] }),
         }));
+        await page.route("**/api/public/turnstile**", (route) => route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ enabled: false, surface: "login" }),
+        }));
       }
       await page.goto(target.url, { waitUntil: "networkidle" });
       await expect(page.locator(target.shell).first()).toBeVisible();
