@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { ContextMenu as BaseContextMenu } from "@base-ui/react/context-menu";
 import { Drawer as BaseDrawer } from "@base-ui/react/drawer";
@@ -56,9 +56,10 @@ export function Popover({ trigger, title, description, children }: { trigger: Re
 }
 
 function MenuItems({ actions, context = false }: { actions: MenuAction[]; context?: boolean }) {
-  const Item = context ? BaseContextMenu.Item : BaseMenu.Item;
-  const Separator = context ? BaseContextMenu.Separator : BaseMenu.Separator;
-  return <>{actions.map((action) => <span key={action.id}>{action.separatorBefore ? <Separator className="gj-menu-separator" /> : null}<Item className="gj-menu-item" data-destructive={action.destructive || undefined} disabled={action.disabled} onClick={action.onSelect}>{action.label}</Item></span>)}</>;
+  if (context) {
+    return <>{actions.map((action) => <Fragment key={action.id}>{action.separatorBefore ? <BaseContextMenu.Separator className="gj-menu-separator" /> : null}<BaseContextMenu.Item className="gj-menu-item" data-destructive={action.destructive || undefined} disabled={action.disabled} onClick={action.onSelect}>{action.label}</BaseContextMenu.Item></Fragment>)}</>;
+  }
+  return <>{actions.map((action) => <Fragment key={action.id}>{action.separatorBefore ? <BaseMenu.Separator className="gj-menu-separator" /> : null}<BaseMenu.Item className="gj-menu-item" data-destructive={action.destructive || undefined} disabled={action.disabled} onClick={action.onSelect}>{action.label}</BaseMenu.Item></Fragment>)}</>;
 }
 
 export function DropdownMenu({ label = "更多操作", actions }: { label?: string; actions: MenuAction[] }) {
@@ -94,10 +95,10 @@ export function ContextMenu({ children, actions }: { children: ReactNode; action
   );
 }
 
-export function HoverCard({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
+export function HoverCard({ href, trigger, children }: { href: string; trigger: ReactNode; children: ReactNode }) {
   return (
     <BasePreviewCard.Root>
-      <BasePreviewCard.Trigger className="gj-preview-trigger">{trigger}</BasePreviewCard.Trigger>
+      <BasePreviewCard.Trigger className="gj-preview-trigger" href={href}>{trigger}</BasePreviewCard.Trigger>
       <BasePreviewCard.Portal><BasePreviewCard.Positioner className="gj-overlay-positioner" sideOffset={8}><BasePreviewCard.Popup className="gj-preview-popup">{children}</BasePreviewCard.Popup></BasePreviewCard.Positioner></BasePreviewCard.Portal>
     </BasePreviewCard.Root>
   );
@@ -105,7 +106,7 @@ export function HoverCard({ trigger, children }: { trigger: ReactNode; children:
 
 export function MobileDrawer({ triggerLabel = "打开菜单", title, description, children }: { triggerLabel?: string; title: string; description?: string; children: ReactNode }) {
   return (
-    <BaseDrawer.Root swipeDirection="right">
+    <BaseDrawer.Root swipeDirection="left">
       <BaseDrawer.Trigger className="gj-button" data-variant="outline" data-size="md">{triggerLabel}</BaseDrawer.Trigger>
       <BaseDrawer.Portal>
         <BaseDrawer.Backdrop className="gj-dialog-backdrop" />
