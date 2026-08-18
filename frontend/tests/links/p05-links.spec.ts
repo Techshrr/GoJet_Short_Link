@@ -104,7 +104,7 @@ for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const runtimeErrors = observeRuntimeErrors(page);
     const state = await installApiFixture(page);
-    await page.goto("/links?workspace=1");
+    await page.goto("/app/links?workspace=1");
 
     await expect(page.getByRole("heading", { name: "Links" })).toBeVisible();
     await expect(page.getByText("Summer campaign").first()).toBeVisible();
@@ -126,7 +126,10 @@ for (const viewport of viewports) {
     const box = await sheet.boundingBox();
     expect(box).not.toBeNull();
     if (viewport.name === "mobile") expect(Math.round(box!.width)).toBeGreaterThanOrEqual(viewport.width - 1);
-    else expect(box!.width).toBeGreaterThanOrEqual(520), expect(box!.width).toBeLessThanOrEqual(560);
+    else {
+      expect(box!.width).toBeGreaterThanOrEqual(520);
+      expect(box!.width).toBeLessThanOrEqual(560);
+    }
     await expect(page.getByLabel("Destination")).toBeVisible();
     await expect(page.getByLabel("Domain")).toBeVisible();
     await page.getByText("Advanced settings").click();
@@ -142,7 +145,7 @@ for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const runtimeErrors = observeRuntimeErrors(page);
     const state = await installApiFixture(page);
-    await page.goto("/links/11?workspace=1");
+    await page.goto("/app/links/11?workspace=1");
 
     await expect(page.getByRole("heading", { name: "https://go.gt/summer" })).toBeVisible();
     for (const label of ["Overview", "Analytics", "Routing", "A/B Test", "UTM", "Access", "QR", "Settings", "History"]) await expect(page.getByRole("tab", { name: label })).toBeVisible();
@@ -157,9 +160,10 @@ for (const viewport of viewports) {
 
     if (viewport.name === "desktop") {
       await page.getByRole("button", { name: "Edit" }).click();
-      await expect(page.getByText("Link settings")).toBeVisible();
-      await page.getByLabel("Change reason").fill("P05 browser gate update");
-      await page.getByRole("button", { name: "Save settings" }).click();
+      const settingsPanel = page.getByRole("tabpanel", { name: "Settings" });
+      await expect(settingsPanel.getByText("Link settings")).toBeVisible();
+      await settingsPanel.getByLabel("Change reason").fill("P05 browser gate update");
+      await settingsPanel.getByRole("button", { name: "Save settings" }).click();
       await expect.poll(() => state.putBody).not.toBeNull();
       const body = state.putBody as { reason?: string; link?: { destination?: string; redirect_status?: number } };
       expect(body.reason).toBe("P05 browser gate update");
@@ -176,7 +180,7 @@ for (const viewport of viewports) {
 test("P05 Links read-only + empty state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { viewer: true, empty: true });
-  await page.goto("/links?workspace=1");
+  await page.goto("/app/links?workspace=1");
   await expect(page.getByText("Read-only workspace")).toBeVisible();
   await expect(page.getByText("No links found")).toBeVisible();
   await expect(page.getByRole("button", { name: "Create link" })).toHaveCount(0);
@@ -185,7 +189,7 @@ test("P05 Links read-only + empty state", async ({ page }) => {
 test("P05 Links API error state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { failList: true });
-  await page.goto("/links?workspace=1");
+  await page.goto("/app/links?workspace=1");
   await expect(page.getByText("无法加载链接")).toBeVisible();
   await expect(page.getByText("links temporarily unavailable")).toBeVisible();
   await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
