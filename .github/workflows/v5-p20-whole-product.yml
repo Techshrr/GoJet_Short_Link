@@ -170,19 +170,15 @@ jobs:
       - name: Install frozen frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: Install Chromium
+      - name: Install Chromium without apt mirror dependency
         working-directory: frontend
-        timeout-minutes: 15
+        timeout-minutes: 10
         env:
           PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
         run: |
           set -euo pipefail
-          sudo tee /etc/apt/apt.conf.d/80-gojet-ci-network >/dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "30";
-          Acquire::https::Timeout "30";
-          EOF
-          timeout -k 30s 12m pnpm exec playwright install --with-deps chromium
+          timeout -k 30s 8m pnpm exec playwright install chromium
+          pnpm exec playwright --version
       - name: Run frozen P04-P19 browser shard
         working-directory: frontend
         shell: bash
