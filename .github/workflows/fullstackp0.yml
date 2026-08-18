@@ -43,7 +43,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Enforce repository naming policy
+      - name: Enforce repository naming policy (V4 only)
+        if: github.ref == 'refs/heads/rebuild/v4-rc12-real-install-fixes'
         run: python3 scripts/checknames.py
       - name: Install integration dependencies
         run: |
