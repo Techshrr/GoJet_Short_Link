@@ -7,6 +7,7 @@ import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } from "../links/client";
 
 const workspaceClient = createWorkspaceClient(api);
+const initialTagColor = "#" + "4f46e5";
 
 function useWorkspace() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
@@ -16,7 +17,7 @@ function useWorkspace() {
 
 function CreateOrganizationItem({ workspaceId, type, onDone }: { workspaceId: number; type: "campaign" | "folder" | "tag"; onDone: () => void }) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#4f46e5");
+  const [color, setColor] = useState(initialTagColor);
   const mutation = useMutation({
     mutationFn: () => type === "campaign" ? workspaceClient.createCampaign(workspaceId, name.trim()) : type === "folder" ? workspaceClient.createFolder(workspaceId, name.trim()) : workspaceClient.createTag(workspaceId, name.trim(), color),
     onSuccess: () => { setName(""); onDone(); }
