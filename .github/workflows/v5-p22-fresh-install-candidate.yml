@@ -1,0 +1,237 @@
+name: V5 P22 Fresh Install Candidate
+
+on:
+  push:
+    branches: ["rebuild/v5-*"]
+    paths:
+      - "frontend/**"
+      - "app/**"
+      - "services/**"
+      - "database/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "installer/**"
+      - "public/install/**"
+      - "docs/v5/**"
+      - "install.sh"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/v5-*.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: v5-p22-fresh-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p21-exact-head:
+    name: Require exact-head P21 success
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      run_id: ${{ steps.wait.outputs.run_id }}
+      artifact_name: ${{ steps.wait.outputs.artifact_name }}
+    steps:
+      - id: wait
+        name: Wait for authoritative P21 artifact for this SHA
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow='v5-p21-native-package.yml';
+            const tested=context.sha;
+            const branch=context.ref.replace('refs/heads/','');
+            const artifactName=`gojet-v5-native-linux-amd64-${tested}`;
+            async function waitExact(workflowId,label,attempts){
+              for(let attempt=0;attempt<attempts;attempt++){
+                const runs=await github.rest.actions.listWorkflowRuns({
+                  owner:context.repo.owner,repo:context.repo.repo,workflow_id:workflowId,
+                  branch,event:'push',per_page:50
+                });
+                const exact=runs.data.workflow_runs
+                  .filter(r=>r.head_sha===tested)
+                  .sort((a,b)=>b.id-a.id)[0];
+                if(exact){
+                  core.info(`${label} exact-head run ${exact.id}: ${exact.status}/${exact.conclusion}`);
+                  if(exact.status==='completed'){
+                    if(exact.conclusion!=='success'){
+                      core.setFailed(`${label} exact-head run ${exact.id} concluded ${exact.conclusion}`);
+                      return null;
+                    }
+                    return exact;
+                  }
+                }
+                await new Promise(resolve=>setTimeout(resolve,12000));
+              }
+              core.setFailed(`No successful completed ${label} push run found for exact HEAD ${tested}`);
+              return null;
+            }
+            const p17=await waitExact('v5-p17-admin.yml','P17',450);
+            if(!p17) return;
+            const exact=await waitExact(workflow,'P21',900);
+            if(!exact) return;
+            const artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,{
+              owner:context.repo.owner,repo:context.repo.repo,run_id:exact.id,per_page:100
+            });
+            const artifact=artifacts.find(a=>a.name===artifactName && !a.expired);
+            if(!artifact){
+              core.setFailed(`P21 success run ${exact.id} has no live ${artifactName} artifact`);
+              return;
+            }
+            core.setOutput('run_id',String(exact.id));
+            core.setOutput('artifact_name',artifactName);
+
+  fresh-install:
+    name: G12 Fresh Install + G13 Production Validation
+    needs: p21-exact-head
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download immutable P21 exact-head artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.p21-exact-head.outputs.artifact_name }}
+          path: /tmp/p21-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.p21-exact-head.outputs.run_id }}
+
+      - name: G12/G13 fresh aaPanel/BT Native candidate acceptance
+        env:
+          TESTED_SHA: ${{ github.sha }}
+          P21_ARTIFACT_DIR: /tmp/p21-artifact
+          SOURCE_ROOT: ${{ github.workspace }}
+        run: sudo --preserve-env=TESTED_SHA,P21_ARTIFACT_DIR,SOURCE_ROOT bash scripts/v5p22freshinstall.sh
+
+      - name: Upload P22 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v5-p22-evidence-${{ github.sha }}
+          path: /tmp/gojet-p22-evidence
+          if-no-files-found: warn
+          retention-days: 30
+
+  close:
+    name: Exact-head P22 closure
+    if: always()
+    needs: [p21-exact-head, fresh-install]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record P22 evidence and close Issue #8 state
+        uses: actions/github-script@v7
+        env:
+          P21_RESULT: ${{ needs.p21-exact-head.result }}
+          P21_RUN: ${{ needs.p21-exact-head.outputs.run_id }}
+          P22_RESULT: ${{ needs.fresh-install.result }}
+        with:
+          script: |
+            const owner=context.repo.owner, repo=context.repo.repo, issue_number=8;
+            const tested=context.sha;
+            const branch=context.ref.replace('refs/heads/','');
+            const marker='<!-- v5-p22-ci-evidence-v1 -->';
+            const success=process.env.P21_RESULT==='success' && process.env.P22_RESULT==='success';
+
+            const branchInfo=await github.rest.repos.getBranch({owner,repo,branch});
+            const exactHead=branchInfo.data.commit.sha===tested;
+
+            async function exactRun(workflow){
+              const runs=await github.rest.actions.listWorkflowRuns({
+                owner,repo,workflow_id:workflow,branch,event:'push',per_page:100
+              });
+              return runs.data.workflow_runs
+                .filter(r=>r.head_sha===tested && r.status==='completed' && r.conclusion==='success')
+                .sort((a,b)=>b.id-a.id)[0] || null;
+            }
+            const p17=await exactRun('v5-p17-admin.yml');
+            const p20=await exactRun('v5-p20-whole-product.yml');
+            const p21=await exactRun('v5-p21-native-package.yml');
+
+            const body=[
+              marker,
+              '## P22 — Fresh Install Candidate authoritative CI evidence',
+              '',
+              `- Status: **${success && exactHead ? 'success' : 'failed / not authoritative'}**`,
+              `- Tested exact HEAD: \`${tested}\``,
+              `- P17 exact-head: ${p17 ? `[Actions ${p17.id}](${p17.html_url}) success` : 'missing'}`,
+              `- P20 / G0–G10 exact-head: ${p20 ? `[Actions ${p20.id}](${p20.html_url}) success` : 'missing'}`,
+              `- P21 / G11 exact-head: ${p21 ? `[Actions ${p21.id}](${p21.html_url}) success` : 'missing'}`,
+              `- P22 / G12–G13: [Actions ${context.runId}](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) ${process.env.P22_RESULT}`,
+              `- P21 immutable artifact: \`gojet-v5-native-linux-amd64-${tested}\``,
+              `- P22 evidence artifact: \`gojet-v5-p22-evidence-${tested}\``,
+              '',
+              'G12 Fresh Install verifies a fresh aaPanel/BT filesystem contract with Nginx + PHP 8.3 + MySQL 8.x + authenticated Redis + systemd + ClamAV, then completes the four-step HTTPS Web Installer from the immutable P21 artifact.',
+              '',
+              'G13 Production Validation verifies eight-service restart, Nginx restart, MySQL/Redis reconnect, real ClamAV EICAR detection, real QR render/decode/redirect, file upload/download lifecycle, real PDF render, SMTP transport, OAuth provider production redirect contracts/reachability, Cloudflare production Siteverify with official CI test credentials, and signed Epay-compatible production callback/return contract.',
+              '',
+              exactHead ? 'Branch head still equals the tested SHA.' : `Branch head moved to ${branchInfo.data.commit.sha}; this run cannot mutate authoritative P22 completion state.`,
+            ].join('\n');
+
+            const comments=await github.paginate(github.rest.issues.listComments,{owner,repo,issue_number,per_page:100});
+            const prior=comments.find(c=>c.body && c.body.includes(marker));
+            if(prior) await github.rest.issues.updateComment({owner,repo,comment_id:prior.id,body});
+            else await github.rest.issues.createComment({owner,repo,issue_number,body});
+
+            if(!(success && exactHead && p17 && p20 && p21)){
+              core.setFailed('P22 cannot close: exact-head prerequisite/evidence failure');
+              return;
+            }
+
+            const issue=await github.rest.issues.get({owner,repo,issue_number});
+            let issueBody=issue.data.body || '';
+            issueBody=issueBody.replace(
+              '> **状态：ACTIVE / P21 COMPLETE / P22 NOT STARTED / 唯一 V5 执行总线**',
+              '> **状态：ACTIVE / P22 COMPLETE / P00–P22 + G0–G13 VERIFIED / 唯一 V5 执行总线**'
+            );
+            issueBody=issueBody.replace(
+              '- [ ] **P22 — Fresh Install Candidate**',
+              '- [x] **P22 — Fresh Install Candidate**'
+            );
+            issueBody=issueBody.replace(
+              '- P22 Fresh Install Candidate / G12–G13 **未开始、未声明、未验收**。',
+              '- P22 Fresh Install Candidate / G12–G13 已完成 authoritative closure，完成状态见下方 P22 ✅。'
+            );
+
+            const p22Section=[
+              '### P22 ✅',
+              `Final authoritative exact-head：\`${tested}\` / Actions \`${context.runId}\` success。`,
+              '',
+              'Fresh Install Candidate / G12–G13 已完整闭环：',
+              `- exact-head P17 / P20 / P21 prerequisite 全部 success：P17 \`${p17.id}\`、P20 \`${p20.id}\`、P21 \`${p21.id}\`；`,
+              `- 只消费 P21 immutable Native artifact：\`gojet-v5-native-linux-amd64-${tested}\`，未从 checkout 源码重新构造 production package；`,
+              '- G12 Fresh Install：全新 aaPanel/BT 目录契约 + Nginx + PHP 8.3 + MySQL 8.x + authenticated Redis + systemd + ClamAV，通过 HTTPS 四步 Web Installer 完成安装并锁定 `/install/`；',
+              '- G13 Production Validation：8 个 systemd 服务重启、Nginx 重启、MySQL/Redis 重连、ClamAV EICAR、QR 真渲染/真解码/真跳转、File 真上传/下载、PDF 真渲染、SMTP、OAuth provider production contracts、Cloudflare production Siteverify、Epay signed production callback/return 全部通过；',
+              `- Evidence artifact：\`gojet-v5-p22-evidence-${tested}\`；`,
+              '- P00–P22 与 G0–G13 已在同一 authoritative exact HEAD 上完成收口。'
+            ].join('\n');
+
+            if(!issueBody.includes('### P22 ✅')){
+              issueBody=issueBody.replace('\n## 5. 当前执行点', `\n\n${p22Section}\n\n## 5. 当前执行点`);
+            }
+
+            const current=[
+              '## 5. 当前执行点',
+              '',
+              '**P22 — Fresh Install Candidate / COMPLETE**',
+              '',
+              `P00–P22 已按强制顺序完成；当前 authoritative exact HEAD 为 \`${tested}\`。P17 Actions \`${p17.id}\`、P20 Actions \`${p20.id}\`、P21 Actions \`${p21.id}\`、P22 Actions \`${context.runId}\` 均为 exact-head success；G0–G13 已完整验证。`,
+              '',
+              '**当前执行点：P22 已完整收口。** 后续如进入 release/tag/发布流程，只允许基于该 authoritative exact HEAD 或重新跑通 P00–P22 / G0–G13 的更新 HEAD，不得将旧 V4、旧 V5、旧 artifact 或历史绿灯转换为发布依据。'
+            ].join('\n');
+
+            issueBody=issueBody.replace(
+              /## 5\. 当前执行点[\s\S]*?(?=\n## 6\. Gate)/,
+              current.trimEnd()
+            );
+
+            await github.rest.issues.update({owner,repo,issue_number,body:issueBody});
+            core.info('Issue #8 P22 strong-order checkbox, verified-stage closure and current execution point updated.');
