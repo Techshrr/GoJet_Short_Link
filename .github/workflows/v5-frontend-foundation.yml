@@ -20,6 +20,7 @@ on:
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
       - 'docs/v5/P08_QR_CONTRACT.md'
       - 'docs/v5/P09_FILES_CONTRACT.md'
+      - 'docs/v5/P10_TEXT_CONTRACT.md'
       - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
   pull_request:
@@ -39,6 +40,7 @@ on:
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
       - 'docs/v5/P08_QR_CONTRACT.md'
       - 'docs/v5/P09_FILES_CONTRACT.md'
+      - 'docs/v5/P10_TEXT_CONTRACT.md'
       - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
 
@@ -111,6 +113,8 @@ jobs:
         run: pnpm verify:qr
       - name: Verify P09 Files vertical slice contract
         run: pnpm verify:files
+      - name: Verify P10 Text vertical slice contract
+        run: pnpm verify:text
 
       - name: Typecheck
         run: pnpm typecheck
@@ -130,6 +134,7 @@ jobs:
             ['workspace', 'src/routes/AnalyticsPage.tsx'],
             ['workspace', 'src/routes/QRPage.tsx'],
             ['workspace', 'src/routes/FilesPage.tsx'],
+            ['workspace', 'src/routes/TextPage.tsx'],
             ['admin', 'src/routes/UsersBoundary.tsx'],
           ];
           for (const [app, source] of checks) {
@@ -140,7 +145,7 @@ jobs:
           }
           NODE
 
-      - name: Test P05-P09 Go backend, fileworker and analytics runtime
+      - name: Test P05-P10 Go backend, fileworker and analytics runtime
         working-directory: .
         run: go test ./app/links ./app/domains ./app/resources ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/analyticsworker/... ./services/analyticsreconciler/...
 
@@ -213,7 +218,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Persist P09 exact-head CI evidence to issue 8
+      - name: Run P10 fixed-viewport browser gate
+        run: pnpm test:text
+      - name: Upload P10 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p10-text-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Persist P10 exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
         continue-on-error: true
         env:
@@ -228,23 +244,23 @@ jobs:
           set -euo pipefail
           current_sha="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | awk '{print $1}' | head -n 1)"
           if [ -z "$current_sha" ] || [ "$current_sha" != "$HEAD_SHA" ]; then
-            echo "Skipping stale P09 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
+            echo "Skipping stale P10 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
             exit 0
           fi
-          marker='<!-- v5-p09-ci-evidence-v1 -->'
+          marker='<!-- v5-p10-ci-evidence-v1 -->'
           if [ "$JOB_STATUS" = "success" ]; then state='✅ success'; else state="❌ $JOB_STATUS"; fi
           cat > /tmp/v5-ci-evidence.md <<EOF
           $marker
-          ## P09 Files — exact-head evidence v1
+          ## P10 Text — exact-head evidence v1
 
           - Status: **$state**
           - Branch: \`$HEAD_BRANCH\`
           - Tested SHA: \`$HEAD_SHA\`
           - Workflow run: $RUN_URL
           - Run ID: \`$RUN_ID\`
-          - Scope: P01–P08 regression gates + P09 Files contract + strict TS/build + Go resources/platform/fileworker/analytics tests + P04/P05/P06/P07/P08/P09 fixed-viewport browser gates
+          - Scope: P01–P09 regression gates + P10 Text contract + strict TS/build + Go resources/platform/fileworker/analytics tests + P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates
 
-          This marker is written only when the tested SHA is still the exact current branch HEAD. P10 remains locked unless this P09 exact-head run is successful.
+          This marker is written only when the tested SHA is still the exact current branch HEAD. P11 remains locked unless this P10 exact-head run is successful.
           EOF
           comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
           if [ -n "$comment_id" ]; then

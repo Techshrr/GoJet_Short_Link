@@ -46,6 +46,43 @@ export interface FileUploadInput {
   password?: string;
 }
 
+export type TextShareFormat = "plain" | "markdown" | "code";
+export type TextShareStatus = "active" | "paused" | "consumed" | "expired";
+
+export interface TextShareRecord {
+  id: number;
+  slug: string;
+  title: string;
+  content?: string;
+  format: TextShareFormat;
+  status: TextShareStatus;
+  expires_at?: string | null;
+  one_time: boolean;
+  protected: boolean;
+  views: number;
+  created_at?: string;
+}
+
+export interface TextShareCreateInput {
+  slug?: string;
+  title: string;
+  content: string;
+  format: TextShareFormat;
+  expires_at?: string | null;
+  one_time: boolean;
+  password?: string;
+}
+
+export interface TextShareUpdateInput {
+  title: string;
+  content: string;
+  format: TextShareFormat;
+  status: "active" | "paused";
+  expires_at?: string | null;
+  one_time: boolean;
+  password?: string;
+}
+
 export interface ResourceAccess {
   role: WorkspaceRole;
   can_view: boolean;
@@ -83,5 +120,17 @@ export function createFilesClient(api: ApiTransport) {
     },
     delete: (workspaceId: number, fileId: number, retentionDays = 7) => api.delete<void>(`${base(workspaceId)}/${fileId}?retention_days=${retentionDays}`),
     publicUrl: (slug: string) => `/f/${encodeURIComponent(slug)}`
+  };
+}
+
+export function createTextClient(api: ApiTransport) {
+  const base = (workspaceId: number) => `/api/workspaces/${workspaceId}/text-shares`;
+  return {
+    list: (workspaceId: number) => api.get<{ data: TextShareRecord[] }>(base(workspaceId)),
+    get: (workspaceId: number, shareId: number) => api.get<TextShareRecord>(`${base(workspaceId)}/${shareId}`),
+    create: (workspaceId: number, input: TextShareCreateInput) => api.post<TextShareRecord>(base(workspaceId), input),
+    update: (workspaceId: number, shareId: number, input: TextShareUpdateInput) => api.put<TextShareRecord>(`${base(workspaceId)}/${shareId}`, input),
+    delete: (workspaceId: number, shareId: number) => api.delete<void>(`${base(workspaceId)}/${shareId}`),
+    publicUrl: (slug: string) => `/t/${encodeURIComponent(slug)}`
   };
 }
