@@ -1,0 +1,26 @@
+.gj-toast-viewport { position:fixed; right:var(--space-5); bottom:var(--space-5); z-index:140; width:min(380px,calc(100vw - 32px)); display:flex; flex-direction:column; gap:var(--space-2); outline:0; }
+.gj-toast { position:relative; border:var(--border-width) solid var(--border); border-radius:var(--radius-lg); background:var(--surface-elevated); color:var(--foreground); box-shadow:var(--shadow-e2); transform:translateX(var(--toast-swipe-movement-x,0)); transition:transform var(--motion-transition,240ms), opacity var(--motion-feedback,160ms); }
+.gj-toast[data-ending-style] { opacity:0; transform:translateX(calc(100% + var(--space-5))); }
+.gj-toast[data-tone="success"] { border-left:3px solid var(--success); }
+.gj-toast[data-tone="warning"] { border-left:3px solid var(--warning); }
+.gj-toast[data-tone="danger"] { border-left:3px solid var(--danger); }
+.gj-toast[data-tone="info"] { border-left:3px solid var(--info); }
+.gj-toast-content { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:var(--space-3); align-items:start; padding:var(--space-4); overflow:hidden; }
+.gj-toast[data-tone="success"] .gj-toast-content > svg { color:var(--success); }
+.gj-toast[data-tone="warning"] .gj-toast-content > svg { color:var(--warning); }
+.gj-toast[data-tone="danger"] .gj-toast-content > svg { color:var(--danger); }
+.gj-toast[data-tone="info"] .gj-toast-content > svg { color:var(--info); }
+.gj-toast-copy { min-width:0; }
+.gj-toast-title { margin:0; font-size:var(--type-product-body); font-weight:var(--weight-bold); color:var(--foreground); }
+.gj-toast-description { margin:var(--space-1) 0 0; color:var(--foreground-secondary); font-size:var(--type-compact); line-height:var(--line-meta); }
+.gj-toast-close { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:0; border-radius:var(--radius-md); background:transparent; color:var(--foreground-muted); cursor:pointer; }
+.gj-toast-close:hover { background:var(--surface-muted); color:var(--foreground); }
+.gj-toast-close:focus-visible { outline:var(--focus-width) solid var(--focus-ring); outline-offset:var(--focus-offset); }
+
+@media (max-width: 639px) {
+  .gj-toast-viewport { left:var(--space-4); right:var(--space-4); bottom:var(--space-4); width:auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gj-toast { transition:none; }
+}
