@@ -5,7 +5,6 @@ const viewports = [
   { name: "tablet", width: 1024, height: 768 },
   { name: "mobile", width: 390, height: 844 },
 ] as const;
-
 const targets = [
   { name: "website", url: "http://127.0.0.1:4173/", shell: ".gj-website-shell" },
   { name: "auth", url: "http://127.0.0.1:4173/login", shell: ".gj-auth-shell" },
@@ -14,28 +13,24 @@ const targets = [
   { name: "docs", url: "http://127.0.0.1:4176/docs/en/", shell: "body" },
 ] as const;
 
-async function attachRuntimeGuards(page: Page) {
+function attachRuntimeGuards(page: Page) {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   return { consoleErrors, pageErrors };
 }
-
 async function assertNoPageOverflow(page: Page) {
   const dimensions = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
   expect(dimensions.scrollWidth, `page-level horizontal overflow: ${JSON.stringify(dimensions)}`).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
-
-async function screenshot(page: Page, testInfo: TestInfo, target: string, viewport: string) {
-  await page.screenshot({ path: testInfo.outputPath(`${target}-${viewport}.png`), fullPage: true });
-}
+async function screenshot(page: Page, testInfo: TestInfo, target: string, viewport: string) { await page.screenshot({ path: testInfo.outputPath(`${target}-${viewport}.png`), fullPage: true }); }
 
 for (const target of targets) {
   for (const viewport of viewports) {
     test(`${target} shell @ ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const runtime = await attachRuntimeGuards(page);
+      const runtime = attachRuntimeGuards(page);
       await page.goto(target.url, { waitUntil: "networkidle" });
       await expect(page.locator(target.shell).first()).toBeVisible();
       await assertNoPageOverflow(page);
@@ -45,13 +40,11 @@ for (const target of targets) {
         if (viewport.name === "desktop") await expect(page.locator(".gj-website-nav")).toBeVisible();
         else await expect(page.locator(".gj-website-mobile-menu")).toBeVisible();
       }
-
       if (target.name === "auth") {
         await expect(page.locator(".gj-auth-panel")).toBeVisible();
         await expect(page.locator("#shell-login-email")).toBeVisible();
         if (viewport.name === "desktop") await expect(page.locator(".gj-auth-visual")).toBeVisible();
       }
-
       if (target.name === "workspace" || target.name === "admin") {
         const desktopSidebar = page.locator(".gj-product-sidebar");
         const mobileTrigger = page.locator(".gj-product-mobile-trigger");
@@ -67,10 +60,11 @@ for (const target of targets) {
           await expect(page.locator(".gj-drawer-popup")).toBeHidden();
         }
       }
-
       if (target.name === "docs") {
         await expect(page.locator("header.header")).toBeVisible();
-        await expect(page.getByRole("link", { name: "Go to Workspace" })).toBeVisible({ visible: viewport.name !== "mobile" });
+        const workspaceLink = page.getByRole("link", { name: "Go to Workspace" });
+        if (viewport.name === "mobile") await expect(workspaceLink).toBeHidden();
+        else await expect(workspaceLink).toBeVisible();
       }
 
       await screenshot(page, testInfo, target.name, viewport.name);
