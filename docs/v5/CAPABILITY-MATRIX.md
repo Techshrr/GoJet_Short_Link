@@ -14,6 +14,7 @@ Accepted phase evidence:
 - **P10 Text:** `cceda41131e3ce1c2e260bd47198bb3f5b553972` / Actions `32108885612` success. This exact HEAD re-ran P01–P09 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates.
 - **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
 - **P12 Workspace / Members / Organization:** `f0ff826c25916aaa6f38ba85fe3f500514b0ccd8` / Actions `32117185172` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Members/Organization dynamic entries, Go workspace/organization/billing/platform API tests, the frozen Tag token-palette contract, and the P04–P12 fixed-viewport browser gates.
+- **P13 Billing / Payments / FX:** `e05e5af582153dae82dc8f4c695a75fb8d0be066` / Actions `32121771838` success. This exact HEAD re-ran P01–P12 regressions, strict TypeScript/build, Workspace Billing/Admin Commerce dynamic entries, Go billing/payments/platform API tests, redacted callback and audited FX invariants, and the P04–P13 fixed-viewport browser gates.
 
 Legend:
 
@@ -55,11 +56,11 @@ Legend:
 | Campaigns | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Folders | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Tags | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Plans / quotas | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Billing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Orders / invoices | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Payment channels / callbacks | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| FX / rate history / override | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Plans / quotas | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Billing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Orders / invoices | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Payment channels / callbacks | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| FX / rate history / override | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Support tickets | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Ticket attachments | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Mail queue / delivery | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
