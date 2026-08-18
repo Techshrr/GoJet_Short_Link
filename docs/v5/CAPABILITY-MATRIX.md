@@ -15,6 +15,8 @@ Accepted phase evidence:
 - **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
 - **P12 Workspace / Members / Organization:** `f0ff826c25916aaa6f38ba85fe3f500514b0ccd8` / Actions `32117185172` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Members/Organization dynamic entries, Go workspace/organization/billing/platform API tests, the frozen Tag token-palette contract, and the P04–P12 fixed-viewport browser gates.
 - **P13 Billing / Payments / FX:** `e05e5af582153dae82dc8f4c695a75fb8d0be066` / Actions `32121771838` success. This exact HEAD re-ran P01–P12 regressions, strict TypeScript/build, Workspace Billing/Admin Commerce dynamic entries, Go billing/payments/platform API tests, redacted callback and audited FX invariants, and the P04–P13 fixed-viewport browser gates.
+- **P14 Tickets / Mail:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P13 regressions, P14 support/mail contract, strict TypeScript/build, Go mail/platform tests, Workspace Support/Admin Tickets/Admin Mail three-viewport Browser Gates, scanned ticket attachments, Turnstile ticket surfaces, and write-only SMTP secret invariants.
+- **P15 Auth / OAuth / Account:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P14 regressions, P15 auth/account contract, strict TypeScript/build, Go Identity/platform tests, Auth/Settings/Sessions/Connected Accounts/Admin OAuth three-viewport Browser Gates, cookie/CSRF, Turnstile, remembered-session UI contract, no-Web-Storage, MFA/backup-code and write-only OAuth secret invariants.
 
 Legend:
 
@@ -61,16 +63,16 @@ Legend:
 | Orders / invoices | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Payment channels / callbacks | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | FX / rate history / override | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Support tickets | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Ticket attachments | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Mail queue / delivery | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Mail templates / variables / preview | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Register / email verify / login | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Forgot / reset password | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| OAuth / social login / binding | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Session management / revoke | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| TOTP / backup codes | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Turnstile policy / verification | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Support tickets | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Ticket attachments | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Mail queue / delivery | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Mail templates / variables / preview | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Register / email verify / login | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Forgot / reset password | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| OAuth / social login / binding | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Session management / revoke | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| TOTP / backup codes | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Turnstile policy / verification | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Destination Risk | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Abuse reports | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Security events | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
@@ -89,7 +91,7 @@ Legend:
 | Analytics worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Analytics reconciler | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | File worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
-| Mail worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Mail worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
 | Operations monitor | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Log receiver | V4 | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
 | PHP 8.3 web installer | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
