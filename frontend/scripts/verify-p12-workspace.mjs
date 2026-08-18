@@ -30,7 +30,7 @@ mustContain("../app/workspace/service.go", [
   '"owner": {"manage": true', "func (s *Service) Invite", 's.billing.Check(ctx, workspaceID, "members", 1)', "func (s *Service) ChangeRole", "func (s *Service) Remove"
 ]);
 mustContain("../app/organization/service.go", [
-  "func (s *Service) Snapshot", "func (s *Service) CreateCampaign", "func (s *Service) CreateFolder", "func (s *Service) CreateTag", "func (s *Service) UpdateCampaignStatus"
+  "func (s *Service) Snapshot", "func (s *Service) CreateCampaign", "func (s *Service) CreateFolder", "func (s *Service) CreateTag", "func (s *Service) SetCampaignStatus"
 ]);
 mustContain("../services/platformapi/cmd/server/main.go", [
   'GET /api/workspaces/{id}/members', 'POST /api/workspaces/{id}/invitations', 'GET /api/workspaces/{id}/organization', 'POST /api/workspaces/{id}/campaigns', 'POST /api/workspaces/{id}/folders', 'POST /api/workspaces/{id}/tags'
