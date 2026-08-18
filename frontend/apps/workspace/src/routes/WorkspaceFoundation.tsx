@@ -1,9 +1,3 @@
 export default function WorkspaceFoundation() {
-  return (
-    <main className="foundation">
-      <span>GoJet Workspace · P01</span>
-      <h1>工作台工程骨架</h1>
-      <p>正式 CustomerShell 与 Links Vertical Slice 将分别在 P04 / P05 实现；此处建立独立 bundle、Router、Query 边界与共享安全客户端。</p>
-    </main>
-  );
+  return <main className="shell-page-proof"><span>GoJet Workspace · P04</span><h1>Workspace shell</h1><p>Sidebar、58px header、content padding 与 mobile drawer 已按冻结 IA 建立。Overview 产品内容仍由后续阶段实现。</p><div className="shell-proof-grid" aria-hidden="true"><span /><span /><span /></div></main>;
 }
