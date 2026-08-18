@@ -18,17 +18,24 @@ admin_token=$(printf '%s' "$admin"|field "['token']")
 suffix="$(date +%s)$RANDOM"
 code="team_${suffix}"
 create_body=$(cat <<JSON
-{"code":"$code","name":"团队协作版","description":"用于套餐目录验收","currency":"CNY","monthly_price_cents":8800,"link_limit":8000,"qr_limit":1500,"text_limit":1500,"bio_limit":80,"file_storage_bytes":21474836480,"member_limit":20,"analytics_retention_days":365,"features":["8,000 条短链接","20 位团队成员","365 天访问分析"]}
+{"code":"$code","name":"团队协作版","description":"用于套餐目录验收","status":"active","currency":"CNY","is_public":true,"display_order":420,"billing_periods":["monthly","quarterly","semiannual","annual"],"monthly_price_cents":8800,"link_limit":8000,"qr_limit":1500,"text_limit":1500,"bio_limit":80,"file_storage_bytes":21474836480,"member_limit":20,"analytics_retention_days":365,"features":["8,000 条短链接","20 位团队成员","365 天访问分析"]}
 JSON
 )
 created=$(expect 201 "$(req POST /api/admin/plans "$create_body" "$admin_token")" create-plan)
 plan_id=$(printf '%s' "$created"|field "['id']")
 [[ "$(mysqlq "SELECT code FROM plans WHERE id=$plan_id;")" == "$code" ]] || { echo 'created plan was not persisted' >&2; exit 1; }
 [[ "$(mysqlq "SELECT JSON_UNQUOTE(JSON_EXTRACT(features,'\$[1]')) FROM plans WHERE id=$plan_id;")" == '20 位团队成员' ]] || { echo 'plan feature list was not persisted as text list' >&2; exit 1; }
+[[ "$(mysqlq "SELECT CONCAT(currency,'|',is_public,'|',display_order,'|',JSON_LENGTH(billing_periods)) FROM plans WHERE id=$plan_id;")" == 'CNY|1|420|4' ]] || { echo 'P13 plan presentation fields were not persisted on create' >&2; exit 1; }
 
-update_body='{"name":"团队协作版 Plus","description":"正常后台字段编辑","status":"active","monthly_price_cents":9900,"link_limit":9000,"qr_limit":1800,"text_limit":1800,"bio_limit":90,"file_storage_bytes":32212254720,"member_limit":25,"analytics_retention_days":400,"features":["9,000 条短链接","25 位团队成员","400 天访问分析"]}'
+# P13 defines the managed-plan PUT as the complete persisted presentation
+# contract. Exercise every authoritative field instead of sending a legacy
+# partial P12-era payload.
+update_body='{"name":"团队协作版 Plus","description":"正常后台字段编辑","status":"active","currency":"CNY","is_public":true,"display_order":430,"billing_periods":["monthly","annual"],"monthly_price_cents":9900,"link_limit":9000,"qr_limit":1800,"text_limit":1800,"bio_limit":90,"file_storage_bytes":32212254720,"member_limit":25,"analytics_retention_days":400,"features":["9,000 条短链接","25 位团队成员","400 天访问分析"]}'
 expect 200 "$(req PUT "/api/admin/plans/$plan_id" "$update_body" "$admin_token")" update-plan >/dev/null
-[[ "$(mysqlq "SELECT CONCAT(name,'|',monthly_price_cents,'|',member_limit) FROM plans WHERE id=$plan_id;")" == '团队协作版 Plus|9900|25' ]] || { echo 'plan editor did not persist ordinary fields' >&2; exit 1; }
+[[ "$(mysqlq "SELECT CONCAT(name,'|',monthly_price_cents,'|',currency,'|',is_public,'|',display_order,'|',JSON_LENGTH(billing_periods),'|',member_limit) FROM plans WHERE id=$plan_id;")" == '团队协作版 Plus|9900|CNY|1|430|2|25' ]] || { echo 'P13 plan editor did not persist complete managed-plan fields' >&2; exit 1; }
+
+public_plans=$(expect 200 "$(req GET /api/public/plans)" public-plans)
+printf '%s' "$public_plans" | python3 -c 'import json,sys; d=json.load(sys.stdin); code=sys.argv[1]; plans=d.get("data",d if isinstance(d,list) else []); p=next((x for x in plans if x.get("code")==code),None); assert p, "updated public plan missing from public source"; assert p["currency"]=="CNY" and p["display_order"]==430 and p["billing_periods"]==["monthly","annual"]' "$code"
 
 # An unused custom plan can be removed from future purchase choices without
 # destroying historical rows.
@@ -55,4 +62,4 @@ pro_raw=$(req DELETE "/api/admin/plans/$pro_id" '' "$admin_token")
 expect 422 "$pro_raw" archive-in-use | grep -Fq '客户正在使用'
 [[ "$(mysqlq "SELECT status FROM plans WHERE id=$pro_id;")" == active ]] || { echo 'in-use plan was incorrectly archived' >&2; exit 1; }
 
-printf 'GoJet plan catalog lifecycle acceptance: PASS (created %s, protected starter and active subscriptions)\n' "$code"
+printf 'GoJet P13 plan catalog lifecycle acceptance: PASS (created %s, complete presentation update, public source, protected starter and active subscriptions)\n' "$code"
