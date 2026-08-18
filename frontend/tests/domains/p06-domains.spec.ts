@@ -71,7 +71,7 @@ for (const viewport of viewports) {
     const state = await installApiFixture(page);
     await page.goto("/app/domains?workspace=1");
 
-    await expect(page.getByRole("heading", { name: "Domains" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Domains", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Available short-link domains" })).toBeVisible();
     await expect(page.getByText("go.gt")).toBeVisible();
     await expect(page.getByRole("heading", { name: "go.example.com" })).toBeVisible();
