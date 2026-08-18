@@ -47,7 +47,7 @@ async function installApiFixture(page: Page, options: FixtureOptions = {}): Prom
       if (options.failOverview) return json(route, { error: "analytics rate limited" }, 429);
       return json(route, { today_clicks: 31, month_clicks: 640, unique_visitors: 420, active_links: 9, usage: {}, trend: [{ date: "2026-08-16", clicks: 18 }, { date: "2026-08-17", clicks: 23 }, { date: "2026-08-18", clicks: 31 }], recent: [], anomalies: [], generated_at: "2026-08-18T04:00:00Z", source: "redis-realtime+mysql-history" });
     }
-    if (method === "GET" && path === "/api/workspaces/1/qr-codes") return json(route, { data: [{ visits: 15 }] });
+    if (method === "GET" && path === "/api/workspaces/1/qr-codes") return json(route, { data: [{ qr_visits: 15 }] });
     if (method === "GET" && path === "/api/workspaces/1/fileshares") {
       if (options.partialResources) return json(route, { error: "file counters unavailable" }, 503);
       return json(route, { data: [{ downloads: 8 }] });
@@ -87,6 +87,7 @@ for (const viewport of viewports) {
     await expect(page.getByText("Today clicks")).toBeVisible();
     await expect(page.getByText("redis-realtime+mysql-history")).toBeVisible();
     await expect(page.getByText("QR visits")).toBeVisible();
+    await expect(page.getByText("15", { exact: true }).first()).toBeVisible();
     await expect(page.getByLabel("Resource filter")).toBeVisible();
     await expect(page.getByLabel("Domain filter")).toBeVisible();
     await expect(page.getByLabel("Campaign filter")).toBeVisible();
@@ -139,7 +140,7 @@ test("P07 partial resource error preserves healthy counters", async ({ page }) =
   await page.goto("/app/analytics?workspace=1");
   await expect(page.getByText("Partial resource data")).toBeVisible();
   await expect(page.getByText("QR visits")).toBeVisible();
-  await expect(page.getByText("15").first()).toBeVisible();
+  await expect(page.getByText("15", { exact: true }).first()).toBeVisible();
 });
 
 test("P07 rate-limited overview becomes explicit error state", async ({ page }) => {
