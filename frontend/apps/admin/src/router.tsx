@@ -2,6 +2,7 @@ import { Suspense, lazy, type ComponentType } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
 import { AdminShell } from "./AdminShell";
 
+const AdminOverviewPage = lazy(() => import("./routes/AdminOverviewPage"));
 const PlansPage = lazy(() => import("./routes/PlansPage"));
 const AdminBillingPage = lazy(() => import("./routes/AdminBillingPage"));
 const PaymentsPage = lazy(() => import("./routes/PaymentsPage"));
@@ -13,7 +14,6 @@ const TemplatesPage = lazy(() => import("./routes/TemplatesPage"));
 const OAuthPage = lazy(() => import("./routes/OAuthPage"));
 const core = (name: keyof typeof import("./routes/AdminP17Core")) => lazy(() => import("./routes/AdminP17Core").then((module) => ({ default: module[name] as ComponentType })));
 const platform = (name: keyof typeof import("./routes/AdminP17OpsPlatform")) => lazy(() => import("./routes/AdminP17OpsPlatform").then((module) => ({ default: module[name] as ComponentType })));
-const AdminOverviewPage = core("AdminOverviewPage");
 const AdminUsersPage = core("AdminUsersPage");
 const AdminWorkspacesPage = core("AdminWorkspacesPage");
 const AdminMembershipsPage = core("AdminMembershipsPage");
