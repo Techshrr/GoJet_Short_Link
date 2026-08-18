@@ -14,7 +14,9 @@
     "./data.css": "./src/data.css",
     "./feedback": "./src/feedback.tsx",
     "./feedback.css": "./src/feedback.css",
-    "./layout.css": "./src/layout.css"
+    "./layout.css": "./src/layout.css",
+    "./shells": "./src/shells.tsx",
+    "./shells.css": "./src/shells.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
