@@ -1,0 +1,5 @@
+@media (max-width:1279px) and (min-width:768px){
+  .gj-website-nav{display:none}.gj-website-mobile-menu{display:block}.gj-website-actions{margin-left:auto}
+  .gj-auth-shell{grid-template-columns:1fr}.gj-auth-visual{min-height:112px;padding:var(--space-5) var(--space-6)}.gj-auth-visual>.gj-brand-wordmark{display:none}.gj-auth-visual-copy{margin:0;padding:0}.gj-auth-visual-copy .gj-auth-kicker,.gj-auth-visual-copy p,.gj-auth-orbit{display:none}.gj-auth-visual-copy h1{margin:0;font-size:24px}.gj-auth-panel{padding:var(--space-8) var(--space-6);align-content:start}.gj-auth-mobile-brand{display:block;width:min(420px,100%);margin:0 auto var(--space-8)}
+  .gj-product-shell[data-shell="workspace"],.gj-product-shell[data-shell="admin"]{display:block;--shell-content-pad:24px}.gj-product-sidebar{display:none}.gj-product-mobile-trigger{display:block}.gj-product-header{padding-inline:var(--space-5)}.gj-product-content{padding:var(--space-6)}.gj-command-trigger{min-width:42px;width:42px;justify-content:center}.gj-command-trigger span,.gj-command-trigger kbd{display:none}
+}
