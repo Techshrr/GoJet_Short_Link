@@ -37,6 +37,13 @@ for (const target of targets) {
     test(`${target.name} shell @ ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const runtime = attachRuntimeGuards(page);
+      if (target.name === "auth") {
+        await page.route("**/api/public/auth/providers", (route) => route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ providers: [] }),
+        }));
+      }
       await page.goto(target.url, { waitUntil: "networkidle" });
       await expect(page.locator(target.shell).first()).toBeVisible();
       await assertNoPageOverflow(page);
