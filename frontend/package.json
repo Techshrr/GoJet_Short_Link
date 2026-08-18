@@ -16,12 +16,14 @@
     "verify:domains": "node scripts/verify-p06-domains.mjs",
     "verify:analytics": "node scripts/verify-p07-analytics.mjs",
     "verify:qr": "node scripts/verify-p08-qr.mjs",
+    "verify:files": "node scripts/verify-p09-files.mjs",
     "test:shells": "playwright test -c playwright.shells.config.ts",
     "test:links": "playwright test -c playwright.links.config.ts",
     "test:domains": "playwright test -c playwright.domains.config.ts",
     "test:analytics": "playwright test -c playwright.analytics.config.ts",
     "test:qr": "playwright test -c playwright.qr.config.ts",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm typecheck && pnpm build"
+    "test:files": "playwright test -c playwright.files.config.ts",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm verify:files && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
