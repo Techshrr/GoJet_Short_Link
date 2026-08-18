@@ -22,7 +22,7 @@ token=$(printf '%s' "$body"|field "['token']")
 spaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$spaces"|python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
 
-first=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" first-invoice)
+first=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$token")" first-invoice)
 first_id=$(printf '%s' "$first"|field "['id']")
 printf '%s' "$first" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["source_amount_cents"]==1000; assert x["source_currency"]=="USD"; assert x["amount_cents"]==7272; assert x["currency"]=="CNY"; assert x["fx_provider"]=="manual"; assert x["fx_markup_bps"]==100; assert x["fx_rate"]=="7.272000000000",x'
 
@@ -32,7 +32,7 @@ frozen=$(mysqlq "SELECT CONCAT(source_amount_cents,'|',source_currency,'|',amoun
 [[ "$frozen" == '1000|USD|7272|CNY|7.272000000000|manual|100' ]] || { echo "issued invoice FX snapshot mutated: $frozen" >&2; exit 1; }
 
 expect 200 "$(req POST "/api/admin/invoices/$first_id/settle" '{"status":"void","note":"汇率冻结验收后重新报价"}' "$admin")" void-first >/dev/null
-second=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" second-invoice)
+second=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$token")" second-invoice)
 printf '%s' "$second" | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["source_amount_cents"]==1000; assert x["source_currency"]=="USD"; assert x["amount_cents"]==8080; assert x["currency"]=="CNY"; assert x["fx_rate"]=="8.080000000000",x'
 
 printf 'GoJet billing FX conversion and invoice freeze acceptance: PASS\n'
