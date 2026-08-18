@@ -114,7 +114,10 @@ login=$(expect 200 "$(req POST /api/auth/login "{\"email\":\"$user_email\",\"pas
 token=$(printf '%s' "$login"|field "['token']")
 expect 200 "$(req GET /api/me '' "$token")" fresh-session-after-password-recovery >/dev/null
 
-invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" invoice-create)
+# P13 requires the selected billing cycle to be explicit and supported by the
+# chosen plan. Use monthly here so this lifecycle test exercises the canonical
+# billing contract instead of relying on the pre-P13 implicit-cycle behavior.
+invoice_body=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$token")" invoice-create)
 invoice_id=$(printf '%s' "$invoice_body"|field "['id']")
 
 start_worker
@@ -153,7 +156,7 @@ mysqlq "UPDATE workspace_subscriptions SET status='active',period_ends_at=DATE_A
 start_worker; wait_type "$user_email" subscription_expiring
 
 # Renewal is a fresh invoice and emits both invoice_paid and subscription_renewed.
-renew=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"renewal"}' "$token")" renewal-invoice)
+renew=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"renewal","billing_cycle":"monthly"}' "$token")" renewal-invoice)
 renew_id=$(printf '%s' "$renew"|field "['id']")
 expect 200 "$(req POST "/api/admin/invoices/$renew_id/settle" '{"status":"paid","note":"续费邮件验收"}' "$admin")" renewal-paid >/dev/null
 start_worker; wait_type "$user_email" subscription_renewed
