@@ -91,8 +91,8 @@ for (const viewport of viewports) {
     if (viewport.name === "mobile") expect(Math.round(box!.width)).toBeGreaterThanOrEqual(viewport.width - 1);
     else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
 
-    await expect(page.getByText("Maximum file size: 100 MB")).toBeVisible();
-    await expect(page.getByText("Folder upload")).toBeVisible();
+    await expect(page.getByText("Maximum file size: 100 MB", { exact: false })).toBeVisible();
+    await expect(page.getByText("Folder upload", { exact: true })).toBeVisible();
     await page.getByLabel("Browse file").setInputFiles({ name: "browser-upload.txt", mimeType: "text/plain", buffer: Buffer.from("secure test file") });
     await page.getByRole("button", { name: "Upload file", exact: true }).last().click();
     await expect(page.getByText("Processing").first()).toBeVisible();
