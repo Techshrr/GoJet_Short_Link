@@ -18,6 +18,7 @@ p { color: var(--foreground-secondary); line-height: 1.65; }
 .dev-ui-shell-main { min-width:0; background:var(--canvas); }
 .dev-ui-shell-main .gj-split-pane { padding:var(--space-5); }
 .dev-ui-shell-placeholder { min-height:160px; padding:var(--space-5); border:var(--border-width) dashed var(--border-strong); border-radius:var(--radius-lg); background:var(--surface); color:var(--foreground-muted); }
+.dev-ui-context-target { margin-top:var(--space-4); padding:var(--space-5); border:var(--border-width) dashed var(--border-strong); border-radius:var(--radius-lg); background:var(--surface-muted); color:var(--foreground-secondary); text-align:center; }
 
 @media (max-width: 900px) {
   .dev-ui-metrics { grid-template-columns:1fr 1fr; }
