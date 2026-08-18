@@ -10,6 +10,7 @@ on:
       - 'app/domains/**'
       - 'app/resources/**'
       - 'services/platformapi/cmd/server/**'
+      - 'services/platformapi/cmd/fileworker/**'
       - 'services/analyticsworker/**'
       - 'services/analyticsreconciler/**'
       - 'go.mod'
@@ -18,6 +19,7 @@ on:
       - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
       - 'docs/v5/P08_QR_CONTRACT.md'
+      - 'docs/v5/P09_FILES_CONTRACT.md'
       - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
   pull_request:
@@ -27,6 +29,7 @@ on:
       - 'app/domains/**'
       - 'app/resources/**'
       - 'services/platformapi/cmd/server/**'
+      - 'services/platformapi/cmd/fileworker/**'
       - 'services/analyticsworker/**'
       - 'services/analyticsreconciler/**'
       - 'go.mod'
@@ -35,6 +38,7 @@ on:
       - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
       - 'docs/v5/P08_QR_CONTRACT.md'
+      - 'docs/v5/P09_FILES_CONTRACT.md'
       - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
 
@@ -105,6 +109,8 @@ jobs:
         run: pnpm verify:analytics
       - name: Verify P08 QR vertical slice contract
         run: pnpm verify:qr
+      - name: Verify P09 Files vertical slice contract
+        run: pnpm verify:files
 
       - name: Typecheck
         run: pnpm typecheck
@@ -123,6 +129,7 @@ jobs:
             ['workspace', 'src/routes/DomainsPage.tsx'],
             ['workspace', 'src/routes/AnalyticsPage.tsx'],
             ['workspace', 'src/routes/QRPage.tsx'],
+            ['workspace', 'src/routes/FilesPage.tsx'],
             ['admin', 'src/routes/UsersBoundary.tsx'],
           ];
           for (const [app, source] of checks) {
@@ -133,9 +140,9 @@ jobs:
           }
           NODE
 
-      - name: Test P05-P08 Go backend and analytics runtime
+      - name: Test P05-P09 Go backend, fileworker and analytics runtime
         working-directory: .
-        run: go test ./app/links ./app/domains ./app/resources ./services/platformapi/cmd/server ./services/analyticsworker/... ./services/analyticsreconciler/...
+        run: go test ./app/links ./app/domains ./app/resources ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/analyticsworker/... ./services/analyticsreconciler/...
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
@@ -195,7 +202,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Persist P08 exact-head CI evidence to issue 8
+      - name: Run P09 fixed-viewport browser gate
+        run: pnpm test:files
+      - name: Upload P09 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p09-files-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Persist P09 exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
         continue-on-error: true
         env:
@@ -210,23 +228,23 @@ jobs:
           set -euo pipefail
           current_sha="$(git ls-remote origin "refs/heads/$HEAD_BRANCH" | awk '{print $1}' | head -n 1)"
           if [ -z "$current_sha" ] || [ "$current_sha" != "$HEAD_SHA" ]; then
-            echo "Skipping stale P08 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
+            echo "Skipping stale P09 evidence for $HEAD_SHA; current branch HEAD is ${current_sha:-unknown}."
             exit 0
           fi
-          marker='<!-- v5-p08-ci-evidence-v1 -->'
+          marker='<!-- v5-p09-ci-evidence-v1 -->'
           if [ "$JOB_STATUS" = "success" ]; then state='✅ success'; else state="❌ $JOB_STATUS"; fi
           cat > /tmp/v5-ci-evidence.md <<EOF
           $marker
-          ## P08 QR — exact-head evidence v1
+          ## P09 Files — exact-head evidence v1
 
           - Status: **$state**
           - Branch: \`$HEAD_BRANCH\`
           - Tested SHA: \`$HEAD_SHA\`
           - Workflow run: $RUN_URL
           - Run ID: \`$RUN_ID\`
-          - Scope: P01–P07 regression gates + P08 QR contract + strict TS/build + Go resource/platform/analytics tests + P04/P05/P06/P07/P08 fixed-viewport browser gates
+          - Scope: P01–P08 regression gates + P09 Files contract + strict TS/build + Go resources/platform/fileworker/analytics tests + P04/P05/P06/P07/P08/P09 fixed-viewport browser gates
 
-          This marker is written only when the tested SHA is still the exact current branch HEAD. P09 remains locked unless this P08 exact-head run is successful.
+          This marker is written only when the tested SHA is still the exact current branch HEAD. P10 remains locked unless this P09 exact-head run is successful.
           EOF
           comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
           if [ -n "$comment_id" ]; then
