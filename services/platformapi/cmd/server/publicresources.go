@@ -53,6 +53,7 @@ var bioPageTemplate = template.Must(template.New("bio").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>{{.Title}} · {{.SiteName}} 个人主页</title>
 <link rel="stylesheet" href="/assets/styles.css">
 <link rel="stylesheet" href="/assets/resourceshare.css">

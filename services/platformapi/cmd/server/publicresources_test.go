@@ -51,13 +51,17 @@ func TestMarkdownTextPageAllowsControlledMarkupButNotRawScript(t *testing.T) {
 	}
 }
 
-func TestBioTemplateRejectsJavascriptURLContext(t *testing.T) {
+func TestBioTemplateRejectsJavascriptURLContextAndIsNoIndex(t *testing.T) {
 	var output bytes.Buffer
-	data := map[string]any{"Title": "Creator", "Bio": "Bio", "Initial": "C", "Primary": "#1769e0", "Background": "#ffffff", "Links": []map[string]string{{"Label": "unsafe", "URL": "javascript:alert(1)"}}}
+	data := map[string]any{"Title": "Creator", "Bio": "Bio", "Initial": "C", "SiteName": "GoJet", "Primary": "#1769e0", "Background": "#ffffff", "Ink": "#14231d", "Muted": "#66766f", "Surface": "#ffffff", "Links": []map[string]string{{"Label": "unsafe", "URL": "javascript:alert(1)"}}}
 	if err := bioPageTemplate.Execute(&output, data); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(output.String(), `href="javascript:`) {
+	html := output.String()
+	if strings.Contains(html, `href="javascript:`) {
 		t.Fatal("javascript URL rendered")
+	}
+	if !strings.Contains(html, `<meta name="robots" content="noindex,nofollow">`) {
+		t.Fatalf("public Bio page must remain noindex,nofollow: %s", html)
 	}
 }

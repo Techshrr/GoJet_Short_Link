@@ -18,6 +18,7 @@
     "verify:qr": "node scripts/verify-p08-qr.mjs",
     "verify:files": "node scripts/verify-p09-files.mjs",
     "verify:text": "node scripts/verify-p10-text.mjs",
+    "verify:bio": "node scripts/verify-p11-bio.mjs",
     "test:shells": "playwright test -c playwright.shells.config.ts",
     "test:links": "playwright test -c playwright.links.config.ts",
     "test:domains": "playwright test -c playwright.domains.config.ts",
@@ -25,7 +26,8 @@
     "test:qr": "playwright test -c playwright.qr.config.ts",
     "test:files": "playwright test -c playwright.files.config.ts",
     "test:text": "playwright test -c playwright.text.config.ts",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm verify:files && pnpm verify:text && pnpm typecheck && pnpm build"
+    "test:bio": "playwright test -c playwright.bio.config.ts",
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm verify:domains && pnpm verify:analytics && pnpm verify:qr && pnpm verify:files && pnpm verify:text && pnpm verify:bio && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

@@ -83,6 +83,42 @@ export interface TextShareUpdateInput {
   password?: string | undefined;
 }
 
+export type BioPageStatus = "draft" | "published" | "paused";
+
+export interface BioTheme {
+  Primary: string;
+  Background: string;
+  Ink?: string | undefined;
+  Muted?: string | undefined;
+  Surface?: string | undefined;
+}
+
+export interface BioBlock {
+  Label: string;
+  URL: string;
+}
+
+export interface BioPageRecord {
+  id: number;
+  slug: string;
+  title: string;
+  bio: string;
+  status: BioPageStatus;
+  theme: BioTheme;
+  blocks: BioBlock[];
+  views: number;
+  created_at?: string;
+}
+
+export interface BioPageInput {
+  slug?: string | undefined;
+  title: string;
+  bio: string;
+  status: BioPageStatus;
+  theme: BioTheme;
+  blocks: BioBlock[];
+}
+
 export interface ResourceAccess {
   role: WorkspaceRole;
   can_view: boolean;
@@ -132,5 +168,16 @@ export function createTextClient(api: ApiTransport) {
     update: (workspaceId: number, shareId: number, input: TextShareUpdateInput) => api.put<{ updated: boolean }>(`${base(workspaceId)}/${shareId}`, input),
     delete: (workspaceId: number, shareId: number) => api.delete<void>(`${base(workspaceId)}/${shareId}`),
     publicUrl: (slug: string) => `/t/${encodeURIComponent(slug)}`
+  };
+}
+
+export function createBioClient(api: ApiTransport) {
+  const base = (workspaceId: number) => `/api/workspaces/${workspaceId}/bio-pages`;
+  return {
+    list: (workspaceId: number) => api.get<{ data: BioPageRecord[] }>(base(workspaceId)),
+    create: (workspaceId: number, input: BioPageInput) => api.post<BioPageRecord>(base(workspaceId), input),
+    update: (workspaceId: number, pageId: number, input: BioPageInput) => api.put<{ updated: boolean }>(`${base(workspaceId)}/${pageId}`, input),
+    delete: (workspaceId: number, pageId: number) => api.delete<void>(`${base(workspaceId)}/${pageId}`),
+    publicUrl: (slug: string) => `/p/${encodeURIComponent(slug)}`
   };
 }
