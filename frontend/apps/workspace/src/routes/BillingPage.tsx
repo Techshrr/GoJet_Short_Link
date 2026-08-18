@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
 import { createBillingClient, type BillingInvoice, type BillingPlan, type PaymentCheckout, type WorkspaceSummary } from "@gojet/api-client";
@@ -64,9 +64,9 @@ export default function BillingPage() {
   const canManage = workspace.role === "owner" || workspace.role === "admin";
   const data = billing.data;
   const usage = data?.usage;
-  const usageRows = useMemo(() => usage ? [
+  const usageRows = usage ? [
     ["Links", usage.links, usage.link_limit], ["QR", usage.qr_codes, usage.qr_limit], ["Text", usage.text_shares, usage.text_limit], ["Bio", usage.bio_pages, usage.bio_limit], ["Files", usage.file_bytes, usage.file_storage_bytes], ["Members", usage.members, usage.member_limit]
-  ] as const : [], [usage]);
+  ] as const : [];
 
   return <Page className="billing-page" data-p13-billing>
     <PageHeader title="Billing" description={`Plans, usage, invoices, payments & currency · ${workspace.name}`} />
