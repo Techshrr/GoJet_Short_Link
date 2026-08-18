@@ -295,7 +295,7 @@ func p05QRContentDisposition(filename string, download bool) string {
 	if download {
 		disposition = "attachment"
 	}
-	return fmt.Sprintf(`%s; filename="%s"`, disposition, filename)
+	return fmt.Sprintf("%s; filename=\"%s\"", disposition, filename)
 }
 
 func p05QRSVG(bitmap [][]bool, size int, foreground, background string) []byte {
@@ -304,17 +304,17 @@ func p05QRSVG(bitmap [][]bool, size int, foreground, background string) []byte {
 		return nil
 	}
 	var out strings.Builder
-	fmt.Fprintf(&out, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" shape-rendering="crispEdges">`, size, size, modules, modules)
-	fmt.Fprintf(&out, `<rect width="%d" height="%d" fill="%s"/>`, modules, modules, background)
-	fmt.Fprintf(&out, `<g fill="%s">`, foreground)
+	fmt.Fprintf(&out, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" shape-rendering=\"crispEdges\">", size, size, modules, modules)
+	fmt.Fprintf(&out, "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>", modules, modules, background)
+	fmt.Fprintf(&out, "<g fill=\"%s\">", foreground)
 	for y, row := range bitmap {
 		for x, dark := range row {
 			if dark {
-				fmt.Fprintf(&out, `<rect x="%d" y="%d" width="1" height="1"/>`, x, y)
+				fmt.Fprintf(&out, "<rect x=\"%d\" y=\"%d\" width=\"1\" height=\"1\"/>", x, y)
 			}
 		}
 	}
-	out.WriteString(`</g></svg>`)
+	out.WriteString("</g></svg>")
 	return []byte(out.String())
 }
 
