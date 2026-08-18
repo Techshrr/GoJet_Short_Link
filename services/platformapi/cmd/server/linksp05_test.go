@@ -17,11 +17,17 @@ func TestP05DateBounds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("p05DateBounds returned error: %v", err)
 	}
-	if from == nil || got := from.Format("2006-01-02"); got != "2026-08-01" {
-		t.Fatalf("unexpected from date: %v", from)
+	if from == nil {
+		t.Fatal("expected from date")
 	}
-	if to == nil || got := to.Format("2006-01-02"); got != "2026-08-19" {
-		t.Fatalf("expected exclusive next-day upper bound, got %v", to)
+	if got := from.Format("2006-01-02"); got != "2026-08-01" {
+		t.Fatalf("unexpected from date: %s", got)
+	}
+	if to == nil {
+		t.Fatal("expected to date")
+	}
+	if got := to.Format("2006-01-02"); got != "2026-08-19" {
+		t.Fatalf("expected exclusive next-day upper bound, got %s", got)
 	}
 }
 
