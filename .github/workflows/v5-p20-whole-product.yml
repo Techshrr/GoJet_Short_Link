@@ -1,6 +1,7 @@
 name: V5 P20 Whole Product Gate
 
 on:
+  workflow_call:
   push:
     branches: ["rebuild/v5-*"]
     paths:
@@ -148,33 +149,13 @@ jobs:
           NODE
 
   browser:
-    name: G4/G5/G8 browser — ${{ matrix.suite }}
+    name: G4/G5/G8 browser shard — ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        suite:
-          - shells
-          - links
-          - domains
-          - analytics
-          - qr
-          - files
-          - text
-          - bio
-          - workspace
-          - billing
-          - commerce
-          - support
-          - mail-ops
-          - auth
-          - account
-          - oauth
-          - trust-safety
-          - admin
-          - docs
-          - site-final
+        shard: [foundation, resources, commerce-auth, governance-final]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -192,14 +173,38 @@ jobs:
       - name: Install Chromium
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
-      - name: Run frozen browser suite
+      - name: Run frozen P04-P19 browser shard
         working-directory: frontend
-        run: pnpm test:${{ matrix.suite }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.shard }}" in
+            foundation)
+              suites=(shells links domains analytics qr)
+              ;;
+            resources)
+              suites=(files text bio workspace billing)
+              ;;
+            commerce-auth)
+              suites=(commerce support mail-ops auth account)
+              ;;
+            governance-final)
+              suites=(oauth trust-safety admin docs site-final)
+              ;;
+            *)
+              echo 'unknown P20 browser shard' >&2
+              exit 1
+              ;;
+          esac
+          for suite in "${suites[@]}"; do
+            echo "===== P20 browser suite: $suite ====="
+            pnpm "test:$suite"
+          done
       - name: Upload P20 browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v5-p20-browser-${{ matrix.suite }}-${{ github.sha }}
+          name: v5-p20-browser-${{ matrix.shard }}-${{ github.sha }}
           path: |
             frontend/test-results/
             frontend/playwright-report/
@@ -228,7 +233,7 @@ jobs:
             if(ref.data.commit.sha!==context.sha){core.info(`Skip stale P20 evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`);return;}
             const success=process.env.SOURCE_RESULT==='success' && process.env.BROWSER_RESULT==='success' && process.env.FULLSTACK_RESULT==='success';
             const marker='<!-- v5-p20-ci-evidence-v1 -->';
-            const body=`${marker}\n## P20 Whole Product Gate — exact-head evidence v1\n\n- Status: **${success?'✅ success':'❌ failure'}**\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- G0-G9 source/build/security/SEO/performance: **${process.env.SOURCE_RESULT}**\n- G4/G5/G8 P04-P19 complete Browser regression matrix: **${process.env.BROWSER_RESULT}**\n- G10 real MySQL/Redis/Go full-stack P0: **${process.env.FULLSTACK_RESULT}**\n- Scope: G0 Scope → G10 Full-stack P0 on one V5 exact HEAD; complete P01-P19 regression, eight Go runtime commands, Website/Docs static artifacts, security contracts and every frozen Playwright gate.\n\nP21 Native Package remains locked unless this exact-head P20 run is successful. P22 and G11-G13 are not marked complete by this run.\n`;
+            const body=`${marker}\n## P20 Whole Product Gate — exact-head evidence v1\n\n- Status: **${success?'✅ success':'❌ failure'}**\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- G0-G9 source/build/security/SEO/performance: **${process.env.SOURCE_RESULT}**\n- G4/G5/G8 P04-P19 complete Browser regression (4 shards / 20 suites): **${process.env.BROWSER_RESULT}**\n- G10 real MySQL/Redis/Go full-stack P0: **${process.env.FULLSTACK_RESULT}**\n- Scope: G0 Scope → G10 Full-stack P0 on one V5 exact HEAD; complete P01-P19 regression, eight Go runtime commands, Website/Docs static artifacts, security contracts and every frozen Playwright gate.\n\nP21 Native Package remains locked unless this exact-head P20 run is successful. P22 and G11-G13 are not marked complete by this run.\n`;
             const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
             const existing=comments.find(c=>c.body?.includes(marker));
             if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
