@@ -16,6 +16,7 @@ on:
       - 'docs/v5/P05_LINKS_CONTRACT.md'
       - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
+      - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
   pull_request:
     paths:
@@ -30,6 +31,7 @@ on:
       - 'docs/v5/P05_LINKS_CONTRACT.md'
       - 'docs/v5/P06_DOMAINS_CONTRACT.md'
       - 'docs/v5/P07_ANALYTICS_CONTRACT.md'
+      - 'docs/v5/CAPABILITY-MATRIX.md'
       - '.github/workflows/v5-frontend-foundation.yml'
 
 concurrency:

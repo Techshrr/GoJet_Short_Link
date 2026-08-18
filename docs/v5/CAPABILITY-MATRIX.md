@@ -8,6 +8,7 @@ Accepted phase evidence:
 
 - **P05 Links:** `c934f3bffc79859d4396506b441bbc68d2f77c78` / Actions `32098269807` success.
 - **P06 Domains:** `747cfac87616c5751280927045036b22c862402b` / Actions `32100295633` success. This exact HEAD also re-ran the P05 regression gates.
+- **P07 Analytics:** `2bae148abdb9abef169b1837cec19f39ae36c123` / Actions `32101231324` success. This exact HEAD re-ran P01–P06 regressions, analytics runtime tests, and the P04/P05/P06/P07 browser gates.
 
 Legend:
 
@@ -41,8 +42,8 @@ Legend:
 | File upload/share/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | File quarantine / ClamAV / publish state | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Link in Bio | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Analytics overview | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Resource analytics | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Analytics overview | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Resource analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Workspace | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Members / invitations | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Roles / permissions / RBAC | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
