@@ -1,9 +1,3 @@
 export default function AdminFoundation() {
-  return (
-    <main className="foundation">
-      <span>GoJet Admin · P01</span>
-      <h1>管理控制台工程骨架</h1>
-      <p>AdminShell、DataTable 与治理交互属于 P03/P04/P17；P01 只固定独立 Router、Query、安全客户端与代码分割边界。</p>
-    </main>
-  );
+  return <main className="shell-page-proof"><span>GoJet Admin · P04</span><h1>Admin shell</h1><p>256px sidebar、56px header、高密度导航与 mobile drawer 已按冻结 IA 建立。Admin Overview 数据与治理功能仍由 P17 实现。</p><div className="shell-proof-grid" aria-hidden="true"><span /><span /><span /><span /></div></main>;
 }
