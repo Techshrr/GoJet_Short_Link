@@ -9,6 +9,7 @@ Accepted phase evidence:
 - **P05 Links:** `c934f3bffc79859d4396506b441bbc68d2f77c78` / Actions `32098269807` success.
 - **P06 Domains:** `747cfac87616c5751280927045036b22c862402b` / Actions `32100295633` success. This exact HEAD also re-ran the P05 regression gates.
 - **P07 Analytics:** `2bae148abdb9abef169b1837cec19f39ae36c123` / Actions `32101231324` success. This exact HEAD re-ran P01–P06 regressions, analytics runtime tests, and the P04/P05/P06/P07 browser gates.
+- **P08 QR:** `2bdd1ed44d959c9b13960c70dd66570f565b8837` / Actions `32103132651` success. This exact HEAD re-ran P01–P07 regressions, strict TypeScript/build, Go resource/platform/analytics tests, and the P04/P05/P06/P07/P08 fixed-viewport browser gates.
 
 Legend:
 
@@ -36,8 +37,8 @@ Legend:
 | A/B testing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Link version history / reason / restore | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Bulk link operations | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| QR create/style/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| QR tracking / analytics | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| QR create/style/download | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| QR tracking / analytics | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Text sharing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | File upload/share/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | File quarantine / ClamAV / publish state | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
