@@ -5,7 +5,7 @@ test("Docs home is static, task-first and bilingual-ready",async({page})=>{
   await expect(page.getByRole("heading",{name:"GoJet Documentation",level:1}).first()).toBeVisible();
   await expect(page.getByRole("heading",{name:"Start here",level:2}).first()).toBeVisible();
   await expect(page.getByRole("heading",{name:"Self-hosting",level:2}).first()).toBeVisible();
-  await expect(page.locator("a.gojet-workspace-link")).toHaveAttribute("href","/app");
+  await expect(page.locator("a.gojet-workspace-link").first()).toHaveAttribute("href","/app");
 });
 
 test("API reference exposes the frozen core fields and language examples",async({page})=>{
