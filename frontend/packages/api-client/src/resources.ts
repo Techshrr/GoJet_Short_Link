@@ -64,13 +64,13 @@ export interface TextShareRecord {
 }
 
 export interface TextShareCreateInput {
-  slug?: string;
+  slug?: string | undefined;
   title: string;
   content: string;
   format: TextShareFormat;
   expires_at?: string | null;
   one_time: boolean;
-  password?: string;
+  password?: string | undefined;
 }
 
 export interface TextShareUpdateInput {
@@ -80,7 +80,7 @@ export interface TextShareUpdateInput {
   status: "active" | "paused";
   expires_at?: string | null;
   one_time: boolean;
-  password?: string;
+  password?: string | undefined;
 }
 
 export interface ResourceAccess {
