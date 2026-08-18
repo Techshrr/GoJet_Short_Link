@@ -274,7 +274,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
             {mode === "login" || mode === "register" || mode === "forgot" ? (
               <label>
                 Email
-                <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+                <input id="shell-login-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
               </label>
             ) : null}
             {socialRegistration ? (
