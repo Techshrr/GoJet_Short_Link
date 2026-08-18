@@ -75,6 +75,12 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, stri
 	return s.LoginWithMetadata(ctx, email, password, "", "")
 }
 func (s *Service) LoginWithMetadata(ctx context.Context, email, password, ip, userAgent string) (User, string, error) {
+	return s.LoginWithMetadataTTL(ctx, email, password, ip, userAgent, s.sessionTTL)
+}
+func (s *Service) LoginWithMetadataTTL(ctx context.Context, email, password, ip, userAgent string, ttl time.Duration) (User, string, error) {
+	if ttl <= 0 || ttl > 30*24*time.Hour {
+		return User{}, "", errors.New("登录会话有效期无效")
+	}
 	var user User
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name,status,password_hash,email_verified_at IS NOT NULL FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Status, &hash, &user.EmailVerified)
@@ -90,7 +96,7 @@ func (s *Service) LoginWithMetadata(ctx context.Context, email, password, ip, us
 		return User{}, "", err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(s.sessionTTL)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO user_sessions(id,user_id,ip_address,user_agent,expires_at) VALUES(?,?,?,?,?)`, tokenHash, user.ID, nullable(ip), nullable(truncate(userAgent, 500)), time.Now().Add(ttl)); err != nil {
 		return User{}, "", err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE users SET last_login_at=NOW() WHERE id=?`, user.ID); err != nil {
