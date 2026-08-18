@@ -1,0 +1,13 @@
+.gj-data-region, .gj-settings-section, .gj-form-section { padding:var(--space-6); border:var(--border-width) solid var(--border); border-radius:var(--radius-lg); background:var(--surface); box-shadow:var(--shadow-e1); }
+.gj-region-header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-4); margin-bottom:var(--space-4); }
+.gj-region-header .gj-section-title, .gj-settings-section .gj-section-title, .gj-form-section .gj-section-title { margin:0; }
+.gj-region-header p, .gj-settings-section > header p, .gj-form-section > p { margin:var(--space-1) 0 0; color:var(--foreground-muted); font-size:var(--type-compact); line-height:var(--line-meta); }
+.gj-settings-section > header { margin-bottom:var(--space-4); }
+.gj-form-section { min-width:0; margin-inline:0; }
+.gj-form-section > legend { padding:0; }
+.gj-section-body { display:grid; gap:var(--space-4); margin-top:var(--space-4); }
+
+@media (max-width: 639px) {
+  .gj-data-region, .gj-settings-section, .gj-form-section { padding:var(--space-4); }
+  .gj-region-header { display:grid; grid-template-columns:1fr; }
+}
