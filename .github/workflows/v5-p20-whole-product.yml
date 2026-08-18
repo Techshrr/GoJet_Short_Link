@@ -63,7 +63,7 @@ jobs:
           test -s docs/v5/CAPABILITY-MATRIX.md
           grep -Fq '| Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |' docs/v5/CAPABILITY-MATRIX.md
           for surface in site docs workspace admin; do test -d "frontend/apps/$surface"; done
-          test -d frontend/apps/site/src/auth
+          test -s frontend/apps/site/src/routes/AuthPage.tsx
           for contract in P05_LINKS_CONTRACT.md P06_DOMAINS_CONTRACT.md P07_ANALYTICS_CONTRACT.md P08_QR_CONTRACT.md P09_FILES_CONTRACT.md P10_TEXT_CONTRACT.md P20_WHOLE_PRODUCT_GATE.md; do test -s "docs/v5/$contract"; done
 
       - name: G1 production architecture boundary
