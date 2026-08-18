@@ -23,7 +23,7 @@ export function createBillingClient(api: ApiTransport) {
   return {
     workspace: (workspaceId: number) => api.get<WorkspaceBillingPayload>(`/api/workspaces/${workspaceId}/billing`),
     paymentMethods: (workspaceId: number) => api.get<{data: PaymentMethod[]}>(`/api/workspaces/${workspaceId}/billing/payment-methods`),
-    createInvoice: (workspaceId: number, planCode: string, type: "change" | "renew", billingCycle: string) => api.post<BillingInvoice>(`/api/workspaces/${workspaceId}/billing/invoices`, { plan_code: planCode, type, billing_cycle: billingCycle }),
+    createInvoice: (workspaceId: number, planCode: string, type: "purchase" | "upgrade" | "renewal", billingCycle: string) => api.post<BillingInvoice>(`/api/workspaces/${workspaceId}/billing/invoices`, { plan_code: planCode, type, billing_cycle: billingCycle }),
     cancellation: (workspaceId: number, cancel: boolean) => api.patch<{cancel_at_period_end: boolean}>(`/api/workspaces/${workspaceId}/billing/cancellation`, { cancel }),
     checkout: (workspaceId: number, invoiceId: number, provider: string) => api.post<PaymentCheckout>(`/api/workspaces/${workspaceId}/billing/invoices/${invoiceId}/pay`, { provider }),
     adminPlans: () => api.get<{data: BillingPlan[]}>("/api/admin/plans"),
