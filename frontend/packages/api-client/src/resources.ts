@@ -129,7 +129,7 @@ export function createTextClient(api: ApiTransport) {
     list: (workspaceId: number) => api.get<{ data: TextShareRecord[] }>(base(workspaceId)),
     get: (workspaceId: number, shareId: number) => api.get<TextShareRecord>(`${base(workspaceId)}/${shareId}`),
     create: (workspaceId: number, input: TextShareCreateInput) => api.post<TextShareRecord>(base(workspaceId), input),
-    update: (workspaceId: number, shareId: number, input: TextShareUpdateInput) => api.put<TextShareRecord>(`${base(workspaceId)}/${shareId}`, input),
+    update: (workspaceId: number, shareId: number, input: TextShareUpdateInput) => api.put<{ updated: boolean }>(`${base(workspaceId)}/${shareId}`, input),
     delete: (workspaceId: number, shareId: number) => api.delete<void>(`${base(workspaceId)}/${shareId}`),
     publicUrl: (slug: string) => `/t/${encodeURIComponent(slug)}`
   };
