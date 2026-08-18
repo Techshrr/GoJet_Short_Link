@@ -4,6 +4,8 @@ import { WebsiteShellPreview } from "./routes/ShellPreviews";
 import AuthPage from "./routes/AuthPage";
 
 const DevUi = lazy(() => import("./routes/DevUi"));
+const LoginShellPreview = () => <AuthPage mode="login" />;
+const RegisterShellPreview = () => <AuthPage mode="register" />;
 
 function RootLayout() {
   return (
@@ -15,8 +17,8 @@ function RootLayout() {
 
 const rootRoute = createRootRoute({ component: RootLayout });
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: WebsiteShellPreview });
-const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: "/login", component: () => <AuthPage mode="login" /> });
-const registerRoute = createRoute({ getParentRoute: () => rootRoute, path: "/register", component: () => <AuthPage mode="register" /> });
+const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: "/login", component: LoginShellPreview });
+const registerRoute = createRoute({ getParentRoute: () => rootRoute, path: "/register", component: RegisterShellPreview });
 const verifyRoute = createRoute({ getParentRoute: () => rootRoute, path: "/verify-email", component: () => <AuthPage mode="verify" /> });
 const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: "/forgot-password", component: () => <AuthPage mode="forgot" /> });
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/reset-password", component: () => <AuthPage mode="reset" /> });
