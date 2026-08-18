@@ -61,7 +61,7 @@ export function createAnalyticsClient(api: ApiTransport) {
         return [];
       };
       return {
-        qr_visits: sum(value(0), "visits", "Visits"),
+        qr_visits: sum(value(0), "qr_visits", "QRVisits", "visits", "Visits"),
         file_downloads: sum(value(1), "downloads", "Downloads"),
         text_views: sum(value(2), "views", "Views"),
         bio_views: sum(value(3), "views", "Views"),
