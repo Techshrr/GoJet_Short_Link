@@ -27,14 +27,16 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments/{attachment}", s.admin("tickets.manage", s.adminDownloadSupportAttachment))
 
 	// Workspace link-domain and official-link creation routes are owned by
-	// registerProductRoutes. Keeping a single registration point prevents
-	// net/http ServeMux startup panics on the V5 runtime.
+	// registerProductRoutes. Plan creation is owned by
+	// registerBillingPresentationRoutes. Keeping one registration owner per
+	// production pattern prevents net/http ServeMux startup conflicts.
 	mux.HandleFunc("GET /api/admin/official-domains", s.admin("domains.manage", s.adminOfficialShortDomains))
 	mux.HandleFunc("POST /api/admin/official-domains", s.admin("domains.manage", s.adminCreateOfficialShortDomain))
 	mux.HandleFunc("PATCH /api/admin/official-domains/{domain}", s.admin("domains.manage", s.adminUpdateOfficialShortDomain))
 	mux.HandleFunc("DELETE /api/admin/official-domains/{domain}", s.admin("domains.manage", s.adminDeleteOfficialShortDomain))
 
-	mux.HandleFunc("POST /api/admin/plans", s.admin("billing.manage", s.adminCreatePlan))
+	// Preserve the legacy DELETE alias while the canonical P13 archive route
+	// remains POST /api/admin/plans/{id}/archive.
 	mux.HandleFunc("DELETE /api/admin/plans/{id}", s.admin("billing.manage", s.adminArchivePlan))
 
 	mux.HandleFunc("GET /api/admin/bot-protection", s.admin("settings.manage", s.getBotProtectionSettings))
