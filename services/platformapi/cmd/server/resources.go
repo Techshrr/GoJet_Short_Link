@@ -86,7 +86,7 @@ func (s *server) createFileShare(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w,422,map[string]string{"error":"无法设置文件访问密码"}); return
 		}
 	}
-	jsonResponse(w,202,map[string]any{"id":item.ID,"workspace_id":item.WorkspaceID,"slug":item.Slug,"original_name":item.OriginalName,"mime_type":item.MIMEType,"size_bytes":item.SizeBytes,"scan_status":item.ScanStatus,"status":item.Status,"expires_at":item.ExpiresAt,"max_downloads":item.MaxDownloads,"downloads":item.Downloads,"protected":password!=""})
+	jsonResponse(w,202,map[string]any{"id":item.ID,"workspace_id":item.WorkspaceID,"slug":item.Slug,"original_name":item.OriginalName,"mime_type":item.MIMEType,"size_bytes":item.SizeBytes,"scan_status":item.ScanStatus,"status":item.Status,"expires_at":item.ExpiresAt,"max_downloads":item.MaxDownloads,"downloads":item.Downloads,"protected":password!="","created_at":item.CreatedAt})
 }
 
 func (s *server) listFileShares(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func (s *server) listFileShares(w http.ResponseWriter, r *http.Request) {
 	protection, _ := s.resources.FileProtectionMap(r.Context(), wid)
 	data := make([]map[string]any,0,len(items))
 	for _, item := range items {
-		data = append(data,map[string]any{"id":item.ID,"workspace_id":item.WorkspaceID,"slug":item.Slug,"original_name":item.OriginalName,"mime_type":item.MIMEType,"size_bytes":item.SizeBytes,"scan_status":item.ScanStatus,"scan_result":item.ScanResult,"status":item.Status,"expires_at":item.ExpiresAt,"max_downloads":item.MaxDownloads,"downloads":item.Downloads,"protected":protection[item.ID]})
+		data = append(data,map[string]any{"id":item.ID,"workspace_id":item.WorkspaceID,"slug":item.Slug,"original_name":item.OriginalName,"mime_type":item.MIMEType,"size_bytes":item.SizeBytes,"scan_status":item.ScanStatus,"scan_result":item.ScanResult,"status":item.Status,"expires_at":item.ExpiresAt,"max_downloads":item.MaxDownloads,"downloads":item.Downloads,"protected":protection[item.ID],"created_at":item.CreatedAt})
 	}
 	jsonResponse(w,200,map[string]any{"data":data})
 }
