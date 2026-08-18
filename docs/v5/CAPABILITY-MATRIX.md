@@ -4,6 +4,11 @@
 **V5 branch:** `rebuild/v5-specification-rebuild`  
 **Rule:** a row is DONE only when Backend + API + UI + RBAC + States + Browser + Security + Release are all accepted on the same V5 exact HEAD.
 
+Accepted phase evidence:
+
+- **P05 Links:** `c934f3bffc79859d4396506b441bbc68d2f77c78` / Actions `32098269807` success.
+- **P06 Domains:** `747cfac87616c5751280927045036b22c862402b` / Actions `32100295633` success. This exact HEAD also re-ran the P05 regression gates.
+
 Legend:
 
 - `V4` — capability exists in the frozen V4 baseline and is a migration obligation.
@@ -13,23 +18,23 @@ Legend:
 
 | Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |
 |---|---|---|---|---|---|---|---|---|
-| Link create/list/detail/edit/delete | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Custom short code | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Official short-link domains | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Custom domains / DNS verification | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Redirect status 301/302/307/308 | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Password-protected links | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Link expiration | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Click limit | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| One-time access | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| UTM | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Geo routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Device routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Language routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Source routing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| A/B testing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Link version history / reason / restore | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Bulk link operations | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Link create/list/detail/edit/delete | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Custom short code | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Official short-link domains | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Custom domains / DNS verification | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Redirect status 301/302/307/308 | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Password-protected links | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Link expiration | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Click limit | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| One-time access | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| UTM | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Geo routing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Device routing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Language routing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Source routing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| A/B testing | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Link version history / reason / restore | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Bulk link operations | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | QR create/style/download | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | QR tracking / analytics | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Text sharing | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |

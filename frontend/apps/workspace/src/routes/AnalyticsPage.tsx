@@ -26,6 +26,10 @@ function percent(current: number, previous?: number) {
 }
 function humanVisits(data?: LinkAnalytics) { return Math.max(0, (data?.clicks ?? 0) - (data?.bot_visits ?? 0)); }
 
+function ComparedMetric({ label, value, change }: { label: string; value: string; change: string | undefined }) {
+  return change === undefined ? <Metric label={label} value={value} /> : <Metric label={label} value={value} change={change} />;
+}
+
 function useWorkspace() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
   const requested = requestedWorkspaceId();
@@ -74,7 +78,7 @@ export default function AnalyticsPage() {
   const organization = useQuery({ queryKey: ["analytics-organization", workspaceId], queryFn: () => linksClient.organization(workspaceId!), enabled: Boolean(workspaceId && canAnalytics) });
   const links = useQuery({
     queryKey: ["analytics-links", workspaceId, domain, campaign],
-    queryFn: () => linksClient.list(workspaceId!, { domain, campaign: campaign ? Number(campaign) : undefined, limit: 100, offset: 0 }),
+    queryFn: () => linksClient.list(workspaceId!, { domain, limit: 100, offset: 0, ...(campaign ? { campaign: Number(campaign) } : {}) }),
     enabled: Boolean(workspaceId && canAnalytics)
   });
   const overview = useQuery({ queryKey: ["analytics-overview", workspaceId], queryFn: () => analyticsClient.overview(workspaceId!), enabled: Boolean(workspaceId && canAnalytics && !linkId) });
@@ -133,16 +137,16 @@ export default function AnalyticsPage() {
     </section>
 
     {rangeInvalid ? <Alert tone="danger" title="Invalid date range">From 不能晚于 To。</Alert> : null}
-    {links.isError || domains.isError || organization.isError ? <Alert tone="warning" title="部分筛选元数据暂时不可用">{[links.error, domains.error, organization.error].filter(Boolean).map(errorMessage).join(" · ")}</Alert> : null}
+    {links.isError || domains.isError || organization.isError ? <Alert tone="warning" title="部分筛选元数据暂时不可用">{[links.error, domains.error, organization.error].filter(Boolean).map((error) => errorMessage(error)).join(" · ")}</Alert> : null}
 
     {linkId ? <>
       <section className="analytics-context"><div><span className="analytics-eyebrow">RESOURCE ANALYTICS</span><h2>{selectedLink?.title || selectedLink?.code || `Link #${linkId}`}</h2><p>{selectedLink ? `https://${selectedLink.domain}/${selectedLink.code}` : "Selected link"} · {from} → {to}</p></div>{compare ? <Badge tone="info">Comparing {previousPeriod.from} → {addDays(from, -1)}</Badge> : null}</section>
       {current.isPending || (compare && previous.isPending) ? <div className="analytics-centered"><Spinner label="正在加载链接分析" /></div> : linkError ? <ErrorState title="无法加载链接分析" description={errorMessage(linkError)} action={<Button type="button" onClick={() => { current.refetch(); if (compare) previous.refetch(); }}>重试</Button>} /> : current.data ? <>
         <section className="analytics-metrics" aria-label="Link analytics metrics">
-          <Metric label="Clicks" value={current.data.clicks.toLocaleString()} change={percent(current.data.clicks, previous.data?.clicks)} />
-          <Metric label="Unique visitors" value={current.data.unique_visitors.toLocaleString()} change={percent(current.data.unique_visitors, previous.data?.unique_visitors)} />
-          <Metric label="Human visits" value={humanVisits(current.data).toLocaleString()} change={percent(humanVisits(current.data), previous.data ? humanVisits(previous.data) : undefined)} />
-          <Metric label="Bot visits" value={current.data.bot_visits.toLocaleString()} change={percent(current.data.bot_visits, previous.data?.bot_visits)} />
+          <ComparedMetric label="Clicks" value={current.data.clicks.toLocaleString()} change={compare ? percent(current.data.clicks, previous.data?.clicks) : undefined} />
+          <ComparedMetric label="Unique visitors" value={current.data.unique_visitors.toLocaleString()} change={compare ? percent(current.data.unique_visitors, previous.data?.unique_visitors) : undefined} />
+          <ComparedMetric label="Human visits" value={humanVisits(current.data).toLocaleString()} change={compare && previous.data ? percent(humanVisits(current.data), humanVisits(previous.data)) : undefined} />
+          <ComparedMetric label="Bot visits" value={current.data.bot_visits.toLocaleString()} change={compare ? percent(current.data.bot_visits, previous.data?.bot_visits) : undefined} />
         </section>
         <div className="analytics-dimension-grid">
           <DimensionList title="Countries" items={current.data.countries} focus={countryFocus} />
