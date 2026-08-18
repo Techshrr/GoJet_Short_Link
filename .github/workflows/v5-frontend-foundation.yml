@@ -164,7 +164,7 @@ jobs:
             exit 0
           fi
 
-          marker='<!-- v5-frontend-ci-evidence -->'
+          marker='<!-- v5-p05-ci-evidence-v2 -->'
           if [ "$JOB_STATUS" = "success" ]; then
             state='✅ success'
           else
@@ -173,7 +173,7 @@ jobs:
 
           cat > /tmp/v5-ci-evidence.md <<EOF
           $marker
-          ## V5 Foundation + P05 Links — latest exact-head evidence
+          ## P05 Links — final exact-head evidence v2
 
           - Status: **$state**
           - Branch: \`$HEAD_BRANCH\`
@@ -182,7 +182,7 @@ jobs:
           - Run ID: \`$RUN_ID\`
           - Scope: P01–P04 regression gates + P05 Links contract + strict TS/build + Go Links/server tests + P04/P05 fixed-viewport browser gates
 
-          This comment records the exact SHA tested by \`.github/workflows/v5-frontend-foundation.yml\`. It does not mark P06 or any later phase complete.
+          This v2 marker is isolated from pre-guard workflow runs. It records only an exact current branch HEAD and does not mark P06 or later phases complete.
           EOF
 
           comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
