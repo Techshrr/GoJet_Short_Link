@@ -12,7 +12,11 @@ func (s *server) adminCreatePlan(w http.ResponseWriter, r *http.Request) {
 		Code                   string          `json:"code"`
 		Name                   string          `json:"name"`
 		Description            string          `json:"description"`
+		Status                 string          `json:"status"`
 		Currency               string          `json:"currency"`
+		IsPublic               bool            `json:"is_public"`
+		DisplayOrder           int             `json:"display_order"`
+		BillingPeriods         json.RawMessage `json:"billing_periods"`
 		MonthlyPriceCents      int64           `json:"monthly_price_cents"`
 		LinkLimit              int64           `json:"link_limit"`
 		QRLimit                int64           `json:"qr_limit"`
@@ -26,8 +30,9 @@ func (s *server) adminCreatePlan(w http.ResponseWriter, r *http.Request) {
 	if decode(w, r, &raw) != nil {
 		return
 	}
-	id, err := s.billing.CreatePlan(r.Context(), billing.PlanCreateInput{
-		Code: raw.Code, Name: raw.Name, Description: raw.Description, Currency: raw.Currency,
+	id, err := s.billing.CreateManagedPlan(r.Context(), billing.ManagedPlanInput{
+		Code: raw.Code, Name: raw.Name, Description: raw.Description, Status: raw.Status, Currency: raw.Currency,
+		IsPublic: raw.IsPublic, DisplayOrder: raw.DisplayOrder, BillingPeriods: raw.BillingPeriods,
 		MonthlyPriceCents: raw.MonthlyPriceCents, LinkLimit: raw.LinkLimit, QRLimit: raw.QRLimit,
 		TextLimit: raw.TextLimit, BioLimit: raw.BioLimit, FileStorageBytes: raw.FileStorageBytes,
 		MemberLimit: raw.MemberLimit, AnalyticsRetentionDays: raw.AnalyticsRetentionDays, Features: raw.Features,
