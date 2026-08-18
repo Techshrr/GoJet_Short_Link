@@ -222,7 +222,7 @@ post_install \
   --data-urlencode "public_url=$PUBLIC_BASE" --data-urlencode "admin_email=$ADMIN_EMAIL" \
   --data-urlencode "admin_password=$ADMIN_PASSWORD" --data-urlencode "admin_password_confirm=$ADMIN_PASSWORD" \
   --data-urlencode "alert_email=$ADMIN_EMAIL" >"$PAGE"
-grep -Fq '确认并安装' "$PAGE" || die "installer site step did not advance"
+grep -Fq '确认安装' "$PAGE" || die "installer site step did not advance"
 
 post_install \
   --data-urlencode "csrf=$csrf" --data-urlencode "action=install" >"$PAGE"
