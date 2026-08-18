@@ -24,6 +24,15 @@ func (s *server) registerProductRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/workspaces/{id}/tags/{tag}", s.user(s.deleteTag))
 	mux.HandleFunc("POST /api/workspaces/{id}/share-qr", s.user(s.createShareQR))
 
+	// P05 Links presentation routes close the V4 UI-contract gaps without
+	// changing the redirect-plane service semantics already accepted in V4.
+	mux.HandleFunc("GET /api/workspaces/{id}/link-domains", s.user(s.workspaceLinkDomains))
+	mux.HandleFunc("POST /api/workspaces/{id}/links/official", s.user(s.createOfficialLink))
+	mux.HandleFunc("GET /api/workspaces/{id}/links/presentation", s.user(s.listLinksP05))
+	mux.HandleFunc("GET /api/workspaces/{id}/links/capabilities", s.user(s.linksP05Capabilities))
+	mux.HandleFunc("GET /api/workspaces/{id}/links/{link}/presentation", s.user(s.getLinkP05))
+	mux.HandleFunc("GET /api/workspaces/{id}/links/{link}/qr", s.user(s.linkP05QR))
+
 	mux.HandleFunc("GET /api/workspaces/{id}/billing/payment-methods", s.user(s.paymentMethods))
 	mux.HandleFunc("GET /api/admin/payment-callbacks", s.admin("billing.manage", s.adminPaymentCallbacks))
 	mux.HandleFunc("GET /api/admin/analytics/overview", s.admin("platform.read", s.adminAnalyticsOverview))
@@ -117,7 +126,6 @@ func (s *server) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
 func (s *server) updateCampaignFull(w http.ResponseWriter, r *http.Request) {
 	wid, e1 := pathID(r, "id")
 	id, e2 := pathID(r, "campaign")
