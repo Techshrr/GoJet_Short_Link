@@ -264,12 +264,12 @@ func (s *server) linkP05QR(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "png"
 	}
-	filename := fmt.Sprintf("gojet-link-%d.%s", linkID, format)
-	if r.URL.Query().Get("download") == "1" {
-		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	} else {
-		w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
+	if format != "png" && format != "svg" && format != "pdf" {
+		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "二维码导出格式仅支持 PNG、SVG 或 PDF"})
+		return
 	}
+	filename := fmt.Sprintf("gojet-link-%d.%s", linkID, format)
+	w.Header().Set("Content-Disposition", p05QRContentDisposition(filename, r.URL.Query().Get("download") == "1"))
 	w.Header().Set("Cache-Control", "private, no-store")
 
 	switch format {
@@ -287,9 +287,15 @@ func (s *server) linkP05QR(w http.ResponseWriter, r *http.Request) {
 	case "pdf":
 		w.Header().Set("Content-Type", "application/pdf")
 		_, _ = w.Write(p05QRPDF(qr.Bitmap(), size, foreground, background))
-	default:
-		jsonResponse(w, http.StatusUnprocessableEntity, map[string]string{"error": "二维码导出格式仅支持 PNG、SVG 或 PDF"})
 	}
+}
+
+func p05QRContentDisposition(filename string, download bool) string {
+	disposition := "inline"
+	if download {
+		disposition = "attachment"
+	}
+	return fmt.Sprintf(`%s; filename="%s"`, disposition, filename)
 }
 
 func p05QRSVG(bitmap [][]bool, size int, foreground, background string) []byte {
