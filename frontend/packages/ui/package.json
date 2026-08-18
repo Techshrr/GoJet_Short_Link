@@ -11,7 +11,9 @@
     "./overlays": "./src/overlays.tsx",
     "./overlays.css": "./src/overlays.css",
     "./data": "./src/data.tsx",
-    "./data.css": "./src/data.css"
+    "./data.css": "./src/data.css",
+    "./feedback": "./src/feedback.tsx",
+    "./feedback.css": "./src/feedback.css"
   },
   "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
   "dependencies": {
