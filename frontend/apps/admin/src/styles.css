@@ -1,6 +1,4 @@
 @import "tailwindcss";
-html { background: var(--canvas); color: var(--foreground); font-family: InterVariable, Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
-body { margin: 0; min-width: 320px; }
-.foundation { max-width: 980px; margin: 0 auto; padding: 48px 28px; }
-.foundation span { color: var(--brand-blue); font-size: 13px; font-weight: 700; }
-h1 { font-size: 24px; margin: 12px 0; } p { color: var(--foreground-secondary); line-height: 1.65; }
+html{background:var(--canvas);color:var(--foreground);font-family:var(--font-product)}body{margin:0;min-width:320px;background:var(--canvas)}
+.shell-context-muted{color:var(--foreground-muted)}.shell-page-proof{max-width:1100px;margin:0;padding:var(--space-4) 0}.shell-page-proof>span{color:var(--brand-blue);font-size:var(--type-product-meta);font-weight:var(--weight-bold);letter-spacing:.06em}.shell-page-proof h1{margin:var(--space-2) 0;font-size:var(--type-page-title);line-height:var(--line-h2)}.shell-page-proof p{max-width:720px;margin:0;color:var(--foreground-secondary);line-height:var(--line-body)}.shell-proof-grid{margin-top:var(--space-6);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-3)}.shell-proof-grid span,.shell-proof-list span{display:block;border:var(--border-width) solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-e1)}.shell-proof-grid span{height:110px}.shell-proof-list{margin-top:var(--space-6);display:grid;gap:var(--space-2)}.shell-proof-list span{height:48px}
+@media(max-width:900px){.shell-proof-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:767px){.shell-page-proof{padding:var(--space-2) 0}.shell-proof-grid{grid-template-columns:1fr}.shell-proof-grid span{height:80px}}
