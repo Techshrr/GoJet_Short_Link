@@ -81,6 +81,12 @@ var fileShareTemplate = template.Must(template.New("fileshare").Funcs(template.F
 </body>
 </html>`))
 
+func setFilePublicSecurityHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+}
+
 func (s *server) serveFileSharePage(w http.ResponseWriter, r *http.Request) {
 	item, err := s.resources.PublicFileMetadata(r.Context(), r.PathValue("slug"))
 	if err != nil {
@@ -100,8 +106,7 @@ func (s *server) serveFileSharePage(w http.ResponseWriter, r *http.Request) {
 		SharePath string
 	}{PublicFileMetadata: item, SiteName: s.stringSetting(r.Context(), "site.name", "GoJet"), SharePath: r.URL.Path}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	setFilePublicSecurityHeaders(w)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'")
 	_ = fileShareTemplate.Execute(w, view)
 }
@@ -122,9 +127,8 @@ func (s *server) streamFileShare(w http.ResponseWriter, r *http.Request, passwor
 	w.Header().Set("Content-Type", download.MIMEType)
 	w.Header().Set("Content-Length", strconv.FormatInt(download.SizeBytes, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename*=UTF-8''%s`, percentEncodeFilename(download.OriginalName)))
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	setFilePublicSecurityHeaders(w)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
-	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, download.File)
 }
