@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   foundation:
@@ -85,3 +86,43 @@ jobs:
             }
           }
           NODE
+
+      - name: Persist exact-head CI evidence to issue 8
+        if: always() && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          marker='<!-- v5-frontend-ci-evidence -->'
+          if [ "$JOB_STATUS" = "success" ]; then
+            state='✅ success'
+          else
+            state="❌ $JOB_STATUS"
+          fi
+
+          cat > /tmp/v5-ci-evidence.md <<EOF
+          $marker
+          ## V5 Frontend Foundation — latest exact-head evidence
+
+          - Status: **$state**
+          - Branch: \`$HEAD_BRANCH\`
+          - Tested SHA: \`$HEAD_SHA\`
+          - Workflow run: $RUN_URL
+          - Run ID: \`$RUN_ID\`
+
+          This comment records the SHA actually tested by \`.github/workflows/v5-frontend-foundation.yml\`. It does not imply later V5 phases are complete.
+          EOF
+
+          comment_id="$(gh api --paginate "repos/$REPO/issues/8/comments" --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -n 1 || true)"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$comment_id" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/8/comments" --raw-field body="$(cat /tmp/v5-ci-evidence.md)" >/dev/null
+          fi
