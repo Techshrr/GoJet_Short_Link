@@ -7,7 +7,15 @@ import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } from "../links/client";
 
 const workspaceClient = createWorkspaceClient(api);
-const initialTagColor = "#" + "4f46e5";
+const tagPalette = [
+  { name: "Blue", value: "#" + "2563eb", swatch: "var(--brand-blue)" },
+  { name: "Cyan", value: "#" + "06b6d4", swatch: "var(--brand-cyan)" },
+  { name: "Sky", value: "#" + "38bdf8", swatch: "var(--brand-sky)" },
+  { name: "Green", value: "#" + "16a34a", swatch: "var(--success)" },
+  { name: "Amber", value: "#" + "d97706", swatch: "var(--warning)" },
+  { name: "Red", value: "#" + "dc2626", swatch: "var(--danger)" },
+  { name: "Ink", value: "#" + "0b1220", swatch: "var(--brand-ink)" }
+] as const;
 
 function useWorkspace() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
@@ -17,7 +25,7 @@ function useWorkspace() {
 
 function CreateOrganizationItem({ workspaceId, type, onDone }: { workspaceId: number; type: "campaign" | "folder" | "tag"; onDone: () => void }) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState(initialTagColor);
+  const [color, setColor] = useState(tagPalette[0].value);
   const mutation = useMutation({
     mutationFn: () => type === "campaign" ? workspaceClient.createCampaign(workspaceId, name.trim()) : type === "folder" ? workspaceClient.createFolder(workspaceId, name.trim()) : workspaceClient.createTag(workspaceId, name.trim(), color),
     onSuccess: () => { setName(""); onDone(); }
@@ -26,7 +34,7 @@ function CreateOrganizationItem({ workspaceId, type, onDone }: { workspaceId: nu
   return <form className="organization-create-form" onSubmit={submit}>
     {mutation.isError ? <Alert tone="danger" title={`Unable to create ${type}`}>{errorMessage(mutation.error)}</Alert> : null}
     <Field label="Name" htmlFor={`organization-${type}-name`} required><Input id={`organization-${type}-name`} value={name} onChange={(event) => setName(event.target.value)} required /></Field>
-    {type === "tag" ? <Field label="Color" htmlFor="organization-tag-color" help="Server accepts canonical #RRGGBB values only."><Input id="organization-tag-color" type="color" value={color} onChange={(event) => setColor(event.target.value)} /></Field> : null}
+    {type === "tag" ? <Field label="Color" help="Choose from the frozen GoJet token palette; arbitrary custom colors are not accepted by the V5 UI."><div className="organization-tag-palette" role="radiogroup" aria-label="Tag color token palette">{tagPalette.map((item) => <button key={item.name} type="button" role="radio" aria-checked={color === item.value} className="organization-tag-color" onClick={() => setColor(item.value)}><span className="organization-tag-swatch" style={{ backgroundColor: item.swatch }} aria-hidden="true" /><span>{item.name}</span></button>)}</div></Field> : null}
     <Button type="submit" loading={mutation.isPending} disabled={!name.trim()}>Create {type}</Button>
   </form>;
 }
@@ -60,7 +68,7 @@ export default function OrganizationPage() {
     {organization.isPending ? <div className="workspace-centered"><Spinner label="正在加载组织资源" /></div> : organization.isError ? <ErrorState title="无法加载组织资源" description={errorMessage(organization.error)} action={<Button type="button" onClick={() => organization.refetch()}>重试</Button>} /> : <div className="organization-stack">
       <section className="workspace-section" aria-labelledby="campaigns-title"><div className="workspace-section-head"><div><span className="workspace-eyebrow">CAMPAIGNS</span><h2 id="campaigns-title">Campaign performance groups</h2><p>Campaign 的 links、clicks 与 conversion 均来自服务端实时组织快照。</p></div>{canEdit ? <SideSheet triggerLabel="New campaign" title="Create campaign"><CreateOrganizationItem workspaceId={workspace.id} type="campaign" onDone={refresh} /></SideSheet> : null}</div>{data?.campaigns.length ? <div className="organization-card-grid">{data.campaigns.map((item) => <CampaignCard key={item.id} item={item} workspaceId={workspace.id} canEdit={canEdit} onDone={refresh} />)}</div> : <EmptyState title="No campaigns" description="创建 Campaign 后可在 Links 中归组并汇总点击与转化。" />}</section>
       <section className="workspace-section" aria-labelledby="folders-title"><div className="workspace-section-head"><div><span className="workspace-eyebrow">FOLDERS</span><h2 id="folders-title">Folders</h2><p>Folders 用于工作区内部结构化归档，不改变短链跳转行为。</p></div>{canEdit ? <SideSheet triggerLabel="New folder" title="Create folder"><CreateOrganizationItem workspaceId={workspace.id} type="folder" onDone={refresh} /></SideSheet> : null}</div>{data?.folders.length ? <div className="organization-list-grid">{data.folders.map((item) => <article key={item.id}><strong>{item.name}</strong><span>{item.links} links</span></article>)}</div> : <EmptyState title="No folders" description="当前没有 Folder。" />}</section>
-      <section className="workspace-section" aria-labelledby="tags-title"><div className="workspace-section-head"><div><span className="workspace-eyebrow">TAGS</span><h2 id="tags-title">Tags</h2><p>Tag 颜色由服务端验证为 #RRGGBB，避免前端产生不可持久化的视觉值。</p></div>{canEdit ? <SideSheet triggerLabel="New tag" title="Create tag"><CreateOrganizationItem workspaceId={workspace.id} type="tag" onDone={refresh} /></SideSheet> : null}</div>{data?.tags.length ? <div className="organization-list-grid">{data.tags.map((item) => <article key={item.id}><span className="organization-tag-dot" style={{ backgroundColor: item.color }} aria-hidden="true" /><strong>{item.name}</strong><span>{item.links} links</span></article>)}</div> : <EmptyState title="No tags" description="当前没有 Tag。" />}</section>
+      <section className="workspace-section" aria-labelledby="tags-title"><div className="workspace-section-head"><div><span className="workspace-eyebrow">TAGS</span><h2 id="tags-title">Tags</h2><p>Tag 颜色仅从冻结 Design Token palette 选择；服务端继续验证并持久化规范化 #RRGGBB 值。</p></div>{canEdit ? <SideSheet triggerLabel="New tag" title="Create tag"><CreateOrganizationItem workspaceId={workspace.id} type="tag" onDone={refresh} /></SideSheet> : null}</div>{data?.tags.length ? <div className="organization-list-grid">{data.tags.map((item) => <article key={item.id}><span className="organization-tag-dot" style={{ backgroundColor: item.color }} aria-hidden="true" /><strong>{item.name}</strong><span>{item.links} links</span></article>)}</div> : <EmptyState title="No tags" description="当前没有 Tag。" />}</section>
     </div>}
   </Page>;
 }
