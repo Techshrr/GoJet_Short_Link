@@ -38,8 +38,8 @@ function QRCreateForm({ workspaceId, canEdit }: { workspaceId: number; canEdit: 
   const [linkId, setLinkId] = useState(0);
   const [name, setName] = useState("");
   const [size, setSize] = useState(1024);
-  const [foreground, setForeground] = useState(qrPaletteDefaults.foreground);
-  const [background, setBackground] = useState(qrPaletteDefaults.background);
+  const [foreground, setForeground] = useState<string>(qrPaletteDefaults.foreground);
+  const [background, setBackground] = useState<string>(qrPaletteDefaults.background);
   const [format, setFormat] = useState<ExportFormat>("png");
   const riskAllows = useMemo(() => safeLinks(risks.data?.data), [risks.data]);
   const allowedLinks = (links.data?.data ?? []).filter((item) => riskAllows(item.id));
