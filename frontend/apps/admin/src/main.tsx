@@ -7,6 +7,7 @@ import "@gojet/ui/css";
 import "@gojet/ui/patterns.css";
 import "@gojet/ui/overlays.css";
 import "@gojet/ui/shells.css";
+import "@gojet/ui/shells-responsive.css";
 import "./styles.css";
 import { router } from "./router";
 
