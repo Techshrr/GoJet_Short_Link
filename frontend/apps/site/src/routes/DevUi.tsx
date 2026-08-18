@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, BarChart3, Globe2, Link2, Plus, Search, Settings, Trash2, Users } from "@gojet/icons";
 import { Alert, Badge, Breadcrumb, Button, Checkbox, Dialog, EmptyState, ErrorState, Field, IconButton, Input, Page, PageHeader, PageSection, Select, Skeleton, Spinner, Switch, Table, Tabs, Textarea, Tooltip } from "@gojet/ui";
 import { AppHeader, Avatar, BulkActionBar, ChartFrame, Combobox, Command, DatePicker, DateTime, FilterBar, InlineMessage, Metric, OtpInput, Pagination, Progress, RadioGroup, Sheet, Sidebar, SidebarItem, Slider, Sparkline, SplitPane, Surface, WorkspaceSwitcher } from "@gojet/ui/patterns";
+import { AlertDialog, ContextMenu, DropdownMenu, HoverCard, MobileDrawer, Popover, SelectMenu, UserMenu } from "@gojet/ui/overlays";
 
 export default function DevUi() {
   const [radio, setRadio] = useState("302");
@@ -10,6 +11,11 @@ export default function DevUi() {
   const [search, setSearch] = useState("");
   const [otp, setOtp] = useState("");
   const [workspace, setWorkspace] = useState("personal");
+  const menuActions = [
+    { id: "open", label: "打开详情" },
+    { id: "duplicate", label: "复制链接" },
+    { id: "delete", label: "删除", destructive: true, separatorBefore: true },
+  ];
 
   return (
     <Page className="dev-ui gj-ui-root">
@@ -50,7 +56,9 @@ export default function DevUi() {
       </PageSection>
 
       <PageSection title="Overlay / Destructive / Command">
-        <div className="dev-ui-row"><Dialog triggerLabel="打开对话框" title="更新链接设置" description="对话框不得改变底层页面布局宽度。"><p>这是 Base UI Dialog 封装后的 GoJet 表面。</p></Dialog><Dialog destructive triggerLabel="危险操作" title="删除资源" description="此操作不可撤销。" confirmLabel="确认删除"><p>删除前必须明确对象和后果。</p></Dialog><Sheet triggerLabel="打开 Sheet" title="筛选条件" description="移动端可作为 Drawer 使用。"><Command items={[{ id: "links", label: "前往链接" }, { id: "domains", label: "前往域名" }, { id: "settings", label: "前往设置" }]} /></Sheet></div>
+        <div className="dev-ui-row"><Dialog triggerLabel="打开对话框" title="更新链接设置" description="对话框不得改变底层页面布局宽度。"><p>这是 Base UI Dialog 封装后的 GoJet 表面。</p></Dialog><AlertDialog triggerLabel="Alert Dialog" title="永久删除链接？" description="删除后无法恢复。" confirmLabel="确认删除" /><Sheet triggerLabel="打开 Sheet" title="筛选条件" description="桌面端辅助面板。"><Command items={[{ id: "links", label: "前往链接" }, { id: "domains", label: "前往域名" }, { id: "settings", label: "前往设置" }]} /></Sheet><MobileDrawer title="移动端导航" description="支持滑动关闭。"><Command items={[{ id: "links", label: "链接" }, { id: "domains", label: "域名" }, { id: "analytics", label: "分析" }]} /></MobileDrawer></div>
+        <div className="dev-ui-row"><DropdownMenu actions={menuActions} /><SelectMenu label="批量操作" actions={menuActions} /><UserMenu name="Ethan" actions={[{ id: "profile", label: "个人资料" }, { id: "logout", label: "退出登录", separatorBefore: true }]} /><Popover trigger="打开 Popover" title="链接摘要" description="轻量上下文信息。"><p>短码：summer-2026</p></Popover><HoverCard trigger={<span>预览短链接</span>}><strong>gojet.example/demo</strong><p>悬停或聚焦时显示预览。</p></HoverCard></div>
+        <ContextMenu actions={menuActions}><div className="dev-ui-context-target">右键 / 长按此区域测试 Context Menu</div></ContextMenu>
       </PageSection>
 
       <PageSection title="Shell Building Blocks">
