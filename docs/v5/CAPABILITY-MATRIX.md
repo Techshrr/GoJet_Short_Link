@@ -18,6 +18,7 @@ Accepted phase evidence:
 - **P14 Tickets / Mail:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P13 regressions, P14 support/mail contract, strict TypeScript/build, Go mail/platform tests, Workspace Support/Admin Tickets/Admin Mail three-viewport Browser Gates, scanned ticket attachments, Turnstile ticket surfaces, and write-only SMTP secret invariants.
 - **P15 Auth / OAuth / Account:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P14 regressions, P15 auth/account contract, strict TypeScript/build, Go Identity/platform tests, Auth/Settings/Sessions/Connected Accounts/Admin OAuth three-viewport Browser Gates, cookie/CSRF, Turnstile, remembered-session UI contract, no-Web-Storage, MFA/backup-code and write-only OAuth secret invariants.
 - **P16 Trust & Safety:** `20b7fe4f6918f78c35d10666394c2333ca1b2927` / Actions `32145466061` success. This exact HEAD passed P01–P15 regressions, strict TypeScript/build, Go destination-risk/platform API tests, Destination Risk/File Security/Abuse/Security Events/Audit three-viewport Browser Gates, mandatory governance-reason contracts, and customer-facing risk provider/evidence isolation.
+- **P17 Admin:** implementation exact-head `b7166c822c0af29e12928ff004ba5df8efd60a53` / Actions `32150097570` success. Matrix closure is accepted only after a later exact HEAD containing these DONE rows re-passes the P17 gate.
 
 Legend:
 
@@ -78,16 +79,16 @@ Legend:
 | Abuse reports | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Security events | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Audit log | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Admin users | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Admin workspaces | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Admin resource governance | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Admin roles / permissions | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Announcements | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| System settings | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Service status / operations monitor | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Storage configuration | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| API keys | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Webhooks | V4 | V4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
+| Admin users | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Admin workspaces | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Admin resource governance | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Admin roles / permissions | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Announcements | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| System settings | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Service status / operations monitor | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Storage configuration | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| API keys | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Webhooks | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Redirect engine | V4 | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Analytics worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
 | Analytics reconciler | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
