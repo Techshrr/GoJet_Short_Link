@@ -109,7 +109,7 @@ mkdir -p /tmp/gojet-p22-stage
 tar -xzf "$ARCHIVE" -C /tmp/gojet-p22-stage
 STAGED=/tmp/gojet-p22-stage/gojet-v5-native-linux-amd64
 [[ -d "$STAGED" ]] || die "unexpected P21 archive root"
-jq -e --arg sha "$TESTED_SHA" '.phase=="P21" and .gate=="G11" and .source_sha==$sha and .fresh_install_claimed==false' \
+jq -e --arg sha "$TESTED_SHA" '.schema=="gojet-v5-native-version-manifest-v1" and .phase=="P21" and .gate=="G11" and .git_sha==$sha and .fresh_install_claimed==false' \
   "$STAGED/VERSION-MANIFEST.json" >/dev/null
 mv "$STAGED" "$ROOT"
 chown -R root:root "$ROOT"
