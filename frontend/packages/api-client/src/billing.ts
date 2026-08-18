@@ -2,7 +2,8 @@ import type { ApiTransport } from "./links";
 
 export interface BillingPlan {
   id: number; code: string; name: string; monthly_price_cents: number; currency: string; description: string; status: "active" | "archived";
-  features: unknown; link_limit: number; qr_limit: number; text_limit: number; bio_limit: number; file_storage_bytes: number; member_limit: number; analytics_retention_days: number;
+  is_public: boolean; display_order: number; billing_periods: string[]; features: unknown;
+  link_limit: number; qr_limit: number; text_limit: number; bio_limit: number; file_storage_bytes: number; member_limit: number; analytics_retention_days: number;
 }
 export interface BillingSubscription { workspace_id: number; plan_id: number; plan_code: string; plan_name: string; status: string; period_started_at: string; period_ends_at?: string; cancel_at_period_end: boolean; }
 export interface BillingUsage { plan_name: string; plan_code: string; links: number; link_limit: number; qr_codes: number; qr_limit: number; text_shares: number; text_limit: number; bio_pages: number; bio_limit: number; file_bytes: number; file_storage_bytes: number; members: number; member_limit: number; analytics_retention_days: number; }
@@ -16,8 +17,8 @@ export interface AdminPaymentDetail { payment: AdminPayment; callbacks: PaymentC
 export interface FXRate { base_currency: string; quote_currency: string; provider: string; rate: string; observed_at: string; expires_at: string; }
 export interface FXHistory { invoice_number: string; source_currency: string; currency: string; rate: string; provider: string; markup_bps: number; quoted_at?: string; created_at: string; }
 export interface AdminFXPayload { settlement_currency: string; provider: "ecb" | "manual"; markup_bps: number; cache_hours: number; manual_rates: Record<string,string>; rates: FXRate[]; history: FXHistory[]; }
-export interface PlanWriteInput { name: string; description: string; status?: "active" | "archived"; monthly_price_cents: number; link_limit: number; qr_limit: number; text_limit: number; bio_limit: number; file_storage_bytes: number; member_limit: number; analytics_retention_days: number; features: unknown; }
-export interface PlanCreateInput extends PlanWriteInput { code: string; currency: string; }
+export interface PlanWriteInput { name: string; description: string; status: "active" | "archived"; currency: string; is_public: boolean; display_order: number; billing_periods: string[]; monthly_price_cents: number; link_limit: number; qr_limit: number; text_limit: number; bio_limit: number; file_storage_bytes: number; member_limit: number; analytics_retention_days: number; features: unknown; }
+export interface PlanCreateInput extends PlanWriteInput { code: string; }
 
 export function createBillingClient(api: ApiTransport) {
   return {
