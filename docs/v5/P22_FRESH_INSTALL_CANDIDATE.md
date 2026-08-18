@@ -20,7 +20,7 @@ The Gate provisions a clean aaPanel/BT-compatible Native host contract and requi
 - ClamAV daemon + Unix socket;
 - `/www/wwwroot/<host>/public` runtime directory and aaPanel vhost/rewrite paths;
 - HTTPS before entering `/install/`;
-- the four-step Web Installer: environment → MySQL/Redis → site/admin → install;
+- the four-step Web Installer: **环境检查 → 数据库与 Redis → 站点与管理员 → 确认安装**；the Gate must verify these real visible transitions rather than bypassing the installer;
 - installer completion lock and the eight installed Go systemd services.
 
 A source-tree development server, Docker/Compose environment, PM2, Node runtime, direct migration shortcut, or hand-written `gojet.env` is not a substitute for G12.
