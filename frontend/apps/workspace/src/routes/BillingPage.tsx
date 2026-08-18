@@ -12,7 +12,7 @@ const cycles = [
   { value: "quarterly", label: "Quarterly · 3 months" },
   { value: "semiannual", label: "Semiannual · 6 months" },
   { value: "annual", label: "Annual · 12 months" }
-];
+] as const;
 
 function money(cents: number, currency: string) {
   try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(cents / 100); }
@@ -26,13 +26,14 @@ function useWorkspace() {
 function usagePercent(value: number, limit: number) { return limit <= 0 ? 0 : Math.min(100, Math.round((value / limit) * 100)); }
 
 function PlanRequest({ plan, currentCode, workspaceId, onDone }: { plan: BillingPlan; currentCode: string; workspaceId: number; onDone: () => void }) {
-  const [cycle, setCycle] = useState("monthly");
+  const allowedCycles = cycles.filter((item) => plan.billing_periods.includes(item.value));
+  const [cycle, setCycle] = useState(allowedCycles[0]?.value ?? "monthly");
   const mutation = useMutation({ mutationFn: () => billingClient.createInvoice(workspaceId, plan.code, plan.code === currentCode ? "renewal" : "upgrade", cycle), onSuccess: onDone });
   return <div className="billing-plan-request">
     <p>Generate a server-side invoice for <strong>{plan.name}</strong>. Payment remains pending until a verified provider callback or an audited admin settlement updates the invoice.</p>
-    <Field label="Billing cycle" htmlFor={`billing-cycle-${plan.id}`}><Select id={`billing-cycle-${plan.id}`} value={cycle} onChange={(event) => setCycle(event.target.value)}>{cycles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
+    <Field label="Billing cycle" htmlFor={`billing-cycle-${plan.id}`} help="Only billing periods enabled for this plan are selectable; the API enforces the same rule."><Select id={`billing-cycle-${plan.id}`} value={cycle} onChange={(event) => setCycle(event.target.value)}>{allowedCycles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></Field>
     {mutation.isError ? <Alert tone="danger" title="Invoice request failed">{errorMessage(mutation.error)}</Alert> : null}
-    <Button type="button" loading={mutation.isPending} onClick={() => mutation.mutate()}>{plan.code === currentCode ? "Create renewal invoice" : "Create change invoice"}</Button>
+    <Button type="button" loading={mutation.isPending} disabled={!allowedCycles.length} onClick={() => mutation.mutate()}>{plan.code === currentCode ? "Create renewal invoice" : "Create change invoice"}</Button>
   </div>;
 }
 
