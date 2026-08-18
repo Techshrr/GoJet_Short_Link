@@ -29,6 +29,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  start:
+    name: Index exact-head P20 run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish run index for diagnostics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch=context.ref.replace('refs/heads/','');
+            const marker='<!-- v5-p20-run-index-v1 -->';
+            const body=`${marker}\n## P20 Whole Product Gate — current run index\n\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- State: **running / not accepted yet**\n\nThis index is diagnostic only. P20 is not complete until the exact-head closure marker reports success.\n`;
+            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
+            const existing=comments.find(c=>c.body?.includes(marker));
+            if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
+
   source:
     name: G0-G9 source build security SEO performance
     runs-on: ubuntu-latest
