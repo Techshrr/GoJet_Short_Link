@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
-import { createWorkspaceClient, type CampaignRecord, type WorkspaceSummary } from "@gojet/api-client";
+import { createWorkspaceClient, type WorkspaceCampaignRecord, type WorkspaceSummary } from "@gojet/api-client";
 import { Alert, Badge, Button, EmptyState, ErrorState, Field, Input, Page, PageHeader, Select, Spinner } from "@gojet/ui";
 import { SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } from "../links/client";
@@ -30,12 +30,12 @@ function CreateOrganizationItem({ workspaceId, type, onDone }: { workspaceId: nu
   </form>;
 }
 
-function CampaignCard({ item, workspaceId, canEdit, onDone }: { item: CampaignRecord; workspaceId: number; canEdit: boolean; onDone: () => void }) {
-  const mutation = useMutation({ mutationFn: (status: CampaignRecord["status"]) => workspaceClient.updateCampaignStatus(workspaceId, item.id, status), onSuccess: onDone });
+function CampaignCard({ item, workspaceId, canEdit, onDone }: { item: WorkspaceCampaignRecord; workspaceId: number; canEdit: boolean; onDone: () => void }) {
+  const mutation = useMutation({ mutationFn: (status: WorkspaceCampaignRecord["status"]) => workspaceClient.updateCampaignStatus(workspaceId, item.id, status), onSuccess: onDone });
   return <article className="organization-card">
     <div className="organization-card-head"><div><span>Campaign</span><h3>{item.name}</h3></div><Badge tone={item.status === "active" ? "success" : item.status === "paused" ? "warning" : "neutral"}>{item.status}</Badge></div>
     <dl className="organization-metrics"><div><dt>Links</dt><dd>{item.links}</dd></div><div><dt>Clicks</dt><dd>{item.clicks}</dd></div><div><dt>Conversions</dt><dd>{item.conversions}</dd></div></dl>
-    {canEdit ? <Field label="Status" htmlFor={`campaign-status-${item.id}`}><Select id={`campaign-status-${item.id}`} value={item.status} disabled={mutation.isPending} onChange={(event) => mutation.mutate(event.target.value as CampaignRecord["status"])}><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option></Select></Field> : null}
+    {canEdit ? <Field label="Status" htmlFor={`campaign-status-${item.id}`}><Select id={`campaign-status-${item.id}`} value={item.status} disabled={mutation.isPending} onChange={(event) => mutation.mutate(event.target.value as WorkspaceCampaignRecord["status"])}><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option></Select></Field> : null}
     {mutation.isError ? <Alert tone="danger" title="Campaign update failed">{errorMessage(mutation.error)}</Alert> : null}
   </article>;
 }
