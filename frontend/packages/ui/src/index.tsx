@@ -85,9 +85,16 @@ export function ErrorState({ title = "无法加载内容", description, action }
 export function Page(props: HTMLAttributes<HTMLElement>) { return <main className="gj-page" {...props} />; }
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) { return <header className="gj-page-header"><div><h1>{title}</h1>{description ? <p>{description}</p> : null}</div>{actions ? <div className="gj-page-actions">{actions}</div> : null}</header>; }
 export function PageSection({ title, children }: { title?: string; children: ReactNode }) { return <section className="gj-section">{title ? <h2 className="gj-section-title">{title}</h2> : null}{children}</section>; }
-export const DataRegion = PageSection;
-export const SettingsSection = PageSection;
-export const FormSection = PageSection;
+
+export function DataRegion({ title, description, actions, children }: { title?: string; description?: string; actions?: ReactNode; children: ReactNode }) {
+  return <section className="gj-section gj-data-region"><header className="gj-region-header"><div>{title ? <h2 className="gj-section-title">{title}</h2> : null}{description ? <p>{description}</p> : null}</div>{actions}</header>{children}</section>;
+}
+export function SettingsSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return <section className="gj-section gj-settings-section"><header><h2 className="gj-section-title">{title}</h2>{description ? <p>{description}</p> : null}</header><div className="gj-section-body">{children}</div></section>;
+}
+export function FormSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return <fieldset className="gj-section gj-form-section"><legend className="gj-section-title">{title}</legend>{description ? <p>{description}</p> : null}<div className="gj-section-body">{children}</div></fieldset>;
+}
 
 export function Table({ children, label }: { children: ReactNode; label: string }) { return <div className="gj-table-wrap"><table className="gj-table" aria-label={label}>{children}</table></div>; }
 
@@ -102,7 +109,7 @@ export function Dialog({ triggerLabel, title, description, children, confirmLabe
 }
 
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
-  return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<span />} >{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="gj-tooltip-positioner" sideOffset={6}><BaseTooltip.Popup className="gj-tooltip-popup">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root></BaseTooltip.Provider>;
+  return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<span />}>{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="gj-tooltip-positioner" sideOffset={6}><BaseTooltip.Popup className="gj-tooltip-popup">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root></BaseTooltip.Provider>;
 }
 
 export interface BreadcrumbItem { label: string; href?: string; }
