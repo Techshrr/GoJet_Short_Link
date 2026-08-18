@@ -1,3 +1,4 @@
+# Exact-head retrigger after V5 CI hardening.
 name: V5 P17 Admin Gate
 
 on:
