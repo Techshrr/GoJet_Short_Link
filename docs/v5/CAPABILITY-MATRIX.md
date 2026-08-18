@@ -13,7 +13,7 @@ Accepted phase evidence:
 - **P09 Files:** `a44c85210dfef89a328e5cc093d3102d4dab0d96` / Actions `32104800662` success. This exact HEAD re-ran P01–P08 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09 fixed-viewport browser gates.
 - **P10 Text:** `cceda41131e3ce1c2e260bd47198bb3f5b553972` / Actions `32108885612` success. This exact HEAD re-ran P01–P09 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates.
 - **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
-- **P12 Workspace / Members / Organization:** `a07d0b5d58edccdc8133d417ed58fcd2e9d6684b` / Actions `32115929397` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Go workspace/organization/billing/platform API tests, and the P04–P12 fixed-viewport browser gates.
+- **P12 Workspace / Members / Organization:** `f0ff826c25916aaa6f38ba85fe3f500514b0ccd8` / Actions `32117185172` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Members/Organization dynamic entries, Go workspace/organization/billing/platform API tests, the frozen Tag token-palette contract, and the P04–P12 fixed-viewport browser gates.
 
 Legend:
 
