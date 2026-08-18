@@ -12,8 +12,9 @@
     "verify:brand": "node scripts/verify-brand-foundation.mjs",
     "verify:ui": "node scripts/verify-design-system.mjs",
     "verify:shells": "node scripts/verify-shell-foundation.mjs",
+    "verify:links": "node scripts/verify-p05-links.mjs",
     "test:shells": "playwright test -c playwright.shells.config.ts",
-    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm typecheck && pnpm build"
+    "check": "pnpm verify:brand && pnpm verify:ui && pnpm verify:shells && pnpm verify:links && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
