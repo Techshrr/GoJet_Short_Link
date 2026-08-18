@@ -1,0 +1,88 @@
+name: V5 P16 Trust Safety Gate
+
+on:
+  push:
+    branches: ["rebuild/v5-*"]
+    paths:
+      - "frontend/**"
+      - "app/destinationrisk/**"
+      - "services/platformapi/**"
+      - "docs/v5/**"
+      - ".github/workflows/v5-p16-trust-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  p16-trust-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.24.x", cache: true }
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify P16 static and build contracts
+        working-directory: frontend
+        run: |
+          ! grep -R -E 'localStorage\.(setItem|getItem)|sessionStorage\.(setItem|getItem)' apps/site/src apps/workspace/src apps/admin/src packages/auth/src
+          pnpm check
+      - name: Verify Go trust and safety contracts
+        run: go test ./app/destinationrisk ./services/platformapi/cmd/server
+      - name: Browser regression P01-P16
+        working-directory: frontend
+        run: |
+          pnpm test:shells
+          pnpm test:links
+          pnpm test:domains
+          pnpm test:analytics
+          pnpm test:qr
+          pnpm test:files
+          pnpm test:text
+          pnpm test:bio
+          pnpm test:workspace
+          pnpm test:billing
+          pnpm test:commerce
+          pnpm test:support
+          pnpm test:mail-ops
+          pnpm test:auth
+          pnpm test:account
+          pnpm test:oauth
+          pnpm test:trust-safety
+      - name: Upload P16 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-p16-trust-safety-${{ github.sha }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
+      - name: Publish exact-head evidence to Issue 8
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const ref = await github.rest.repos.getBranch({ owner: context.repo.owner, repo: context.repo.repo, branch });
+            if (ref.data.commit.sha !== context.sha) { core.info(`Skip stale evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`); return; }
+            const marker = '<!-- v5-p16-ci-evidence-v1 -->';
+            const status = process.env.JOB_STATUS === 'success' ? 'SUCCESS' : 'FAILURE';
+            const body = `${marker}\n### P16 Trust & Safety exact-HEAD CI evidence\n- **Status:** ${status}\n- **Branch:** \`${branch}\`\n- **Exact HEAD / tested SHA:** \`${context.sha}\`\n- **Actions run:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- **Run ID:** \`${context.runId}\`\n- **Scope:** P01–P15 browser regression + P16 Trust & Safety browser gate + frontend static/type/build + Go destination-risk/platform API tests\n- **Invariant:** user-facing link-risk state excludes provider identity and internal evidence; Admin moderation uses real RBAC APIs.\n`;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: 8, per_page: 100 });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: 8, body });

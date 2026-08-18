@@ -11,7 +11,6 @@ type userLinkRiskState struct {
 	AutomaticDecision string     `json:"automatic_decision"`
 	EffectiveDecision string     `json:"effective_decision"`
 	Score             int        `json:"score"`
-	Provider          string     `json:"provider"`
 	ScannedAt         *time.Time `json:"scanned_at,omitempty"`
 	NextScanAt        *time.Time `json:"next_scan_at,omitempty"`
 	Pending           bool       `json:"pending"`
@@ -19,8 +18,8 @@ type userLinkRiskState struct {
 }
 
 // workspaceLinkRisks exposes only the minimum customer-facing risk state needed
-// to render an honest link status. Evidence, administrator identity and manual
-// review notes remain admin-only.
+// to render an honest link status. Provider identity, evidence, administrator
+// identity and manual review notes remain admin-only.
 func (s *server) workspaceLinkRisks(w http.ResponseWriter, r *http.Request) {
 	workspaceID, err := pathID(r, "id")
 	if err != nil {
@@ -35,7 +34,6 @@ func (s *server) workspaceLinkRisks(w http.ResponseWriter, r *http.Request) {
 SELECT l.id,
        COALESCE(r.decision,'review'),
        COALESCE(r.score,0),
-       COALESCE(r.provider,'pending'),
        r.scanned_at,
        r.next_scan_at,
        r.manual_decision
@@ -55,7 +53,7 @@ ORDER BY l.id DESC`, workspaceID)
 		var item userLinkRiskState
 		var scannedAt, nextScanAt sql.NullTime
 		var manual sql.NullString
-		if err = rows.Scan(&item.LinkID, &item.AutomaticDecision, &item.Score, &item.Provider, &scannedAt, &nextScanAt, &manual); err != nil {
+		if err = rows.Scan(&item.LinkID, &item.AutomaticDecision, &item.Score, &scannedAt, &nextScanAt, &manual); err != nil {
 			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "链接安全状态暂时不可用"})
 			return
 		}
@@ -72,8 +70,6 @@ ORDER BY l.id DESC`, workspaceID)
 			value := nextScanAt.Time.UTC()
 			item.NextScanAt = &value
 		}
-		// Missing scans and due automatic scans are represented as REVIEW in the
-		// customer console. Manual decisions remain effective until cleared.
 		item.Pending = !scannedAt.Valid || (!item.Manual && nextScanAt.Valid && !nextScanAt.Time.After(now))
 		if item.Pending && !item.Manual {
 			item.EffectiveDecision = "review"

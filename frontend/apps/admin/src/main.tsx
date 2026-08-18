@@ -4,12 +4,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import "@gojet/tokens/css";
 import "@gojet/ui/css";
+import "@gojet/ui/data.css";
 import "@gojet/ui/patterns.css";
 import "@gojet/ui/overlays.css";
 import "@gojet/ui/shells.css";
 import "@gojet/ui/shells-responsive.css";
 import "./styles.css";
 import "./commerce.css";
+import "./trust-safety.css";
 import { router } from "./router";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1, refetchOnWindowFocus: false } } });
