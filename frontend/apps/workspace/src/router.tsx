@@ -1,15 +1,13 @@
 import { Suspense, lazy } from "react";
-import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
+import { WorkspaceShell } from "./WorkspaceShell";
 
 const WorkspaceFoundation = lazy(() => import("./routes/WorkspaceFoundation"));
 const LinksBoundary = lazy(() => import("./routes/LinksBoundary"));
 
 function RootLayout() {
-  return (
-    <Suspense fallback={<main className="foundation"><span>GoJet</span><p>正在加载…</p></main>}>
-      <Outlet />
-    </Suspense>
-  );
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return <WorkspaceShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet</span><p>正在加载…</p></main>}><Outlet /></Suspense></WorkspaceShell>;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
