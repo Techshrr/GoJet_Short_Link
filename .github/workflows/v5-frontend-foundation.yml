@@ -129,6 +129,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Run P05 fixed-viewport browser gate
+        run: pnpm test:links
+
+      - name: Upload P05 browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p05-links-evidence-${{ github.sha }}
+          path: frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Persist exact-head CI evidence to issue 8
         if: always() && github.event_name == 'push'
         continue-on-error: true
@@ -158,7 +170,7 @@ jobs:
           - Tested SHA: \`$HEAD_SHA\`
           - Workflow run: $RUN_URL
           - Run ID: \`$RUN_ID\`
-          - Scope: P01–P04 regression gates + P05 Links contract + strict TS/build + Go Links/server tests + P04 browser gate
+          - Scope: P01–P04 regression gates + P05 Links contract + strict TS/build + Go Links/server tests + P04/P05 fixed-viewport browser gates
 
           This comment records the exact SHA tested by \`.github/workflows/v5-frontend-foundation.yml\`. It does not mark P06 or any later phase complete.
           EOF
