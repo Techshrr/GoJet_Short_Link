@@ -1,15 +1,13 @@
 import { Suspense, lazy } from "react";
-import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
+import { AdminShell } from "./AdminShell";
 
 const AdminFoundation = lazy(() => import("./routes/AdminFoundation"));
 const UsersBoundary = lazy(() => import("./routes/UsersBoundary"));
 
 function RootLayout() {
-  return (
-    <Suspense fallback={<main className="foundation"><span>GoJet Admin</span><p>正在加载…</p></main>}>
-      <Outlet />
-    </Suspense>
-  );
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  return <AdminShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet Admin</span><p>正在加载…</p></main>}><Outlet /></Suspense></AdminShell>;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
