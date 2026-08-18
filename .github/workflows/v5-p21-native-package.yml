@@ -16,8 +16,7 @@ on:
       - "install.sh"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/v5-p20-whole-product.yml"
-      - ".github/workflows/v5-p21-native-package.yml"
+      - ".github/workflows/v5-*.yml"
   workflow_dispatch:
 
 permissions:

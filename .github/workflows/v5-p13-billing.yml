@@ -100,8 +100,14 @@ jobs:
         working-directory: .
         run: go test ./app/billing ./app/payments ./services/platformapi/cmd/server
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright Chromium without apt mirror dependency
+        timeout-minutes: 12
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: |
+          set -euo pipefail
+          pnpm exec playwright --version
+          timeout -k 30s 10m pnpm exec playwright install chromium
 
       - name: Run P04-P13 fixed-viewport Browser Gate regressions
         run: |

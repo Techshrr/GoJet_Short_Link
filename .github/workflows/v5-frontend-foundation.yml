@@ -135,7 +135,7 @@ jobs:
             ['workspace', 'src/routes/QRPage.tsx'],
             ['workspace', 'src/routes/FilesPage.tsx'],
             ['workspace', 'src/routes/TextPage.tsx'],
-            ['admin', 'src/routes/UsersBoundary.tsx'],
+            ['admin', 'src/routes/AdminOverviewPage.tsx'],
           ];
           for (const [app, source] of checks) {
             const file = `apps/${app}/dist/.vite/manifest.json`;
@@ -149,8 +149,14 @@ jobs:
         working-directory: .
         run: go test ./app/links ./app/domains ./app/resources ./services/platformapi/cmd/server ./services/platformapi/cmd/fileworker ./services/analyticsworker/... ./services/analyticsreconciler/...
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright Chromium without apt mirror dependency
+        timeout-minutes: 12
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: |
+          set -euo pipefail
+          pnpm exec playwright --version
+          timeout -k 30s 10m pnpm exec playwright install chromium
 
       - name: Run P04 fixed-viewport browser gate
         run: pnpm test:shells

@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
   issues: write
+concurrency:
+  group: v5-p19-website-final-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   contract:
     runs-on: ubuntu-latest
@@ -45,9 +48,15 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-      - name: Install Chromium
+      - name: Install Chromium without apt mirror dependency
         working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 12
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
+        run: |
+          set -euo pipefail
+          pnpm exec playwright --version
+          timeout -k 30s 10m pnpm exec playwright install chromium
       - name: P19 Website Final browser gate — 1440x900 / 1280x800 / 390x844
         working-directory: frontend
         run: pnpm test:site-final
