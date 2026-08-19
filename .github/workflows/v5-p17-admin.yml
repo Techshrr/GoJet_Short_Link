@@ -20,6 +20,7 @@ on:
       - "install.sh"
       - "go.mod"
       - "go.sum"
+      - ".github/workflows/fullstackp0.yml"
       - ".github/workflows/v5-*.yml"
   workflow_dispatch:
 
