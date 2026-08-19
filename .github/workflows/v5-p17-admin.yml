@@ -1,4 +1,5 @@
 # Exact-head retrigger after V5 CI hardening.
+# P22 authoritative exact-head prerequisite retrigger.
 name: V5 P17 Admin Gate
 
 on:
