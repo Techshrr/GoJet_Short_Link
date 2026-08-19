@@ -45,6 +45,18 @@ while IFS= read -r migration || [[ -n "$migration" ]]; do
   [[ -s "$PKG/database/migrations/$migration" ]] || { echo "catalogued migration missing: $migration" >&2; exit 1; }
 done < "$PKG/database/migrations/migrationcatalog.txt"
 
+# Fresh installs must work with a least-privilege MySQL 8 application user even
+# when binary logging is enabled. Keep database migrations schema/data-only and
+# keep business/audit authority in Go; privileged stored objects would require
+# SUPER or server-global trust switches on common production installations.
+privileged_sql=$(grep -RniE \
+  '^[[:space:]]*CREATE([[:space:]]+DEFINER[[:space:]]*=[^[:space:]]+)?[[:space:]]+(TRIGGER|FUNCTION|PROCEDURE|EVENT)([[:space:]]|$)' \
+  "$PKG/database/migrations" || true)
+if [[ -n "$privileged_sql" ]]; then
+  printf 'Privileged MySQL stored object present in Native migrations:\n%s\n' "$privileged_sql" >&2
+  exit 1
+fi
+
 # V5 SPA/static evidence: Vite/Astro outputs must reference built assets; source trees are not shipped.
 grep -Eq '/app/assets/[^" ]+\.js|/assets/[^" ]+\.js' "$PKG/public/app/index.html" || { echo 'Workspace built JS asset reference missing' >&2; exit 1; }
 grep -Eq '/admin/assets/[^" ]+\.js' "$PKG/public/admin/index.html" || { echo 'Admin V5 hashed JS asset reference missing' >&2; exit 1; }
