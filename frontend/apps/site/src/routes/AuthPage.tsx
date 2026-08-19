@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { AuthShell } from "@gojet/ui/shells";
-import { localized, useLocale, type GoJetLocale } from "@gojet/ui/locale";
+import { localizedError, useLocale, type GoJetLocale } from "@gojet/ui/locale";
 import TurnstileField from "../TurnstileField";
 import "../auth.css";
 
@@ -23,6 +23,10 @@ type SocialInfo = {
   password_min_length: number;
 };
 
+class AuthRequestError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
 async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const init: RequestInit = {
     method,
@@ -36,7 +40,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
   if (body !== undefined) init.body = JSON.stringify(body);
   const res = await fetch(path, init);
   const data = res.status === 204 ? undefined : await res.json().catch(() => undefined);
-  if (!res.ok) throw new Error((data as { error?: string } | undefined)?.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new AuthRequestError(res.status, (data as { error?: string } | undefined)?.error ?? `Request failed (${res.status})`);
   return data as T;
 }
 
@@ -46,8 +50,9 @@ const api = {
 };
 
 function errText(error: unknown, locale: GoJetLocale) {
-  if (!(error instanceof Error)) return locale === "zh-CN" ? "发生了未预期的错误，请稍后重试。" : "An unexpected error occurred. Please try again.";
-  return localized(error.message, locale);
+  if (error instanceof AuthRequestError) return localizedError(error.message, locale, error.status);
+  if (error instanceof Error) return localizedError(error.message, locale);
+  return localizedError(undefined, locale);
 }
 
 function providerStart(provider: Provider, mode: Mode) {
@@ -81,12 +86,14 @@ export default function AuthPage({ mode }: { mode: Mode }) {
   useEffect(() => {
     let active = true;
     if (mode === "login" || mode === "register") {
-      api.get<{ providers: Provider[] }>("/api/public/auth/providers").then((value) => active && setProviders(value.providers ?? [])).catch(() => active && setProviders([]));
+      api.get<{ providers: Provider[] }>("/api/public/auth/providers")
+        .then((value) => active && setProviders(value.providers ?? []))
+        .catch(() => active && setProviders([]));
     }
     const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
     const socialError = fragment.get("social_error");
     if (socialError) {
-      setError(locale === "zh-CN" ? `第三方登录失败（${socialError}），请重新尝试或改用邮箱登录。` : `Third-party sign-in failed (${socialError}). Try again or sign in with email.`);
+      setError(text(`Third-party sign-in failed (${socialError}). Try again or sign in with email.`, `第三方登录失败（${socialError}），请重新尝试或改用邮箱登录。`));
       history.replaceState(null, "", location.pathname + location.search);
     }
     const handoff = mode === "login" ? fragment.get("social_handoff") : null;
@@ -98,8 +105,10 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         if (result.two_factor_required && result.challenge) {
           setChallenge(result.challenge);
           setPostAuthRedirect(result.redirect || "/app");
-          setSuccess(locale === "zh-CN" ? "第三方账号验证成功。请输入双因素验证码继续登录。" : "Your third-party account was verified. Enter your two-step verification code to continue.");
-        } else location.assign(result.redirect || "/app");
+          setSuccess(text("Your third-party account was verified. Enter your two-step verification code to continue.", "第三方账号验证成功。请输入双因素验证码继续登录。"));
+        } else {
+          location.assign(result.redirect || "/app");
+        }
       }).catch((ex) => active && setError(errText(ex, locale))).finally(() => active && setBusy(false));
     }
     const registration = mode === "register" ? fragment.get("social_registration") : null;
@@ -111,11 +120,11 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         setSocialRegistration({ code: registration, provider: info.provider, label: info.provider_label });
         if (info.suggested_display_name) setName(info.suggested_display_name);
         if (info.provider_email) setEmail(info.provider_email);
-        setSuccess(locale === "zh-CN" ? `${info.provider_label} 身份验证成功。请确认邮箱并完成 GoJet 账号创建。` : `${info.provider_label} was verified. Confirm your email to finish creating your GoJet account.`);
+        setSuccess(text(`${info.provider_label} was verified. Confirm your email to finish creating your GoJet account.`, `${info.provider_label} 身份验证成功。请确认邮箱并完成 GoJet 账号创建。`));
       }).catch((ex) => active && setError(errText(ex, locale))).finally(() => active && setBusy(false));
     }
     return () => { active = false; };
-  }, [mode, locale]);
+  }, [mode, locale, text]);
 
   const title = {
     login: text("Sign in to GoJet", "登录 GoJet"),
@@ -127,15 +136,24 @@ export default function AuthPage({ mode }: { mode: Mode }) {
   const turnstileSurface = mode === "login" ? "login" : mode === "register" ? "registration" : mode === "forgot" ? "forgot_password" : mode === "reset" ? "reset_password" : "";
 
   const sendRegistrationCode = async () => {
-    setError(""); setSuccess(""); setCodeBusy(true);
+    setError("");
+    setSuccess("");
+    setCodeBusy(true);
     try {
       await api.post("/api/public/email-code", { email, purpose: "register" });
       setSuccess(text("Verification code sent. It is valid for 10 minutes.", "验证码已发送，有效期为 10 分钟。"));
-    } catch (ex) { setError(errText(ex, locale)); } finally { setCodeBusy(false); }
+    } catch (ex) {
+      setError(errText(ex, locale));
+    } finally {
+      setCodeBusy(false);
+    }
   };
 
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setError(""); setSuccess(""); setBusy(true);
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+    setBusy(true);
     try {
       if (challenge) {
         await api.post("/api/auth/login/2fa", { challenge, code, remember_session: rememberSession });
@@ -186,7 +204,11 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         await api.post("/api/auth/resetpassword", { token, password, turnstile_token: turnstileToken });
         setSuccess(text("Your password has been reset and previous sessions have been signed out. Sign in again with the new password.", "密码已重置，之前的登录会话已经退出。请使用新密码重新登录。"));
       }
-    } catch (ex) { setError(errText(ex, locale)); } finally { setBusy(false); }
+    } catch (ex) {
+      setError(errText(ex, locale));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const subtitle = challenge
@@ -222,7 +244,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         {mode === "register" || mode === "reset" ? <label>{text("Confirm password", "确认密码")}<input type="password" autoComplete="new-password" minLength={10} value={confirm} onChange={(event) => setConfirm(event.target.value)} required /></label> : null}
         {mode === "verify" || mode === "reset" ? <label>{mode === "verify" ? text("Verification token", "邮箱验证令牌") : text("Reset token", "密码重置令牌")}<input value={token} onChange={(event) => setToken(event.target.value)} required /></label> : null}
         {mode === "login" ? <label className="auth-check"><input type="checkbox" checked={rememberSession} onChange={(event) => setRememberSession(event.target.checked)} /><span>{text("Keep me signed in on this device for 30 days", "在此设备上保持登录 30 天")}</span></label> : null}
-        {mode === "register" ? <label className="auth-check"><input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} /><span>{text("I agree to the Terms of Service and Privacy Policy.", "我同意《服务条款》和《隐私政策》。")}</span></label> : null}
+        {mode === "register" ? <label className="auth-check"><input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} /><span>{text("I agree to the ", "我同意")}<a href="/legal/terms/">{text("Terms of Service", "《服务条款》")}</a>{text(" and ", "和")}<a href="/legal/privacy/">{text("Privacy Policy", "《隐私政策》")}</a>{text(".", "。")}</span></label> : null}
         {turnstileSurface && !socialRegistration ? <TurnstileField surface={turnstileSurface} onToken={setTurnstileToken} /> : null}
       </>}
       {error ? <div className="auth-alert is-error" role="alert">{error}</div> : null}
@@ -245,6 +267,7 @@ export default function AuthPage({ mode }: { mode: Mode }) {
         : mode === "register"
           ? <a href="/login">{text("Already have an account?", "已有账号？")}</a>
           : <a href="/login">{text("Back to sign in", "返回登录")}</a>}</div> : null}
+      <div className="auth-legal-links"><a href="/legal/privacy/">{text("Privacy Policy", "隐私政策")}</a><a href="/legal/terms/">{text("Terms of Service", "服务条款")}</a><a href="/legal/acceptable-use/">{text("Acceptable Use Policy", "可接受使用政策")}</a></div>
     </form>
   </AuthShell>;
 }
