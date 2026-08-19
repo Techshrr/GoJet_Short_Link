@@ -20,13 +20,13 @@ import (
 // RedisStore uses the small stable RESP2 protocol directly, keeping the
 // redirect data plane dependency-free and cheap to audit.
 type RedisStore struct {
-	address, password string
-	db                int
-	limit             int
+	address, username, password string
+	db                          int
+	limit                       int
 }
 
-func NewRedis(address, password string, db, limit int) *RedisStore {
-	return &RedisStore{address: address, password: password, db: db, limit: limit}
+func NewRedis(address, username, password string, db, limit int) *RedisStore {
+	return &RedisStore{address: address, username: username, password: password, db: db, limit: limit}
 }
 
 func (s *RedisStore) command(ctx context.Context, args ...string) (any, error) {
@@ -39,7 +39,11 @@ func (s *RedisStore) command(ctx context.Context, args ...string) (any, error) {
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	if s.password != "" {
-		if err = writeCommand(rw, "AUTH", s.password); err != nil {
+		authArgs := []string{"AUTH", s.password}
+		if s.username != "" {
+			authArgs = []string{"AUTH", s.username, s.password}
+		}
+		if err = writeCommand(rw, authArgs...); err != nil {
 			return nil, err
 		}
 		if _, err = readRESP(rw.Reader); err != nil {
@@ -133,8 +137,6 @@ func riskInterstitialURL(l domain.Link, decision string) string {
 }
 
 func enforceRiskDecision(l *domain.Link, raw any) {
-	// Operational pause/deletion is not a moderation decision. Preserve its
-	// existing inactive behavior rather than presenting a security-block page.
 	if !l.Active {
 		return
 	}
@@ -143,10 +145,6 @@ func enforceRiskDecision(l *domain.Link, raw any) {
 		return
 	}
 	if target := riskInterstitialURL(*l, decision); target != "" {
-		// Safety review must win over every normal redirect feature for this
-		// request. Replacing only the destination would still allow password,
-		// expiry, A/B, smart routing or UTM rules to interfere with the safety
-		// page, so all of those request-time gates are neutralized here.
 		l.Destination = target
 		l.StatusCode = 302
 		l.ExpiresAt = nil
@@ -158,9 +156,6 @@ func enforceRiskDecision(l *domain.Link, raw any) {
 		l.UTM = nil
 		return
 	}
-	// A missing PUBLIC_BASE_URL still fails closed. The branded interstitial is
-	// preferred, but absence of presentation configuration can never reopen the
-	// destination.
 	l.Active = false
 }
 
@@ -187,10 +182,6 @@ func (s *RedisStore) FindLink(ctx context.Context, host, code string) (domain.Li
 	if e != nil {
 		return l, e
 	}
-	// Missing, REVIEW, BLOCK, malformed or unknown risk state all fail closed.
-	// Only an exact ALLOW decision bound to the current target fingerprint can
-	// preserve the destination. All other states route to the branded GoJet
-	// safety surface before normal redirect features can take effect.
 	enforceRiskDecision(&l, risk)
 	return l, nil
 }
