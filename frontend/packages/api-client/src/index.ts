@@ -1,4 +1,4 @@
-export type CsrfTokenProvider = () => string | undefined | Promise<string | undefined>;
+export type CsrfTokenProvider = (path: string, method: string) => string | undefined | Promise<string | undefined>;
 
 export interface ApiClientOptions {
   baseUrl?: string;
@@ -57,7 +57,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     }
 
     if (!SAFE_METHODS.has(method)) {
-      const csrfToken = await options.getCsrfToken?.();
+      const csrfToken = await options.getCsrfToken?.(path, method);
       if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
     }
 

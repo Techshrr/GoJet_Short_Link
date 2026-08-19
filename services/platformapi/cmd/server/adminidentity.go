@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/adminauth"
 )
+
+const adminSessionCookie = "gojet_admin_session"
+const adminCSRFCookie = "gojet_admin_csrf"
 
 type adminKey struct{}
 type adminSessionKey struct{}
@@ -22,12 +27,76 @@ func (w *adminResponse) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+func adminSessionToken(r *http.Request) (string, bool) {
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(authorization, "Bearer ") {
+		token := strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
+		if token != "" {
+			return token, false
+		}
+	}
+	cookie, err := r.Cookie(adminSessionCookie)
+	if err == nil && strings.TrimSpace(cookie.Value) != "" {
+		return strings.TrimSpace(cookie.Value), true
+	}
+	return "", false
+}
+
+func setAdminCookieExpired(w http.ResponseWriter, r *http.Request, name string, httpOnly bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name: name, Value: "", Path: "/", HttpOnly: httpOnly,
+		Secure: secureRequest(r), SameSite: http.SameSiteStrictMode,
+		MaxAge: -1, Expires: time.Unix(1, 0),
+	})
+}
+
+func clearAdminSessionCookies(w http.ResponseWriter, r *http.Request) {
+	setAdminCookieExpired(w, r, adminSessionCookie, true)
+	setAdminCookieExpired(w, r, adminCSRFCookie, false)
+}
+
+func (s *server) setAdminSessionCookies(w http.ResponseWriter, r *http.Request, token string) string {
+	secure := secureRequest(r)
+	expires := time.Now().Add(12 * time.Hour)
+	http.SetCookie(w, &http.Cookie{
+		Name: adminSessionCookie, Value: token, Path: "/", HttpOnly: true,
+		Secure: secure, SameSite: http.SameSiteStrictMode,
+		MaxAge: 12 * 60 * 60, Expires: expires,
+	})
+	csrf, _ := randomHex(24)
+	http.SetCookie(w, &http.Cookie{
+		Name: adminCSRFCookie, Value: csrf, Path: "/", HttpOnly: false,
+		Secure: secure, SameSite: http.SameSiteStrictMode,
+		MaxAge: 12 * 60 * 60, Expires: expires,
+	})
+	return csrf
+}
+
+func validAdminCookieCSRF(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+		return true
+	}
+	cookie, err := r.Cookie(adminCSRFCookie)
+	if err != nil {
+		return false
+	}
+	header := strings.TrimSpace(r.Header.Get("X-CSRF-Token"))
+	return header != "" && len(header) == len(cookie.Value) && subtle.ConstantTimeCompare([]byte(header), []byte(cookie.Value)) == 1
+}
+
 func (s *server) admin(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		token, cookieAuth := adminSessionToken(r)
 		a, sessionID, err := s.adminAuth.Authenticate(r.Context(), token)
 		if err != nil {
+			if cookieAuth {
+				clearAdminSessionCookies(w, r)
+			}
 			jsonResponse(w, http.StatusUnauthorized, map[string]string{"error": "管理员会话无效或已过期"})
+			return
+		}
+		if cookieAuth && !validAdminCookieCSRF(r) {
+			jsonResponse(w, http.StatusForbidden, map[string]string{"error": "管理员操作验证失败，请刷新页面后重试"})
 			return
 		}
 		a = adminauth.WithBaselinePermissions(a)
@@ -75,16 +144,20 @@ func (s *server) adminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a = adminauth.WithBaselinePermissions(a)
-	jsonResponse(w, http.StatusOK, map[string]any{"administrator": a, "token": token})
+	csrf := s.setAdminSessionCookies(w, r, token)
+	jsonResponse(w, http.StatusOK, map[string]any{"administrator": a, "token": token, "csrfToken": csrf})
 }
 
 func (s *server) adminMe(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, currentAdmin(r))
 }
+
 func (s *server) adminLogout(w http.ResponseWriter, r *http.Request) {
 	_ = s.adminAuth.Logout(r.Context(), r.Context().Value(adminSessionKey{}).(int64))
+	clearAdminSessionCookies(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
+
 func (s *server) adminBeginTOTP(w http.ResponseWriter, r *http.Request) {
 	secret, uri, err := s.adminAuth.BeginTOTP(r.Context(), currentAdmin(r))
 	if err != nil {
@@ -93,6 +166,7 @@ func (s *server) adminBeginTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, http.StatusCreated, map[string]string{"secret": secret, "otpauth_uri": uri})
 }
+
 func (s *server) adminConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Code string `json:"code"`
@@ -106,6 +180,7 @@ func (s *server) adminConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, map[string]bool{"enabled": true})
 }
+
 func (s *server) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		CurrentPassword string `json:"current_password"`
@@ -120,6 +195,7 @@ func (s *server) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonResponse(w, 200, map[string]bool{"updated": true})
 }
+
 func (s *server) adminRevokeSessions(w http.ResponseWriter, r *http.Request) {
 	if !requireSuperAdministrator(w, r) {
 		return
@@ -162,6 +238,7 @@ func (s *server) adminListAdministrators(w http.ResponseWriter, r *http.Request)
 		"role_templates":     administratorRoleTemplates(),
 	})
 }
+
 func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request) {
 	if !requireSuperAdministrator(w, r) {
 		return
@@ -183,6 +260,7 @@ func (s *server) adminCreateAdministrator(w http.ResponseWriter, r *http.Request
 	}
 	jsonResponse(w, 201, map[string]int64{"id": id})
 }
+
 func (s *server) adminUpdateAdministrator(w http.ResponseWriter, r *http.Request) {
 	if !requireSuperAdministrator(w, r) {
 		return
