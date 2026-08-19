@@ -138,9 +138,33 @@ for (const file of auditedFiles) {
     return false;
   }
 
-  function scanJsxExpression(node) {
-    if ((ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) && !insidePairCall(node)) checkPair(node.text, node, 'jsx-expression');
-    ts.forEachChild(node, scanJsxExpression);
+  // A JSX child expression can contain conditions, class names, input types and
+  // other implementation strings. Only expression branches that can themselves
+  // render text are audited here; nested JSX is handled by the normal AST walk.
+  function scanVisibleExpression(node) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) return;
+    if ((ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) && !insidePairCall(node)) {
+      checkPair(node.text, node, 'jsx-expression');
+      return;
+    }
+    if (ts.isParenthesizedExpression(node)) {
+      scanVisibleExpression(node.expression);
+      return;
+    }
+    if (ts.isConditionalExpression(node)) {
+      scanVisibleExpression(node.whenTrue);
+      scanVisibleExpression(node.whenFalse);
+      return;
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      scanVisibleExpression(node.left);
+      scanVisibleExpression(node.right);
+      return;
+    }
+    if (ts.isTemplateExpression(node)) {
+      if (node.head.text) checkPair(node.head.text, node.head, 'jsx-expression');
+      for (const span of node.templateSpans) if (span.literal.text) checkPair(span.literal.text, span.literal, 'jsx-expression');
+    }
   }
 
   function visit(node) {
@@ -149,9 +173,9 @@ for (const file of auditedFiles) {
     if (ts.isJsxAttribute(node) && visibleAttributes.has(node.name.getText())) {
       const init = node.initializer;
       if (init && ts.isStringLiteral(init)) checkPair(init.text, init, `attribute:${node.name.getText()}`);
-      if (init && ts.isJsxExpression(init) && init.expression) scanJsxExpression(init.expression);
+      if (init && ts.isJsxExpression(init) && init.expression) scanVisibleExpression(init.expression);
     } else if (ts.isJsxExpression(node) && node.expression && !ts.isJsxAttribute(node.parent)) {
-      scanJsxExpression(node.expression);
+      scanVisibleExpression(node.expression);
     }
 
     if (ts.isPropertyAssignment(node) && visibleProperties.has(propertyName(node.name))) {
