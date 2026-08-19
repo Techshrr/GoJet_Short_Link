@@ -32,7 +32,7 @@ func main() {
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Password: os.Getenv("REDIS_PASSWORD")})
+	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
 	defer rdb.Close()
 	if err = rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatal(err)
@@ -66,11 +66,6 @@ func main() {
 	}
 }
 
-// operationsHealthcheck validates the complete safety dependency chain: MySQL
-// is reachable, authenticated Redis is reachable, and the Redis risk cache has
-// completed an authoritative SQL backfill. A process is not considered healthy
-// merely because both sockets accept connections while redirect decisions are
-// still absent after a Redis restart or failed bootstrap.
 func operationsHealthcheck() bool {
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
@@ -86,7 +81,7 @@ func operationsHealthcheck() bool {
 	if err = db.PingContext(ctx); err != nil {
 		return false
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Password: os.Getenv("REDIS_PASSWORD")})
+	rdb := redis.NewClient(&redis.Options{Addr: value("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
 	defer rdb.Close()
 	if err = rdb.Ping(ctx).Err(); err != nil {
 		return false
@@ -95,18 +90,10 @@ func operationsHealthcheck() bool {
 	return err == nil && ready
 }
 
-// newDestinationRiskScanner is deliberately small and directly tested. The
-// production worker must always use ProviderFromEnvironment so generic semantic
-// detection remains active even when no external reputation service is set.
 func newDestinationRiskScanner() *destinationrisk.Scanner {
 	return destinationrisk.New(destinationrisk.ProviderFromEnvironment())
 }
 
-// runRiskCacheRecoveryLoop heals two different classes of cache loss:
-//   - Redis restart/flush removes the SQL-backfill marker and EnsureRedisCache
-//     republishes the exact current fingerprints.
-//   - a scan saved SQL but failed to republish its Redis decision; the in-process
-//     dirty flag forces a full backfill even if the Redis marker itself survived.
 func runRiskCacheRecoveryLoop(ctx context.Context, db *sql.DB, rdb *redis.Client, dirty *atomic.Bool) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
@@ -181,10 +168,6 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 					if len(targets) == 0 {
 						continue
 					}
-
-					// Revoke any previously cached ALLOW before changing authoritative
-					// SQL state. If save or republish then fails, redirectengine sees a
-					// cache miss and routes to REVIEW instead of serving stale ALLOW.
 					var invalidateErr error
 					for attempt := 0; attempt < 3; attempt++ {
 						invalidateErr = rdb.Del(ctx, destinationrisk.RedisKey(item.LinkID, targets)).Err()
@@ -194,21 +177,14 @@ func runRiskLoop(ctx context.Context, store *destinationrisk.Store, scanner *des
 						time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
 					}
 					if invalidateErr != nil {
-						// SQL is deliberately untouched. Replaying the old SQL decision into
-						// Redis here could restore a stale ALLOW, so wait for the next scan.
 						log.Printf("destination risk fail-closed invalidate link=%d: %v", item.LinkID, invalidateErr)
 						continue
 					}
-
 					if err := store.Save(ctx, item.LinkID, targets, assessment); err != nil {
-						// The cache key was already removed. Keep it missing (= REVIEW) and
-						// let the still-due SQL row retry instead of backfilling old state.
 						log.Printf("destination risk save link=%d: %v", item.LinkID, err)
 						continue
 					}
 					if err := destinationrisk.SyncDecision(ctx, rdb, item.LinkID, targets, assessment.Decision); err != nil {
-						// SQL now contains the new authoritative decision, so recovery may
-						// safely republish from SQL even if the Redis ready marker survived.
 						if dirty != nil {
 							dirty.Store(true)
 						}
