@@ -5,7 +5,7 @@ on:
   pull_request:
   push:
     branches:
-      - 'rebuild/v4-rc12-real-install-fixes'
+      - 'rebuild/v5.0.2-auth-i18n-product-copy'
 
 concurrency:
   group: gojetproductsurface${{ github.ref }}
@@ -17,188 +17,120 @@ jobs:
     services:
       mysql:
         image: mysql:8.4
-        env: {MYSQL_ROOT_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
-        ports: ['3306:3306']
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gojet_surface
+        ports:
+          - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=5s --health-timeout=5s --health-retries=30
       redis:
         image: redis:7-alpine
-        ports: ['6379:6379']
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=5s --health-timeout=3s --health-retries=30
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: {go-version-file: go.mod, cache: false}
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
       - uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: packagelock.json}
-      - name: Enforce repository naming policy
-        run: python3 scripts/checknames.py
-      - name: Install browser and runtime dependencies
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Normalize Ubuntu package sources
+        run: bash scripts/aptstable.sh
+
+      - name: Install runtime acceptance dependencies
         run: |
           set -euo pipefail
-          sudo apt-get update
           sudo apt-get install -y default-mysql-client nginx poppler-utils zbar-tools python3-fonttools
-          bash scripts/npmci.sh
-          npx playwright install --with-deps chromium
-      - name: Prepare PDF font resources
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+
+      - name: Validate repository and backend runtime
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: gojet_surface
         run: |
           set -euo pipefail
+          python3 scripts/checknames.py
+          python3 scripts/checkschema.py
           chmod 0755 scripts/preparepdffonts.sh
           scripts/preparepdffonts.sh
-          go mod download
-      - name: Build canonical public site and validate runtime sources
-        run: |
-          set -euo pipefail
-          python3 scripts/buildpublicsite.py --output /tmp/gojetpublicbuild
-          test -f /tmp/gojetpublicbuild/index.html
-          test -f /tmp/gojetpublicbuild/privacy.html
-          test -f /tmp/gojetpublicbuild/terms.html
-          test -f /tmp/gojetpublicbuild/forgotpassword.html
-          test -f /tmp/gojetpublicbuild/reportabuse.html
-          test -f /tmp/gojetpublicbuild/products/urlshortener.html
-          test -z "$(find /tmp/gojetpublicbuild -mindepth 2 -type f -name index.html -print -quit)"
-          test ! -e frontend/marketingsite
-          test ! -e scripts/rebuildmarketingpages.py
-          test ! -e scripts/rebuildpublicproductpages.py
-          test ! -e frontend/adminconsole/settingsfull.js
-          RUNTIME_PATHS='frontend/publicsite frontend/adminconsole frontend/userconsole services/platformapi/cmd/server'
-          VERSION_QUERY='?'; VERSION_QUERY+='v='
-          if grep -R -I -n -F "$VERSION_QUERY" $RUNTIME_PATHS --include='*.js' --include='*.html' --include='*.go' --exclude='*_test.go'; then echo 'static asset version query leaked into canonical runtime source' >&2; exit 1; fi
-          node --check frontend/publicsite/assets/app.js
-          node --check frontend/publicsite/assets/authbase.js
-          node --check frontend/publicsite/assets/authcodeui.js
-          for file in frontend/adminconsole/settings.js frontend/adminconsole/socialauthsettings.js frontend/adminconsole/paymentux.js frontend/adminconsole/billingadmin.js frontend/adminconsole/supportsecurity.js frontend/adminconsole/announcementbarsettings.js frontend/adminconsole/destinationrisk.js frontend/adminconsole/riskworkflowux.js; do node --check "$file"; done
-          for file in frontend/userconsole/pages.js frontend/userconsole/router.js frontend/userconsole/links.js frontend/userconsole/workflowpages.js frontend/userconsole/textux.js frontend/userconsole/bio.js frontend/userconsole/domains.js frontend/userconsole/analytics.js frontend/userconsole/files.js frontend/userconsole/team.js frontend/userconsole/organization.js frontend/userconsole/billing.js frontend/userconsole/billingreal.js frontend/userconsole/support.js frontend/userconsole/socialidentities.js frontend/userconsole/linkriskux.js frontend/userconsole/shareqrux.js; do node --check "$file"; done
-          if grep -R -n --include='*.js' 'GoJetProductHardening' frontend/userconsole; then echo 'retired customer console page registry detected' >&2; exit 1; fi
-          for spec in productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js socialauthsettings.spec.js socialidentitysettings.spec.js socialregistration.spec.js billinglayout.spec.js authentrysurface.spec.js responsiveconsole.spec.js; do node --check "tests/e2e/$spec"; done
-          python3 -m py_compile tests/integration/assertpdfcontrast.py
-      - name: Run source level tests
-        run: |
-          set -euo pipefail
-          bash tests/integration/releasestoragenamespaces.sh
+          bash scripts/runmigrations.sh
           go test ./...
           go vet ./...
-      - name: Apply migration catalog and build runtime services
-        env: {MYSQL_HOST: 127.0.0.1, MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
+
+      - name: Verify canonical V5 product surfaces
+        working-directory: frontend
         run: |
           set -euo pipefail
-          bash scripts/runmigrations.sh
-          mkdir -p /tmp/gojetsurface/{uploads,files,brand,generated/qr,bin}
-          go build -o /tmp/gojetsurface/bin/platformapi ./services/platformapi/cmd/server
-          go build -o /tmp/gojetsurface/bin/redirectengine ./services/redirectengine/cmd/server
-          go build -o /tmp/gojetsurface/bin/analyticsworker ./services/analyticsworker/cmd/worker
-          go build -o /tmp/gojetsurface/bin/operationsmonitor ./services/platformapi/cmd/operationsmonitor
-      - name: Start backend, analytics and destination risk services
+          pnpm check
+
+      - name: Run final website browser acceptance
+        working-directory: frontend
+        run: pnpm test:site-final
+
+      - name: Run authentication and product shell browser acceptance
+        working-directory: frontend
         run: |
           set -euo pipefail
-          sudo sh -c "printf '\n127.0.0.1 rainbow.test\n' >> /etc/hosts"
-          openssl req -x509 -newkey rsa:2048 -nodes \
-            -keyout /tmp/gojetsurface/rainbow.key \
-            -out /tmp/gojetsurface/rainbow.crt \
-            -days 1 -subj '/CN=rainbow.test' \
-            -addext 'subjectAltName=DNS:rainbow.test' >/dev/null 2>&1
-          cat >/tmp/gojetsurface/rainbowfixture.py <<'PY'
-          import http.server
-          import json
-          import ssl
-          import urllib.parse
+          pnpm test:shells
+          pnpm test:auth
+          pnpm test:account
+          pnpm test:admin
+          pnpm test:workspace
+          pnpm test:docs
 
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  parsed = urllib.parse.urlparse(self.path)
-                  if parsed.path == '/health':
-                      self.send_response(200)
-                      self.end_headers()
-                      self.wfile.write(b'ok')
-                      return
-                  query = urllib.parse.parse_qs(parsed.query)
-                  if parsed.path != '/connect.php' or query.get('act', [''])[0] != 'login':
-                      self.send_response(400)
-                      self.end_headers()
-                      return
-                  login_type = query.get('type', [''])[0]
-                  payload = {
-                      'code': 0,
-                      'msg': 'succ',
-                      'type': login_type,
-                      'url': 'https://graph.qq.com/oauth2.0/authorize?from=gojet-surface',
-                  }
-                  body = json.dumps(payload).encode()
-                  self.send_response(200)
-                  self.send_header('Content-Type', 'application/json')
-                  self.send_header('Content-Length', str(len(body)))
-                  self.end_headers()
-                  self.wfile.write(body)
-
-              def log_message(self, format, *args):
-                  return
-
-          server = http.server.ThreadingHTTPServer(('127.0.0.1', 18443), Handler)
-          context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-          context.load_cert_chain('/tmp/gojetsurface/rainbow.crt', '/tmp/gojetsurface/rainbow.key')
-          server.socket = context.wrap_socket(server.socket, server_side=True)
-          server.serve_forever()
-          PY
-          python3 /tmp/gojetsurface/rainbowfixture.py >/tmp/gojetsurface/rainbowfixture.log 2>&1 & echo $! >/tmp/gojetsurface/rainbowfixture.pid
-          for i in $(seq 1 30); do curl --cacert /tmp/gojetsurface/rainbow.crt -fsS https://rainbow.test:18443/health >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 30; done
-          SETTINGS_KEY=$(python3 - <<'PY'
-          import base64
-          print(base64.b64encode(bytes(range(32))).decode())
-          PY
-          )
-          QR_KEY='9c2f6b3a8d7e4f10b5a1c9d8e7f6a5b49c2f6b3a8d7e4f10b5a1c9d8e7f6a5b4'
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' SETTINGS_ENCRYPTION_KEY="$SETTINGS_KEY" ADMIN_BOOTSTRAP_EMAIL='owner@example.test' ADMIN_BOOTSTRAP_PASSWORD='OwnerPassword!2026' QR_TRACKING_KEY="$QR_KEY" PUBLIC_BASE_URL='http://127.0.0.1:4180' PLATFORM_HTTP_ADDRESS='127.0.0.1:18090' UPLOAD_STORAGE_PATH='/tmp/gojetsurface/uploads' BRAND_ASSET_PATH='/tmp/gojetsurface/brand' GENERATED_QR_STORAGE_PATH='/tmp/gojetsurface/generated/qr' FILE_STORAGE_PATH='/tmp/gojetsurface/files' PDF_FONT_PATH="$GITHUB_WORKSPACE/resources/fonts/NotoSansSCRegular.ttf" SSL_CERT_FILE='/tmp/gojetsurface/rainbow.crt' /tmp/gojetsurface/bin/platformapi >/tmp/gojetsurface/platformapi.log 2>&1 & echo $! >/tmp/gojetsurface/platformapi.pid
-          env REDIS_ADDRESS='127.0.0.1:6379' HTTP_ADDRESS='127.0.0.1:18080' VISITOR_HASH_KEY='productsurfacevisitorkey2026' QR_TRACKING_KEY="$QR_KEY" /tmp/gojetsurface/bin/redirectengine >/tmp/gojetsurface/redirectengine.log 2>&1 & echo $! >/tmp/gojetsurface/redirectengine.pid
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' ANALYTICS_GROUP='gojetsurface' ANALYTICS_CONSUMER='browsersurface' /tmp/gojetsurface/bin/analyticsworker >/tmp/gojetsurface/analyticsworker.log 2>&1 & echo $! >/tmp/gojetsurface/analyticsworker.pid
-          env MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/gojet_surface?parseTime=true&multiStatements=true' REDIS_ADDRESS='127.0.0.1:6379' DESTINATION_RISK_SCAN_INTERVAL_SECONDS='2' DESTINATION_RISK_SCAN_WORKERS='2' DESTINATION_RISK_SCAN_BATCH='32' OPERATIONS_MONITOR_INTERVAL_SECONDS='60' /tmp/gojetsurface/bin/operationsmonitor >/tmp/gojetsurface/operationsmonitor.log 2>&1 & echo $! >/tmp/gojetsurface/operationsmonitor.pid
-          for port in 18090 18080; do for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; test "$i" -lt 60; done; done
-          kill -0 "$(cat /tmp/gojetsurface/operationsmonitor.pid)"
-          kill -0 "$(cat /tmp/gojetsurface/rainbowfixture.pid)"
-      - name: Serve product through Nginx
+      - name: Validate production release payload uses V5 applications
         run: |
           set -euo pipefail
-          rm -rf /tmp/gojetweb && mkdir -p /tmp/gojetweb/app /tmp/gojetweb/admin
-          cp -a /tmp/gojetpublicbuild/. /tmp/gojetweb/; cp -a frontend/userconsole/. /tmp/gojetweb/app/; cp -a frontend/adminconsole/. /tmp/gojetweb/admin/
-          sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
-          cat >/tmp/gojetsurfacenginx.conf <<'NGINX'
-          server { listen 4180; server_name 127.0.0.1 localhost; root /tmp/gojetweb; index index.html; client_max_body_size 110m;
-            location ^~ /api/ { proxy_pass http://127.0.0.1:18090; proxy_http_version 1.1; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
-            location ^~ /assets/images/ { alias /tmp/gojetsurface/brand/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
-            location ^~ /generated/qr/ { alias /tmp/gojetsurface/generated/qr/; autoindex off; add_header Cache-Control 'public, max-age=60'; }
-            location = /app { return 302 /app/; } location ^~ /app/ { try_files $uri $uri/ /app/index.html; }
-            location = /admin { return 302 /admin/; } location ^~ /admin/ { try_files $uri $uri/ /admin/index.html; }
-            location = / { try_files /index.html =404; } location / { try_files $uri $uri.html @redirect; }
-            location @redirect { proxy_pass http://127.0.0.1:18080; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
-          }
-          NGINX
-          sudo cp /tmp/gojetsurfacenginx.conf /etc/nginx/conf.d/gojetsurface.conf; sudo nginx -t; sudo nginx
-          for path in / /privacy /terms /forgotpassword /reportabuse /products/urlshortener; do curl -fsS "http://127.0.0.1:4180$path" >/dev/null; done
-      - name: Run browser product surface acceptance
-        env: {GOJET_SURFACE_BASE: 'http://127.0.0.1:4180'}
-        run: npx playwright test productsurface.spec.js fullsurfaceconsistency.spec.js announcementrotation.spec.js destinationriskadmin.spec.js socialauthsettings.spec.js socialidentitysettings.spec.js socialregistration.spec.js billinglayout.spec.js authentrysurface.spec.js responsiveconsole.spec.js --config=tests/e2e/playwright.surface.config.js --project=chromium
-      - name: Run invoice PDF visual contrast acceptance
-        env: {GOJET_TEST_BASE: 'http://127.0.0.1:18090', MYSQL_HOST: '127.0.0.1', MYSQL_PORT: '3306', MYSQL_USER: root, MYSQL_PASSWORD: root, MYSQL_DATABASE: gojet_surface}
+          sh -n scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/site/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/workspace/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/admin/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/docs/dist' scripts/packagerelease.sh
+          grep -Fq 'public/legal/privacy/index.html' scripts/packagerelease.sh
+          grep -Fq 'public/zh-CN/legal/privacy/index.html' scripts/verifyrelease.sh
+          for config in deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf; do
+            grep -Fq 'try_files $uri $uri.html $uri/index.html' "$config"
+          done
+
+      - name: Reject retired visible and CI contracts
         run: |
-          bash tests/integration/invoicepdfrender.sh
-          python3 tests/integration/assertpdfcontrast.py /tmp/gojet-pdf-acceptance/invoice-pixels.ppm
-      - name: Diagnostics on failure
-        if: failure()
-        run: |
-          echo '===== platformapi ====='; cat /tmp/gojetsurface/platformapi.log 2>/dev/null || true
-          echo '===== redirectengine ====='; cat /tmp/gojetsurface/redirectengine.log 2>/dev/null || true
-          echo '===== analyticsworker ====='; cat /tmp/gojetsurface/analyticsworker.log 2>/dev/null || true
-          echo '===== operationsmonitor ====='; cat /tmp/gojetsurface/operationsmonitor.log 2>/dev/null || true
-          echo '===== rainbow fixture ====='; cat /tmp/gojetsurface/rainbowfixture.log 2>/dev/null || true
-          echo '===== nginx error ====='; sudo cat /var/log/nginx/error.log 2>/dev/null || true
-      - name: Upload browser and PDF evidence
+          set -euo pipefail
+          if grep -R -n -E 'azure\.archive\.ubuntu\.com|playwright install --with-deps' .github/workflows; then
+            echo 'unstable Ubuntu mirror or Playwright apt bootstrap returned to CI' >&2
+            exit 1
+          fi
+          if grep -R -n -E 'frontend/(publicsite|userconsole|adminconsole)' scripts/packagerelease.sh; then
+            echo 'legacy frontend entered the production release packager' >&2
+            exit 1
+          fi
+
+      - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
-        with: {name: gojetproductsurfaceevidence, path: "test-results/\n/tmp/gojet-pdf-acceptance/", if-no-files-found: ignore, retention-days: 14}
-      - name: Stop runtime services
-        if: always()
-        run: |
-          sudo nginx -s stop 2>/dev/null || true
-          for name in platformapi redirectengine analyticsworker operationsmonitor rainbowfixture; do test ! -f "/tmp/gojetsurface/$name.pid" || kill "$(cat "/tmp/gojetsurface/$name.pid")" 2>/dev/null || true; done
+        with:
+          name: gojetv5productsurfaceevidence
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
