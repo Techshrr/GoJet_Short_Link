@@ -1,6 +1,7 @@
 # Exact-head retrigger after V5 CI hardening.
 # P22 authoritative exact-head prerequisite: any V5 candidate-affecting change
 # must produce a same-SHA P17 regression result before P22 may consume G11.
+# Final retrigger after full-stack Ubuntu mirror stabilization.
 name: V5 P17 Admin Gate
 
 on:
