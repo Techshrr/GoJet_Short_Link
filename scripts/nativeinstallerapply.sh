@@ -59,13 +59,13 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   key=${line%%=*}
   encoded=${line#*=}
   case "$key" in
-    MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_PORT|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)
+    MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_HOST|REDIS_PORT|REDIS_USERNAME|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)
       cfg[$key]=$(printf '%s' "$encoded" | base64 -d 2>/dev/null) || fail "安装请求字段 $key 无效" ;;
     *) fail "安装请求包含未知字段：$key" ;;
   esac
 done < "$PROCESSING"
 
-for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do
+for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_HOST REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do
   [[ -n "${cfg[$key]:-}" ]] || fail "缺少安装参数：$key"
 done
 [[ "${cfg[MYSQL_PORT]}" =~ ^[0-9]{1,5}$ ]] && (( cfg[MYSQL_PORT] >= 1 && cfg[MYSQL_PORT] <= 65535 )) || fail 'MySQL 端口无效'
@@ -79,13 +79,16 @@ if [[ -n "${cfg[ALERT_EMAIL]:-}" ]]; then
 fi
 admin_password=${cfg[ADMIN_PASSWORD]}
 mysql_password=${cfg[MYSQL_PASSWORD]}
+redis_host=${cfg[REDIS_HOST]:-127.0.0.1}
+redis_username=${cfg[REDIS_USERNAME]-}
 redis_password=${cfg[REDIS_PASSWORD]-}
 [[ ${#admin_password} -ge 12 && ${#admin_password} -le 256 ]] || fail '管理员密码长度必须为 12-256 位'
-[[ ${#mysql_password} -le 512 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 密码过长'
-for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do
+[[ ${#mysql_password} -le 512 && ${#redis_username} -le 256 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 认证参数过长'
+for key in MYSQL_PASSWORD REDIS_HOST REDIS_USERNAME REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do
   value=${cfg[$key]:-}
   [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "安装参数 $key 包含非法控制字符"
 done
+[[ "$redis_host" != *[[:space:]]* ]] || fail 'Redis 地址格式无效'
 HOST=${cfg[PUBLIC_BASE_URL]#https://}
 HOST=${HOST%/}
 HTTPS_PORT=443
@@ -105,11 +108,22 @@ status database 27 '正在执行数据库迁移'
 MYSQL_HOST="$MYSQL_HOST" MYSQL_PORT="${cfg[MYSQL_PORT]}" MYSQL_USER="${cfg[MYSQL_USER]}" MYSQL_PASSWORD="${cfg[MYSQL_PASSWORD]}" MYSQL_DATABASE="${cfg[MYSQL_DATABASE]}" MYSQL_BIN="$mysql" "$ROOT/scripts/runmigrations.sh" || fail '数据库迁移失败'
 
 status redis 38 '正在验证 Redis'
-redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}")
-if [[ -n "${cfg[REDIS_PASSWORD]:-}" ]]; then
-  redis_args+=(-a "${cfg[REDIS_PASSWORD]}")
+is_loopback_redis_host(){
+  local h=${1#[}
+  h=${h%]}
+  case "${h,,}" in localhost|::1|127.*) return 0;; *) return 1;; esac
+}
+[[ -z "$redis_username" || -n "$redis_password" ]] || fail 'Redis ACL 用户名已填写时必须同时填写密码'
+if ! is_loopback_redis_host "$redis_host" && [[ -z "$redis_password" ]]; then
+  fail '远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'
 fi
-"$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 连接或密码验证失败'
+redis_args=(-h "$redis_host" -p "${cfg[REDIS_PORT]}")
+[[ -z "$redis_username" ]] || redis_args+=(--user "$redis_username")
+if [[ -n "$redis_password" ]]; then
+  REDISCLI_AUTH="$redis_password" "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 认证连接失败；请检查地址、端口、用户名和密码'
+else
+  "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail '本机 Redis 连接失败；如 Redis 已启用认证请填写密码或 ACL 用户名/密码'
+fi
 
 status secrets 45 '正在生成系统安全密钥'
 SETTINGS_ENCRYPTION_KEY=$(openssl rand -base64 32 | tr -d '\n')
@@ -138,8 +152,9 @@ ENV_FILE="$ROOT/deploy/native/gojet.env"
   printf 'MYSQL_USER=%s\n' "$(envq "${cfg[MYSQL_USER]}")"
   printf 'MYSQL_PASSWORD=%s\n' "$(envq "${cfg[MYSQL_PASSWORD]}")"
   printf 'MYSQL_DSN=%s\n' "$(envq "$MYSQL_DSN")"
-  printf 'REDIS_ADDRESS=%s\n' "$(envq "127.0.0.1:${cfg[REDIS_PORT]}")"
-  printf 'REDIS_PASSWORD=%s\n' "$(envq "${cfg[REDIS_PASSWORD]:-}")"
+  printf 'REDIS_ADDRESS=%s\n' "$(envq "${redis_host}:${cfg[REDIS_PORT]}")"
+  printf 'REDIS_USERNAME=%s\n' "$(envq "$redis_username")"
+  printf 'REDIS_PASSWORD=%s\n' "$(envq "$redis_password")"
   printf 'SETTINGS_ENCRYPTION_KEY=%s\n' "$(envq "$SETTINGS_ENCRYPTION_KEY")"
   printf 'ADMIN_BOOTSTRAP_EMAIL=%s\n' "$(envq "${cfg[ADMIN_EMAIL]}")"
   printf 'ADMIN_BOOTSTRAP_PASSWORD=%s\n' "$(envq "${cfg[ADMIN_PASSWORD]}")"
@@ -205,9 +220,13 @@ systemctl reload nginx 2>/dev/null || "$nginx" -s reload
 status nginx 72 '正在验证后台静态资源路由'
 PUBLIC_ORIGIN=${cfg[PUBLIC_BASE_URL]%/}
 CURL_LOCAL=(curl --noproxy '*' -kfsS --resolve "$HOST:$HTTPS_PORT:127.0.0.1")
-"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" | grep -Fq 'method="post" action="/api/admin/auth/login"' || fail '管理员登录页安全回退验证失败；已恢复安装前 rewrite'
-"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/styles.css" | grep -Fq ':root{' || fail '管理员后台 CSS 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
-"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/app.js" | grep -Fq 'loginForm' || fail '管理员后台 JavaScript 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
+admin_html=$(mktemp)
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" > "$admin_html" || fail '管理员 V5 SPA 入口无法读取；已恢复安装前 rewrite'
+grep -Fq '<div id="root"></div>' "$admin_html" || fail '管理员 V5 SPA root mount 缺失；已恢复安装前 rewrite'
+admin_asset=$(grep -oE '/admin/assets/[^" ]+\.js' "$admin_html" | head -n1 || true)
+[[ -n "$admin_asset" ]] || fail '管理员 V5 hashed JavaScript 资产引用缺失；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN$admin_asset" >/dev/null || fail '管理员 V5 hashed JavaScript 无法读取；已恢复安装前 rewrite'
+rm -f "$admin_html"
 
 status services 76 '正在启动 8 个 GoJet 服务'
 for service in "${SERVICES[@]}"; do
