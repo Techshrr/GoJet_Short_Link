@@ -72,7 +72,9 @@ jobs:
           SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='mail_messages' AND COLUMN_NAME='dedupe_key';
           SELECT COUNT(*) FROM mail_templates WHERE template_key IN ('verification','account_welcome','password_reset','invoice_created','invoice_due_soon','invoice_overdue','invoice_paid','payment_started','payment_failed','subscription_changed','subscription_renewed','subscription_expiring','subscription_cancelled');
           SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='link_destination_risk';
-          SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='gojet_test' AND TRIGGER_NAME='short_links_destination_risk_invalidate';
+          SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='users' AND COLUMN_NAME='password_login_enabled';
+          SELECT COALESCE(MAX(CHARACTER_MAXIMUM_LENGTH),0) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='gojet_test' AND TABLE_NAME='user_social_identities' AND COLUMN_NAME='provider_subject';
+          SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='gojet_test';
           SQL
           mapfile -t schema < /tmp/gojetschemacheck
           test "${schema[0]}" = 1
@@ -83,6 +85,8 @@ jobs:
           test "${schema[5]}" -ge 13
           test "${schema[6]}" = 1
           test "${schema[7]}" = 1
+          test "${schema[8]}" = 255
+          test "${schema[9]}" = 0
       - name: Build P0 runtime services
         run: |
           set -euo pipefail
