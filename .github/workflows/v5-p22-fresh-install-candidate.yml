@@ -9,6 +9,7 @@ on:
       - "services/**"
       - "database/**"
       - "scripts/**"
+      - "tests/**"
       - "deploy/**"
       - "installer/**"
       - "public/install/**"
@@ -95,6 +96,18 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Stabilize Ubuntu package downloads
+        run: |
+          set -euo pipefail
+          if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+            sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' /etc/apt/sources.list.d/ubuntu.sources
+          fi
+          sudo tee /etc/apt/apt.conf.d/80gojet-p22 >/dev/null <<'EOF'
+          Acquire::Retries "5";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
 
       - name: Download immutable P21 exact-head artifact
         uses: actions/download-artifact@v4
