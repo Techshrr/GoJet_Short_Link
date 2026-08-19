@@ -28,6 +28,7 @@ for path in \
   scripts/runmigrations.sh scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh scripts/installgeoip.sh \
   deploy/native/gojet@.service deploy/native/gojet.env.example deploy/native/gojetinstaller.service deploy/native/gojetinstaller.path \
   deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf \
+  resources/fonts/NotoSansSCRegular.ttf resources/fonts/OFL.txt \
   VERSION VERSION-MANIFEST.json SBOM.cdx.json MANIFEST.sha256; do
   [[ -s "$PKG/$path" ]] || { echo "required G11 payload missing: $path" >&2; exit 1; }
 done
@@ -84,14 +85,21 @@ if find "$PKG" -type f \( -iname 'Dockerfile*' -o -iname 'docker-compose*.yml' -
 fi
 grep -Fq -- '--docker' "$PKG/install.sh" && { echo 'Native installer still exposes V4 Docker mode' >&2; exit 1; }
 
-# Frozen V5 production requires authenticated Redis and Vite Admin validation.
+# Frozen V5 production requires authenticated Redis, Vite Admin validation and
+# the renderer-compatible static TrueType font shipped inside the immutable G11 artifact.
 grep -Fq 'REDIS_PORT REDIS_PASSWORD PUBLIC_BASE_URL' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Redis password is not a required Native install parameter' >&2; exit 1; }
 grep -Fq 'redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}" -a "${cfg[REDIS_PASSWORD]}")' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Native Redis AUTH probe missing' >&2; exit 1; }
 redis_example=$(sed -n 's/^REDIS_PASSWORD=//p' "$PKG/deploy/native/gojet.env.example" | head -n1)
 [[ -n "$redis_example" ]] || { echo 'Native environment example permits unauthenticated Redis' >&2; exit 1; }
 ! grep -Eq '/admin/(styles\.css|app\.js)|loginForm' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'V4 Admin static verification leaked into V5 Native installer' >&2; exit 1; }
 grep -Fq '/admin/assets/' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'V5 Admin hashed-asset verification missing' >&2; exit 1; }
-grep -Fq '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc' "$PKG/deploy/native/gojet@.service" || { echo 'Native service does not use packaged/system-provisioned PDF font contract' >&2; exit 1; }
+PDF_FONT_REL='resources/fonts/NotoSansSCRegular.ttf'
+PDF_FONT_NATIVE='__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf'
+grep -Fq "Environment=PDF_FONT_PATH=$PDF_FONT_NATIVE" "$PKG/deploy/native/gojet@.service" || { echo 'Native service does not use the packaged static PDF font' >&2; exit 1; }
+grep -Fq "PDF_FONT_PATH=$PDF_FONT_NATIVE" "$PKG/deploy/native/gojet.env.example" || { echo 'Native environment example does not use the packaged static PDF font' >&2; exit 1; }
+grep -Fq "ExecStartPre=/usr/bin/test -s $PDF_FONT_NATIVE" "$PKG/deploy/native/gojet@.service" || { echo 'Native service does not fail closed when the packaged PDF font is missing' >&2; exit 1; }
+[[ "$(od -An -tx1 -N4 "$PKG/$PDF_FONT_REL" | tr -d ' \n')" == '00010000' ]] || { echo 'packaged PDF font is not a static TrueType sfnt' >&2; exit 1; }
+[[ "$(stat -c %s "$PKG/$PDF_FONT_REL")" -gt 1000000 ]] || { echo 'packaged PDF font is unexpectedly small' >&2; exit 1; }
 
 (
   cd "$PKG"
