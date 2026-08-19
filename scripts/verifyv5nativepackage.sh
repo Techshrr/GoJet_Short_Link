@@ -36,6 +36,12 @@ done
 for helper in install.sh scripts/runmigrations.sh scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh scripts/installgeoip.sh; do
   [[ -x "$PKG/$helper" ]] || { echo "required G11 executable helper missing execute bit: $helper" >&2; exit 1; }
 done
+
+# Release packaging must never rewrite installer/security behavior after checkout.
+for rel in installer/index.php scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh deploy/native/gojet.env.example install.sh; do
+  cmp -s "$ROOT/$rel" "$PKG/$rel" || { echo "P21 source/package byte mismatch: $rel" >&2; exit 1; }
+done
+
 grep -Fq 'ExecStart=__GOJET_ROOT__/scripts/nativeinstallerrun.sh' "$PKG/deploy/native/gojetinstaller.service" || {
   echo 'gojetinstaller.service ExecStart is not bound to packaged privileged installer runner' >&2
   exit 1
@@ -46,29 +52,18 @@ while IFS= read -r migration || [[ -n "$migration" ]]; do
   [[ -s "$PKG/database/migrations/$migration" ]] || { echo "catalogued migration missing: $migration" >&2; exit 1; }
 done < "$PKG/database/migrations/migrationcatalog.txt"
 
-# Fresh installs must work with a least-privilege MySQL 8 application user even
-# when binary logging is enabled. Keep database migrations schema/data-only and
-# keep business/audit authority in Go; privileged stored objects would require
-# SUPER or server-global trust switches on common production installations.
-privileged_sql=$(grep -RniE \
-  '^[[:space:]]*CREATE([[:space:]]+DEFINER[[:space:]]*=[^[:space:]]+)?[[:space:]]+(TRIGGER|FUNCTION|PROCEDURE|EVENT)([[:space:]]|$)' \
-  "$PKG/database/migrations" || true)
+privileged_sql=$(grep -RniE '^[[:space:]]*CREATE([[:space:]]+DEFINER[[:space:]]*=[^[:space:]]+)?[[:space:]]+(TRIGGER|FUNCTION|PROCEDURE|EVENT)([[:space:]]|$)' "$PKG/database/migrations" || true)
 if [[ -n "$privileged_sql" ]]; then
   printf 'Privileged MySQL stored object present in Native migrations:\n%s\n' "$privileged_sql" >&2
   exit 1
 fi
 
-# V5 SPA/static evidence: Vite/Astro outputs must reference built assets; source trees are not shipped.
 grep -Eq '/app/assets/[^" ]+\.js|/assets/[^" ]+\.js' "$PKG/public/app/index.html" || { echo 'Workspace built JS asset reference missing' >&2; exit 1; }
 grep -Eq '/admin/assets/[^" ]+\.js' "$PKG/public/admin/index.html" || { echo 'Admin V5 hashed JS asset reference missing' >&2; exit 1; }
 find "$PKG/public/admin/assets" -type f -name '*.js' -print -quit | grep -q . || { echo 'Admin hashed JS payload missing' >&2; exit 1; }
 find "$PKG/public/app" -type f -name '*.js' -print -quit | grep -q . || { echo 'Workspace JS payload missing' >&2; exit 1; }
 [[ -d "$PKG/public/docs/_astro" || -d "$PKG/public/docs/pagefind" ]] || { echo 'Docs static output missing Astro/Pagefind assets' >&2; exit 1; }
 
-# Docs is Astro static output rooted at public/docs/index.html. The packaged
-# aaPanel rewrite must serve that directory tree directly and must never point
-# at the retired /docs.html path, otherwise a successful fresh install produces
-# a deterministic public /docs/ 404.
 DOCS_REWRITE="$PKG/deploy/nginx/gojetbtrewrite.conf"
 ! grep -Fq '/docs.html' "$DOCS_REWRITE" || { echo 'Native Nginx rewrite still points Docs at retired /docs.html' >&2; exit 1; }
 grep -A3 -F 'location ^~ /docs/' "$DOCS_REWRITE" | grep -Fq 'try_files $uri $uri/ =404;' || {
@@ -76,7 +71,6 @@ grep -A3 -F 'location ^~ /docs/' "$DOCS_REWRITE" | grep -Fq 'try_files $uri $uri
   exit 1
 }
 
-# The archive itself is the deployable product: no build-time or V4 production runtime is allowed inside it.
 if find "$PKG" -type d \( -name node_modules -o -name userconsole -o -name adminconsole \) -print -quit | grep -q .; then
   echo 'forbidden Node/legacy console directory present in Native package' >&2; exit 1
 fi
@@ -85,12 +79,18 @@ if find "$PKG" -type f \( -iname 'Dockerfile*' -o -iname 'docker-compose*.yml' -
 fi
 grep -Fq -- '--docker' "$PKG/install.sh" && { echo 'Native installer still exposes V4 Docker mode' >&2; exit 1; }
 
-# Frozen V5 production requires authenticated Redis, Vite Admin validation and
-# the renderer-compatible static TrueType font shipped inside the immutable G11 artifact.
-grep -Fq 'REDIS_PORT REDIS_PASSWORD PUBLIC_BASE_URL' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Redis password is not a required Native install parameter' >&2; exit 1; }
-grep -Fq 'redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}" -a "${cfg[REDIS_PASSWORD]}")' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Native Redis AUTH probe missing' >&2; exit 1; }
-redis_example=$(sed -n 's/^REDIS_PASSWORD=//p' "$PKG/deploy/native/gojet.env.example" | head -n1)
-[[ -n "$redis_example" ]] || { echo 'Native environment example permits unauthenticated Redis' >&2; exit 1; }
+# v5.0.1 Redis policy: loopback may be unauthenticated; password and ACL are
+# supported; non-loopback no-auth is rejected by both Web and root installers.
+grep -Fq 'REDIS_HOST|REDIS_PORT|REDIS_USERNAME|REDIS_PASSWORD' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Native Redis request contract incomplete' >&2; exit 1; }
+! grep -Fq 'REDIS_HOST REDIS_PORT REDIS_PASSWORD PUBLIC_BASE_URL' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Native Redis password incorrectly required' >&2; exit 1; }
+grep -Fq '远程 Redis 不允许无认证连接' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Remote no-auth Redis fail-closed rule missing' >&2; exit 1; }
+grep -Fq 'REDISCLI_AUTH="$redis_password"' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Native Redis authenticated probe missing' >&2; exit 1; }
+! grep -Eq 'redis-cli.*-a|redis_args\+\=\(-a' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'Redis password exposed on process argv' >&2; exit 1; }
+grep -Fq 'function redisLoopback' "$PKG/installer/index.php" || { echo 'Web Installer loopback policy missing' >&2; exit 1; }
+grep -Fq 'Redis ACL 用户名（可选）' "$PKG/installer/index.php" || { echo 'Web Installer ACL field missing' >&2; exit 1; }
+grep -Fxq 'REDIS_USERNAME=' "$PKG/deploy/native/gojet.env.example" || { echo 'Native environment ACL username default missing' >&2; exit 1; }
+grep -Fxq 'REDIS_PASSWORD=' "$PKG/deploy/native/gojet.env.example" || { echo 'Native environment must permit local no-auth Redis' >&2; exit 1; }
+
 ! grep -Eq '/admin/(styles\.css|app\.js)|loginForm' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'V4 Admin static verification leaked into V5 Native installer' >&2; exit 1; }
 grep -Fq '/admin/assets/' "$PKG/scripts/nativeinstallerapply.sh" || { echo 'V5 Admin hashed-asset verification missing' >&2; exit 1; }
 PDF_FONT_REL='resources/fonts/NotoSansSCRegular.ttf'
@@ -101,10 +101,7 @@ grep -Fq "ExecStartPre=/usr/bin/test -s $PDF_FONT_NATIVE" "$PKG/deploy/native/go
 [[ "$(od -An -tx1 -N4 "$PKG/$PDF_FONT_REL" | tr -d ' \n')" == '00010000' ]] || { echo 'packaged PDF font is not a static TrueType sfnt' >&2; exit 1; }
 [[ "$(stat -c %s "$PKG/$PDF_FONT_REL")" -gt 1000000 ]] || { echo 'packaged PDF font is unexpectedly small' >&2; exit 1; }
 
-(
-  cd "$PKG"
-  sha256sum -c MANIFEST.sha256
-)
+(cd "$PKG" && sha256sum -c MANIFEST.sha256)
 
 python3 - "$PKG" "$EXPECTED_SHA" <<'PY'
 from pathlib import Path
@@ -115,7 +112,7 @@ assert v['schema']=='gojet-v5-native-version-manifest-v1'
 assert v['phase']=='P21' and v['gate']=='G11'
 assert v['git_sha']==expected,(v['git_sha'],expected)
 assert v['platform']['os']=='linux' and v['platform']['arch']=='amd64'
-assert v['platform']['cache']=='redis-authenticated'
+assert v['platform']['cache']=='redis-local-noauth-or-authenticated'
 assert v['fresh_install_claimed'] is False
 assert len(v['binaries'])==8 and len(set(v['binaries']))==8
 s=json.loads((p/'SBOM.cdx.json').read_text())
