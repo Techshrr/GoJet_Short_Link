@@ -208,8 +208,6 @@ func (s *server) linkCreatePolicy(r *http.Request) links.CreatePolicy {
 				out = append(out, text)
 			}
 			return out
-		case string:
-			return nil
 		default:
 			return nil
 		}
