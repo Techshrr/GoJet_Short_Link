@@ -39,6 +39,13 @@ function visibleText(html) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function copyAuditText(html) {
+  // A locale switch intentionally names the target language in that language
+  // (for example “简体中文” on an English page). It is navigation metadata,
+  // not mixed product copy, so remove only that semantic control from the
+  // single-language body-copy audit.
+  return visibleText(html.replace(/<a\b[^>]*class="gj-language-link"[^>]*>[\s\S]*?<\/a>/gi, ' '));
+}
 
 for (const route of required) {
   const enFile = pagePath(route, 'en');
@@ -54,13 +61,13 @@ for (const route of required) {
   if (!en.includes('rel="alternate"') || !zh.includes('rel="alternate"')) throw new Error(`${route} missing locale alternate URL`);
   if (!en.includes('footer-columns') || !zh.includes('footer-columns')) throw new Error(`${route} missing complete footer navigation`);
   for (const phrase of forbiddenVisible) {
-    if (visibleText(en).includes(phrase) || visibleText(zh).includes(phrase)) throw new Error(`${route} exposes internal/engineering copy: ${phrase}`);
+    if (copyAuditText(en).includes(phrase) || copyAuditText(zh).includes(phrase)) throw new Error(`${route} exposes internal/engineering copy: ${phrase}`);
   }
 
-  const enText = visibleText(en);
-  if (/[㐀-鿿]/.test(enText)) throw new Error(`${route} English page contains Chinese visible copy`);
+  const enText = copyAuditText(en);
+  if (/[㐀-鿿]/.test(enText)) throw new Error(`${route} English page contains Chinese visible copy outside the language switch`);
 
-  let zhForAudit = visibleText(zh);
+  let zhForAudit = copyAuditText(zh);
   for (const token of allowedEnglishInZh) zhForAudit = zhForAudit.replaceAll(token, '');
   const englishSentence = zhForAudit.match(/\b(?:[A-Za-z]{3,}\s+){4,}[A-Za-z]{3,}\b/);
   if (englishSentence) throw new Error(`${route} Chinese page contains untranslated English sentence: ${englishSentence[0]}`);
