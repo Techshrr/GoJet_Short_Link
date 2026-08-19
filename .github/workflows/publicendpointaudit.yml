@@ -1,0 +1,19 @@
+name: Public Endpoint Contract Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'frontend/apps/site/src/routes/ReportAbusePage.tsx'
+      - 'services/platformapi/cmd/server/**'
+      - 'scripts/publicendpointaudit.py'
+  push:
+    branches:
+      - rebuild/v5.0.2-auth-i18n-product-copy
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/publicendpointaudit.py
