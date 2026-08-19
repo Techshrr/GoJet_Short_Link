@@ -95,6 +95,12 @@ const copy: Record<string, { en: string; "zh-CN": string }> = {
   "Admin navigation": { en: "Admin navigation", "zh-CN": "后台导航" }
 };
 
+const reverse = new Map<string, { en: string; "zh-CN": string }>();
+for (const value of Object.values(copy)) {
+  reverse.set(value.en, value);
+  reverse.set(value["zh-CN"], value);
+}
+
 function cookieValue(name: string): string | undefined {
   if (typeof document === "undefined") return undefined;
   const prefix = `${name}=`;
@@ -110,7 +116,32 @@ function initialLocale(): GoJetLocale {
 }
 
 export function localized(value: string, locale: GoJetLocale): string {
-  return copy[value]?.[locale] ?? value;
+  const direct = copy[value];
+  if (direct) return direct[locale];
+  const pair = reverse.get(value);
+  return pair?.[locale] ?? value;
+}
+
+export function localizedError(value: string | undefined, locale: GoJetLocale, status?: number): string {
+  const raw = (value ?? "").trim();
+  if (raw) {
+    const translated = localized(raw, locale);
+    if (translated !== raw) return translated;
+    const wrongScript = locale === "en" ? /[\u3400-\u9fff]/.test(raw) : /\b(?:[A-Za-z]{3,}\s+){3,}[A-Za-z]{3,}\b/.test(raw);
+    if (!wrongScript) return raw;
+  }
+  const fallback: Record<number, { en: string; "zh-CN": string }> = {
+    400: { en: "The request could not be processed. Check the information and try again.", "zh-CN": "请求无法处理，请检查填写的信息后重试。" },
+    401: { en: "Your sign-in has expired. Please sign in again.", "zh-CN": "登录状态已过期，请重新登录。" },
+    403: { en: "Your account does not have permission to perform this action.", "zh-CN": "当前账号没有执行此操作的权限。" },
+    404: { en: "The requested item could not be found.", "zh-CN": "没有找到请求的内容。" },
+    409: { en: "The request conflicts with the current state. Refresh the page and try again.", "zh-CN": "当前状态已发生变化，请刷新页面后重试。" },
+    422: { en: "Some information is invalid. Check the form and try again.", "zh-CN": "部分信息填写有误，请检查后重试。" },
+    429: { en: "Too many requests were sent. Please wait and try again.", "zh-CN": "请求过于频繁，请稍后再试。" },
+    500: { en: "The service encountered an error. Please try again later.", "zh-CN": "服务发生错误，请稍后重试。" },
+    503: { en: "The service is temporarily unavailable. Please try again later.", "zh-CN": "服务暂时不可用，请稍后重试。" }
+  };
+  return (status ? fallback[status] : undefined)?.[locale] ?? (locale === "zh-CN" ? "操作未完成，请稍后重试。" : "The action could not be completed. Please try again.");
 }
 
 interface LocaleContextValue { locale: GoJetLocale; setLocale: (locale: GoJetLocale) => void; }
