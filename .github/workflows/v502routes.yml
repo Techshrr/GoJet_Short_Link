@@ -1,0 +1,36 @@
+name: V5.0.2 Route Integrity
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - rebuild/v5.0.2-auth-i18n-product-copy
+
+concurrency:
+  group: v502routes${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  routes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Build canonical public surfaces
+        run: |
+          set -euo pipefail
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm --filter @gojet/site build
+          pnpm --filter @gojet/docs build
+      - name: Audit generated local links and route existence
+        run: python3 scripts/linkaudit.py
