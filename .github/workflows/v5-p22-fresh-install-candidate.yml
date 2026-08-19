@@ -100,14 +100,20 @@ jobs:
       - name: Stabilize Ubuntu package downloads
         run: |
           set -euo pipefail
-          if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
-            sudo sed -i 's#http://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' /etc/apt/sources.list.d/ubuntu.sources
-          fi
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+            if [[ -f "$source" ]]; then
+              sudo sed -i \
+                -e 's#http://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+                -e 's#https://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+                "$source"
+            fi
+          done
           sudo tee /etc/apt/apt.conf.d/80gojet-p22 >/dev/null <<'EOF'
           Acquire::Retries "5";
           Acquire::http::Timeout "30";
           Acquire::https::Timeout "30";
           EOF
+          grep -R 'archive.ubuntu.com' /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
 
       - name: Download immutable P21 exact-head artifact
         uses: actions/download-artifact@v4
