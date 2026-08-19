@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { ToastProvider } from "@gojet/ui/feedback";
+import { LocaleProvider } from "@gojet/ui/locale";
 import "@gojet/tokens/css";
 import "@gojet/ui/css";
 import "@gojet/ui/patterns.css";
@@ -16,4 +17,4 @@ import { router } from "./router";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root");
-createRoot(root).render(<React.StrictMode><ToastProvider><RouterProvider router={router} /></ToastProvider></React.StrictMode>);
+createRoot(root).render(<React.StrictMode><LocaleProvider><ToastProvider><RouterProvider router={router} /></ToastProvider></LocaleProvider></React.StrictMode>);

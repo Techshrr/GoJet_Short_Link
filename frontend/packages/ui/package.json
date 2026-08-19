@@ -15,6 +15,7 @@
     "./feedback": "./src/feedback.tsx",
     "./feedback.css": "./src/feedback.css",
     "./layout.css": "./src/layout.css",
+    "./locale": "./src/locale.tsx",
     "./shells": "./src/shells.tsx",
     "./shells.css": "./src/shells.css",
     "./shells-responsive.css": "./src/shells-responsive.css"
