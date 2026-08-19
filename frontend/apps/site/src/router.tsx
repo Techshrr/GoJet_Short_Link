@@ -1,15 +1,20 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { useLocale } from "@gojet/ui/locale";
 import { WebsiteShellPreview } from "./routes/ShellPreviews";
 import AuthPage from "./routes/AuthPage";
 
-const DevUi = lazy(() => import("./routes/DevUi"));
 const LoginShellPreview = () => <AuthPage mode="login" />;
 const RegisterShellPreview = () => <AuthPage mode="register" />;
 
+function LoadingPage() {
+  const { text } = useLocale();
+  return <main className="foundation"><p>{text("Loading…", "正在加载…")}</p></main>;
+}
+
 function RootLayout() {
   return (
-    <Suspense fallback={<main className="foundation"><p>正在加载…</p></main>}>
+    <Suspense fallback={<LoadingPage />}>
       <Outlet />
     </Suspense>
   );
@@ -24,7 +29,6 @@ const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: "/forgo
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/reset-password", component: () => <AuthPage mode="reset" /> });
 const legacyVerifyRoute = createRoute({ getParentRoute: () => rootRoute, path: "/verifyemail", component: () => <AuthPage mode="verify" /> });
 const legacyResetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/resetpassword", component: () => <AuthPage mode="reset" /> });
-const devUiRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: DevUi });
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
@@ -35,7 +39,6 @@ const routeTree = rootRoute.addChildren([
   resetRoute,
   legacyVerifyRoute,
   legacyResetRoute,
-  devUiRoute,
 ]);
 
 export const router = createRouter({ routeTree });
