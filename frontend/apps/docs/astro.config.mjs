@@ -6,7 +6,7 @@ export default defineConfig({
   output: "static",
   integrations: [
     starlight({
-      title: { root: "GoJet Help", "zh-CN": "GoJet 帮助文档" },
+      title: { en: "GoJet Help", "zh-CN": "GoJet 帮助文档" },
       defaultLocale: "root",
       locales: {
         root: { label: "English", lang: "en" },
