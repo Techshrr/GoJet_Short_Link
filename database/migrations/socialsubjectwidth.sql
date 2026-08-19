@@ -1,5 +1,5 @@
-ALTER TABLE oauth_social_identities
-    MODIFY COLUMN subject VARCHAR(255) NOT NULL;
+ALTER TABLE user_social_identities
+    MODIFY COLUMN provider_subject VARCHAR(255) NOT NULL;
 
 ALTER TABLE users
     ADD COLUMN password_login_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER password_hash;
