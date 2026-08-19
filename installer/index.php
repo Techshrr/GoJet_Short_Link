@@ -48,28 +48,43 @@ function csrf(): void {
         exit('安装会话已失效，请刷新页面重试。');
     }
 }
-function redisCheck(int $port, string $password): array {
+function redisResp(array $parts): string {
+    $cmd = '*' . count($parts) . "\r\n";
+    foreach ($parts as $part) {
+        $part = (string)$part;
+        $cmd .= '$' . strlen($part) . "\r\n" . $part . "\r\n";
+    }
+    return $cmd;
+}
+function redisLoopback(string $host): bool {
+    $host = strtolower(trim($host, '[]'));
+    if ($host === 'localhost' || $host === '::1') return true;
+    return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false && str_starts_with($host, '127.');
+}
+function redisCheck(string $host, int $port, string $username, string $password): array {
+    $host = trim($host);
+    $username = trim($username);
+    if ($host === '' || preg_match('/[\s\r\n]/', $host)) return [false, 'Redis 地址格式无效'];
+    if ($username !== '' && $password === '') return [false, 'Redis ACL 用户名已填写时必须同时填写密码'];
+    if (!redisLoopback($host) && $password === '') return [false, '远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'];
+    $plain = trim($host, '[]');
+    $target = filter_var($plain, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 'tcp://[' . $plain . "]:$port" : "tcp://$host:$port";
     $errno = 0; $errstr = '';
-    $socket = @stream_socket_client("tcp://127.0.0.1:$port", $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
+    $socket = @stream_socket_client($target, $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
     if (!$socket) return [false, "无法连接 Redis：$errstr"];
     stream_set_timeout($socket, 2);
     if ($password !== '') {
-        $cmd = "*2\r\n$4\r\nAUTH\r\n$" . strlen($password) . "\r\n$password\r\n";
-        fwrite($socket, $cmd);
+        fwrite($socket, redisResp($username !== '' ? ['AUTH', $username, $password] : ['AUTH', $password]));
         $reply = fgets($socket);
-        if (!is_string($reply) || !str_starts_with($reply, '+OK')) { fclose($socket); return [false, 'Redis 密码验证失败']; }
+        if (!is_string($reply) || !str_starts_with($reply, '+OK')) { fclose($socket); return [false, 'Redis 认证失败，请检查用户名和密码']; }
     }
-    fwrite($socket, "*1\r\n$4\r\nPING\r\n");
+    fwrite($socket, redisResp(['PING']));
     $reply = fgets($socket);
     fclose($socket);
     return [is_string($reply) && str_starts_with($reply, '+PONG'), 'Redis PING 未返回 PONG'];
 }
 function clamavCheck(): array {
     global $state;
-    // Root-owned install.sh is the trust boundary for ClamAV discovery. It only
-    // writes this marker after checking both the real Unix socket type and the
-    // active clamav-daemon.service. PHP-FPM must not probe /run directly because
-    // aaPanel open_basedir intentionally blocks that path.
     $readyFile = $state . '/clamav.ready';
     if (!is_file($readyFile)) return [false, '未检测到可用的 ClamAV；文件分享安装后暂不可用'];
     $endpoint = trim((string)@file_get_contents($readyFile));
@@ -77,7 +92,7 @@ function clamavCheck(): array {
     return [true, 'ClamAV Unix Socket 已由 Root 安装准备程序验证'];
 }
 function writeRequest(string $state, array $values): bool {
-    $allowed = ['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_PORT','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL'];
+    $allowed = ['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_HOST','REDIS_PORT','REDIS_USERNAME','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL'];
     $body = '';
     foreach ($allowed as $key) {
         $body .= $key . '=' . base64_encode((string)($values[$key] ?? '')) . "\n";
@@ -118,7 +133,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $db = post('mysql_database', 'gojet');
         $user = post('mysql_user', 'gojet');
         $pass = (string)($_POST['mysql_password'] ?? '');
+        $redisHost = post('redis_host', '127.0.0.1');
         $redisPort = (int)post('redis_port', '6379');
+        $redisUsername = post('redis_username');
         $redisPassword = (string)($_POST['redis_password'] ?? '');
         if ($mysqlPort < 1 || $mysqlPort > 65535) $errors[] = 'MySQL 端口无效';
         if (!preg_match('/^[A-Za-z0-9_]+$/', $db)) $errors[] = '数据库名只能包含字母、数字和下划线';
@@ -132,12 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!str_starts_with($version, '8.')) $errors[] = "需要 MySQL 8.x，当前为 $version";
                 $pdo->query('SELECT 1');
             } catch (Throwable $e) { $errors[] = 'MySQL 连接失败：' . $e->getMessage(); }
-            [$redisOk, $redisMessage] = redisCheck($redisPort, $redisPassword);
+            [$redisOk, $redisMessage] = redisCheck($redisHost, $redisPort, $redisUsername, $redisPassword);
             if (!$redisOk) $errors[] = $redisMessage;
         }
         if (!$errors) {
             $_SESSION['database'] = ['port' => $mysqlPort, 'database' => $db, 'user' => $user, 'password' => $pass];
-            $_SESSION['redis'] = ['port' => $redisPort, 'password' => $redisPassword];
+            $_SESSION['redis'] = ['host' => $redisHost, 'port' => $redisPort, 'username' => $redisUsername, 'password' => $redisPassword];
             $_SESSION['step'] = $step = 3;
         }
     } elseif ($action === 'site') {
@@ -168,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db = $_SESSION['database']; $redis = $_SESSION['redis']; $site = $_SESSION['site'];
             $request = [
                 'MYSQL_PORT' => (string)$db['port'], 'MYSQL_DATABASE' => (string)$db['database'], 'MYSQL_USER' => (string)$db['user'], 'MYSQL_PASSWORD' => (string)$db['password'],
-                'REDIS_PORT' => (string)$redis['port'], 'REDIS_PASSWORD' => (string)$redis['password'],
+                'REDIS_HOST' => (string)$redis['host'], 'REDIS_PORT' => (string)$redis['port'], 'REDIS_USERNAME' => (string)$redis['username'], 'REDIS_PASSWORD' => (string)$redis['password'],
                 'PUBLIC_BASE_URL' => (string)$site['public_url'], 'ADMIN_EMAIL' => (string)$site['admin_email'], 'ADMIN_PASSWORD' => (string)$site['admin_password'], 'ALERT_EMAIL' => (string)$site['alert_email'],
             ];
             @unlink($state . '/status.json');
@@ -183,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $host = preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
 $defaultUrl = ($host !== '') ? 'https://' . $host : 'https://go.example.com';
 $dbData = $_SESSION['database'] ?? ['port' => 3306, 'database' => 'gojet', 'user' => 'gojet'];
-$redisData = $_SESSION['redis'] ?? ['port' => 6379];
+$redisData = $_SESSION['redis'] ?? ['host' => '127.0.0.1', 'port' => 6379, 'username' => ''];
 $siteData = $_SESSION['site'] ?? ['public_url' => $defaultUrl, 'admin_email' => '', 'alert_email' => ''];
 ?><!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GoJet 安装向导</title>
@@ -204,10 +221,10 @@ const poll=async()=>{try{const r=await fetch('/install/?status=1',{cache:'no-sto
 <div class="check"><span>ClamAV 文件安全扫描</span><b class="<?=$clamavOk?'ok':'warn'?>"><?=$clamavOk?'已就绪':'暂不可用'?></b></div><?php if(!$clamavOk): ?><p class="warn"><?=h($clamavMessage)?>。这不会阻止主系统安装，但文件分享会保持不可用，直到安装并启动 ClamAV。</p><?php endif ?>
 <form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><input type="hidden" name="action" value="environment"><div class="actions"><button class="btn" type="submit">继续</button></div></form>
 <?php elseif ($step === 2): ?>
-<form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><h2>MySQL 数据库</h2><div class="grid"><label>数据库地址<input class="fixed" value="127.0.0.1" disabled></label><label>端口<input name="mysql_port" inputmode="numeric" value="<?=h((string)$dbData['port'])?>" required></label><label>数据库名称<input name="mysql_database" value="<?=h((string)$dbData['database'])?>" required></label><label>数据库用户名<input name="mysql_user" value="<?=h((string)$dbData['user'])?>" required></label><label>数据库用户密码<input name="mysql_password" type="password" autocomplete="new-password" required></label></div><p class="muted">请先在宝塔中创建数据库和普通数据库用户。GoJet 不会索取或保存 MySQL root 密码。</p><h2>Redis</h2><div class="grid"><label>Redis 地址<input class="fixed" value="127.0.0.1" disabled></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData['port'])?>" required></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 未设置密码时可留空。</span></label></div><div class="actions"><button class="btn secondary" type="submit" name="action" value="back">返回</button><button class="btn" type="submit" name="action" value="connections">测试连接并继续</button></div></form>
+<form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><h2>MySQL 数据库</h2><div class="grid"><label>数据库地址<input class="fixed" value="127.0.0.1" disabled></label><label>端口<input name="mysql_port" inputmode="numeric" value="<?=h((string)$dbData['port'])?>" required></label><label>数据库名称<input name="mysql_database" value="<?=h((string)$dbData['database'])?>" required></label><label>数据库用户名<input name="mysql_user" value="<?=h((string)$dbData['user'])?>" required></label><label>数据库用户密码<input name="mysql_password" type="password" autocomplete="new-password" required></label></div><p class="muted">请先在宝塔中创建数据库和普通数据库用户。GoJet 不会索取或保存 MySQL root 密码。</p><h2>Redis</h2><div class="grid"><label>Redis 地址<input name="redis_host" value="<?=h((string)$redisData['host'])?>" required><span class="muted">本机默认 127.0.0.1；远程 Redis 必须启用认证。</span></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData['port'])?>" required></label><label>Redis ACL 用户名（可选）<input name="redis_username" value="<?=h((string)$redisData['username'])?>" autocomplete="username"><span class="muted">使用 requirepass/default 用户时留空。</span></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 可留空；远程 Redis 必须填写密码，ACL 模式同时填写用户名。</span></label></div><div class="actions"><button class="btn secondary" type="submit" name="action" value="back">返回</button><button class="btn" type="submit" name="action" value="connections">测试连接并继续</button></div></form>
 <?php elseif ($step === 3): ?>
 <form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><h2>站点</h2><div class="grid"><label>正式 HTTPS 地址<input name="public_url" value="<?=h((string)$siteData['public_url'])?>" required></label><label>管理员邮箱<input name="admin_email" type="email" value="<?=h((string)$siteData['admin_email'])?>" required></label><label>管理员密码<input name="admin_password" type="password" minlength="12" autocomplete="new-password" required></label><label>再次输入管理员密码<input name="admin_password_confirm" type="password" minlength="12" autocomplete="new-password" required></label><label>系统告警邮箱<input name="alert_email" type="email" value="<?=h((string)$siteData['alert_email'])?>" placeholder="默认与管理员邮箱相同"></label></div><p class="muted">加密密钥、访客哈希密钥、QR 跟踪密钥和日志 Token 全部由安装器使用 CSPRNG 自动生成，不要求人工填写。</p><div class="actions"><button class="btn secondary" type="submit" name="action" value="back">返回</button><button class="btn" type="submit" name="action" value="site">继续</button></div></form>
 <?php else: $db=$_SESSION['database'];$redis=$_SESSION['redis'];$site=$_SESSION['site']; ?>
-<h2>确认安装</h2><dl class="summary"><dt>网站</dt><dd><?=h((string)$site['public_url'])?></dd><dt>MySQL</dt><dd>127.0.0.1:<?=h((string)$db['port'])?> / <?=h((string)$db['database'])?> / <?=h((string)$db['user'])?></dd><dt>Redis</dt><dd>127.0.0.1:<?=h((string)$redis['port'])?></dd><dt>管理员</dt><dd><?=h((string)$site['admin_email'])?></dd><dt>ClamAV</dt><dd><?=$clamavOk?'Unix Socket 已就绪':'未就绪，文件分享暂不可用'?></dd></dl><p class="muted">开始后将执行数据库迁移、生成安全密钥、注册并启动 8 个 systemd 服务、写入宝塔 Nginx 路由并执行健康检查。</p><form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><div class="actions"><button class="btn secondary" type="submit" name="action" value="back">返回</button><button class="btn" type="submit" name="action" value="install">开始安装</button></div></form>
+<h2>确认安装</h2><dl class="summary"><dt>网站</dt><dd><?=h((string)$site['public_url'])?></dd><dt>MySQL</dt><dd>127.0.0.1:<?=h((string)$db['port'])?> / <?=h((string)$db['database'])?> / <?=h((string)$db['user'])?></dd><dt>Redis</dt><dd><?=h((string)$redis['host'])?>:<?=h((string)$redis['port'])?><?=((string)$redis['username']!=='')?' / ACL '.h((string)$redis['username']):(((string)$redis['password']!=='')?' / 密码认证':' / 本机无认证')?></dd><dt>管理员</dt><dd><?=h((string)$site['admin_email'])?></dd><dt>ClamAV</dt><dd><?=$clamavOk?'Unix Socket 已就绪':'未就绪，文件分享暂不可用'?></dd></dl><p class="muted">开始后将执行数据库迁移、生成安全密钥、注册并启动 8 个 systemd 服务、写入宝塔 Nginx 路由并执行健康检查。</p><form method="post"><input type="hidden" name="csrf" value="<?=h($_SESSION['csrf'])?>"><div class="actions"><button class="btn secondary" type="submit" name="action" value="back">返回</button><button class="btn" type="submit" name="action" value="install">开始安装</button></div></form>
 <?php endif ?>
 <?php endif ?></section></main></body></html>
