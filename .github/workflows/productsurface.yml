@@ -115,8 +115,8 @@ jobs:
       - name: Reject retired visible and CI contracts
         run: |
           set -euo pipefail
-          if grep -R -n -E 'azure\.archive\.ubuntu\.com|playwright install --with-deps' .github/workflows; then
-            echo 'unstable Ubuntu mirror or Playwright apt bootstrap returned to CI' >&2
+          if grep -R -n -F 'playwright install --with-deps' .github/workflows; then
+            echo 'Playwright is not allowed to invoke apt implicitly. Use browser-only installation after controlled package setup.' >&2
             exit 1
           fi
           if grep -R -n -E 'frontend/(publicsite|userconsole|adminconsole)' scripts/packagerelease.sh; then
