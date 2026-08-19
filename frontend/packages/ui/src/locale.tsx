@@ -169,8 +169,10 @@ export function useLocale() {
 
 export function LocaleSwitch() {
   const { locale, setLocale } = useLocale();
+  const chineseLabel = locale === "zh-CN" ? "简体中文" : "Chinese (Simplified)";
+  const englishLabel = locale === "zh-CN" ? "英语" : "English";
   return <select className="gj-select" aria-label={locale === "zh-CN" ? "语言" : "Language"} value={locale} onChange={(event) => setLocale(event.target.value as GoJetLocale)}>
-    <option value="zh-CN">简体中文</option><option value="en">English</option>
+    <option value="zh-CN">{chineseLabel}</option><option value="en">{englishLabel}</option>
   </select>;
 }
 
