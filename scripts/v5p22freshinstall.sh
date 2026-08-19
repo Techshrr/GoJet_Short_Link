@@ -20,6 +20,9 @@ ADMIN_EMAIL=owner@example.test
 ADMIN_PASSWORD='OwnerPassword!2026'
 PUBLIC_BASE="https://$HOST"
 API_BASE="$PUBLIC_BASE"
+REDIRECT_HEALTH='http://127.0.0.1:18080/health'
+PLATFORM_HEALTH='http://127.0.0.1:18090/health'
+LOG_HEALTH='http://127.0.0.1:18092/health'
 EVIDENCE=/tmp/gojet-p22-evidence
 SERVICES=(logreceiver redirectengine platformapi analyticsworker analyticsreconciler mailworker fileworker operationsmonitor)
 mkdir -p "$EVIDENCE"
@@ -253,10 +256,13 @@ redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -qx PONG
 for service in "${SERVICES[@]}"; do
   systemctl is-active --quiet "gojet@$service.service" || die "service not active: $service"
 done
-curl -fsS "$API_BASE/health" | tee "$EVIDENCE/nginx-platform-health.json" >/dev/null
+curl -fsS "$REDIRECT_HEALTH" | tee "$EVIDENCE/redirectengine-health.json" >/dev/null
+curl -fsS "$PLATFORM_HEALTH" | tee "$EVIDENCE/platformapi-health.json" >/dev/null
+curl -fsS "$LOG_HEALTH" | tee "$EVIDENCE/logreceiver-health.json" >/dev/null
 curl -fsS "$PUBLIC_BASE/admin/" | grep -Fq '<div id="root"></div>'
 curl -fsS "$PUBLIC_BASE/app/" | grep -Fq '<div id="root"></div>'
 curl -fsS "$PUBLIC_BASE/docs/" >/dev/null
+curl -fsS "$API_BASE/api/public/turnstile" | tee "$EVIDENCE/nginx-platform-route.json" >/dev/null
 
 note "G13 restart and reconnect validation"
 for service in "${SERVICES[@]}"; do systemctl restart "gojet@$service.service"; done
@@ -265,10 +271,11 @@ systemctl restart nginx
 nginx -t
 systemctl restart redis-server
 redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -qx PONG
-retry 60 1 curl -fsS "$API_BASE/health" >/dev/null || die "platform failed after Redis restart"
+retry 60 1 curl -fsS "$REDIRECT_HEALTH" >/dev/null || die "redirect engine failed after Redis restart"
+retry 60 1 curl -fsS "$PLATFORM_HEALTH" >/dev/null || die "platform failed after Redis restart"
 systemctl restart mysql
 MYSQL_PWD="$MYSQL_PASSWORD" mysql -h127.0.0.1 -u"$MYSQL_USER" "$MYSQL_DATABASE" -Nse 'SELECT 1' | grep -qx 1
-retry 60 1 curl -fsS "$API_BASE/health" >/dev/null || die "platform failed after MySQL restart"
+retry 60 1 curl -fsS "$PLATFORM_HEALTH" >/dev/null || die "platform failed after MySQL restart"
 printf '8 systemd services + nginx + Redis/MySQL reconnect: PASS\n' | tee "$EVIDENCE/restart-reconnect.txt"
 
 note "G13 real ClamAV EICAR"
