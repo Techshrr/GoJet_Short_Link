@@ -1,0 +1,34 @@
+name: V5.0.2 Acceptance Signal
+
+on:
+  workflow_run:
+    workflows: ["V5.0.2 Full System Acceptance"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  record:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const marker = '<!-- v502-full-system-acceptance -->';
+            const body = `${marker}\nV5.0.2 full-system acceptance passed for \`${run.head_sha}\`. Website, authentication, Workspace, Admin, Docs, generated routes, localization, backend tests and production release packaging completed through the final acceptance gate.\n\nRun: ${run.html_url}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 8,
+              per_page: 100,
+            });
+            const previous = comments.find((comment) => comment.body?.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: 8, body });
+            }
