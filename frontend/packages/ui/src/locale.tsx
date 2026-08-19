@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { surfaceCopy } from "./locale-copy";
 
 export type GoJetLocale = "zh-CN" | "en";
 const localeCookie = "gojet_locale";
 
 const copy: Record<string, { en: string; "zh-CN": string }> = {
+  ...surfaceCopy,
   "GOJET WORKSPACE": { en: "GOJET", "zh-CN": "GOJET" },
   "WORKFLOW": { en: "HOW IT WORKS", "zh-CN": "使用方式" },
   "USE CASES": { en: "WHO IT'S FOR", "zh-CN": "适用场景" },
@@ -68,10 +70,10 @@ const copy: Record<string, { en: string; "zh-CN": string }> = {
   "Name": { en: "Name", "zh-CN": "名称" },
   "Role": { en: "Role", "zh-CN": "角色" },
   "Status": { en: "Status", "zh-CN": "状态" },
-  "Governance": { en: "Access controls", "zh-CN": "权限管理" },
+  "Governance": { en: "Account actions", "zh-CN": "账号操作" },
   "Privileged administrator inventory. Server-side super-administrator checks remain authoritative for role changes.": {
-    en: "Manage the people who can enter the administration area. Review each administrator's role, account status and granted permissions here; changes to high-privilege roles are verified again by the server before they are accepted.",
-    "zh-CN": "管理可以进入后台的管理员账号，并在这里查看每个账号的角色、启用状态和已授予权限。涉及高权限角色的新增或修改会由服务端再次校验，未通过权限检查的操作不会生效。"
+    en: "Manage the people who can enter the administration area. Review each administrator's role, account status and granted permissions here; changes to high-privilege roles are verified again before they are accepted.",
+    "zh-CN": "管理可以进入后台的管理员账号，并在这里查看每个账号的角色、启用状态和已授予权限。涉及高权限角色的新增或修改会再次校验，未通过权限检查的操作不会生效。"
   },
   "表格加载失败": { en: "Unable to load the list", "zh-CN": "列表加载失败" },
   "管理员会话无效或已过期": { en: "Your administrator session has expired. Please sign in again.", "zh-CN": "管理员登录已过期，请重新登录。" },
@@ -117,7 +119,7 @@ const LocaleContext = createContext<LocaleContextValue | null>(null);
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<GoJetLocale>(() => initialLocale());
   const setLocale = (next: GoJetLocale) => {
-    document.cookie = `${localeCookie}=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    if (typeof document !== "undefined") document.cookie = `${localeCookie}=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax`;
     setLocaleState(next);
   };
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
