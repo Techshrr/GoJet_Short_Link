@@ -27,16 +27,13 @@ currency=$(mysqlq "SELECT currency FROM billing_invoices WHERE id=$invoice_id;")
 order="GJCONFLICT${suffix}"
 mysqlq "INSERT INTO payment_transactions(invoice_id,workspace_id,provider,merchant_order_no,amount_cents,currency,status) VALUES($invoice_id,$wid,'stripe','$order',$amount,'$currency','pending');"
 
+# Billing/payment authority is the Go service boundary. Service.Settle locks the
+# invoice row and rejects manual paid/void transitions while an online payment
+# is still created/pending. Fresh installs must not depend on a MySQL trigger
+# that requires SUPER when binary logging is enabled.
 blocked=$(req POST "/api/admin/invoices/$invoice_id/settle" '{"status":"paid","note":"人工核对"}' "$admin")
 expect 422 "$blocked" api-conflict >/dev/null
 printf '%s\n' "$blocked" | sed '$d' | grep -q '进行中的在线支付'
-
-set +e
-db_error=$(MYSQL_PWD="$MYSQL_PASSWORD" mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" "$MYSQL_DATABASE" -N -B -e "UPDATE billing_invoices SET status='void' WHERE id=$invoice_id;" 2>&1)
-db_rc=$?
-set -e
-[[ $db_rc -ne 0 ]] || { echo 'database trigger allowed manual settlement during active payment' >&2; exit 1; }
-printf '%s' "$db_error" | grep -q '进行中的在线支付'
 [[ "$(mysqlq "SELECT status FROM billing_invoices WHERE id=$invoice_id;")" == pending ]] || { echo 'blocked invoice state changed unexpectedly' >&2; exit 1; }
 
 mysqlq "UPDATE payment_transactions SET status='failed',failure_reason='acceptance cleanup' WHERE merchant_order_no='$order';"
