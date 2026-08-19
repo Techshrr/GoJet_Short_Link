@@ -23,7 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "redis:6379"), Password: os.Getenv("REDIS_PASSWORD")})
+	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
 	defer rdb.Close()
 	batch, _ := strconv.Atoi(getenv("ANALYTICS_RECONCILE_BATCH", "500"))
 	intervalSeconds, _ := strconv.Atoi(getenv("ANALYTICS_RECONCILE_INTERVAL_SECONDS", "60"))
