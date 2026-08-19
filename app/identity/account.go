@@ -47,7 +47,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassw
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash=? WHERE id=?`, string(nextHash), userID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash=?,password_login_enabled=TRUE WHERE id=?`, string(nextHash), userID); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE user_sessions SET revoked_at=COALESCE(revoked_at,NOW()) WHERE user_id=?`, userID); err != nil {
