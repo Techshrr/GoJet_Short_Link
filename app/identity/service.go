@@ -83,8 +83,9 @@ func (s *Service) LoginWithMetadataTTL(ctx context.Context, email, password, ip,
 	}
 	var user User
 	var hash string
-	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name,status,password_hash,email_verified_at IS NOT NULL FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Status, &hash, &user.EmailVerified)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil || user.Status != "active" {
+	var passwordLoginEnabled bool
+	err := s.db.QueryRowContext(ctx, `SELECT id,email,display_name,status,password_hash,password_login_enabled,email_verified_at IS NOT NULL FROM users WHERE email=?`, strings.ToLower(strings.TrimSpace(email))).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Status, &hash, &passwordLoginEnabled, &user.EmailVerified)
+	if err != nil || !passwordLoginEnabled || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil || user.Status != "active" {
 		return User{}, "", errors.New("邮箱或密码错误")
 	}
 	token, tokenHash, err := newToken()
@@ -189,7 +190,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) err
 	if err = tx.QueryRowContext(ctx, `SELECT id,user_id FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>NOW() FOR UPDATE`, hex.EncodeToString(sum[:])).Scan(&id, &userID); err != nil {
 		return errors.New("重置链接无效或已经过期")
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash=? WHERE id=?`, string(hash), userID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash=?,password_login_enabled=TRUE WHERE id=?`, string(hash), userID); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE password_reset_tokens SET used_at=NOW() WHERE id=?`, id); err != nil {
