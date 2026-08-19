@@ -1,0 +1,36 @@
+---
+title: Workspace and Account Settings
+sidebar:
+  order: 4
+  label: Workspace & Account
+---
+
+# Workspace and Account Settings
+
+A workspace is the place where members, content, domains, billing and account-level settings are managed together. Check the active workspace before making changes when your account belongs to more than one.
+
+## Members and roles
+
+Open **Members** to see who belongs to the workspace and which role each person has. Invite a person with the least amount of access they need for their work. When a role is changed or a member is removed, the server checks whether the signed-in account is allowed to perform that action; hiding or showing a button in the browser does not decide permission by itself.
+
+## Billing, plans and limits
+
+Open **Billing** to review the workspace plan, billing period, invoices and current usage limits returned by the billing service. Use the amounts and limits shown there as the current account information. If a plan change affects quotas or billing dates, review the effective period before confirming the change.
+
+## Domains, campaigns and tags
+
+Domains control the public hostname used by links and pages. Campaigns group content that belongs to the same promotion or initiative. Tags provide lighter-weight labels for organizing and filtering items. Using these consistently makes it easier to find related content and compare its activity later.
+
+## API keys
+
+Create an API key only when another application or script needs programmatic access to the workspace. Choose only the permissions required by that integration and copy the secret when it is first shown. Store it in a server-side secret store or environment variable, not in browser code, screenshots or a public repository. Revoke a key that is no longer needed or may have been exposed.
+
+## Webhook notifications
+
+Use webhook notifications when another system needs to receive GoJet events automatically. Configure the HTTPS destination, select supported events and store the signing secret safely. The receiving system should verify the signature, handle duplicate delivery safely and return a successful response only after the event has been accepted for processing.
+
+## Workspace settings and activity history
+
+Workspace settings change defaults and account behavior for the active workspace. Review the setting description before saving when the change can affect existing content or members. Administrative and security-sensitive changes are recorded in activity or audit records where supported so later investigations can determine what was changed and by whom.
+
+**Last updated:** 2026-08-20

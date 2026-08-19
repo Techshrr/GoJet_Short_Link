@@ -1,0 +1,40 @@
+---
+title: Self-hosting Installation
+sidebar:
+  order: 7
+  label: Installation
+---
+
+# Self-hosting Installation
+
+Use this section when you run GoJet on infrastructure you control. Review the requirements and prepare DNS, TLS, database, Redis, storage and mail information before starting the installer.
+
+## Server requirements
+
+Use a supported Linux server with Nginx, MySQL 8 and Redis. PHP 8.3 is required for the browser installation boundary used by this release, while the Go services provide the application runtime after installation. Node.js is build-time tooling and is not required as a production request handler. Reserve enough persistent storage for uploaded files, logs and verified backups.
+
+## Prepare aaPanel or BT Panel
+
+Create the website and database with dedicated credentials. Point the public web root to the documented public directory, enable TLS for the production hostname and keep MySQL and Redis inaccessible from the public Internet. If Redis is not bound only to loopback, configure authentication according to the installation requirements before GoJet is allowed to connect.
+
+## Configure Nginx
+
+Terminate HTTPS at Nginx and route only the documented application and API paths. Preserve proxy headers only from trusted proxies, set upload/body limits to match the file sizes you intend to accept, and use long immutable caching only for fingerprinted static assets. Dynamic account and API responses must not be cached as public static content.
+
+## Run the browser installer
+
+Use the PHP installer to collect installation settings, verify prerequisites and bootstrap the application. After installation, normal GoJet requests are handled by the deployed services; the installer is not the runtime for links, workspaces or administrator pages.
+
+## Configure MySQL and Redis
+
+Use a dedicated MySQL database user with the privileges documented for migrations and runtime queries. Keep verified backups. Redis may be used for cache, session or queue-related functions according to the deployment configuration. A loopback Redis instance may follow the local policy documented by the installer; a remotely reachable Redis service must not be left without authentication.
+
+## Start workers, scheduled tasks, mail and file scanning
+
+Run the required background services under a supervisor or service manager so they restart after failure or reboot. Configure scheduled tasks, test outbound mail, and verify the file-scanning service and worker before allowing public file sharing. A green web page alone is not enough to prove that asynchronous jobs are running.
+
+## Confirm the installed applications
+
+The website and help documentation are deployed as static output. The workspace and administrator interfaces are separately built browser applications that communicate with the Go services. After installation, test sign-in, workspace access, administrator sign-in, a short-link redirect, mail delivery and file scanning before considering the installation ready for users.
+
+**Last updated:** 2026-08-20

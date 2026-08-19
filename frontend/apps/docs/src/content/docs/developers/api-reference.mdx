@@ -1,21 +1,21 @@
 ---
-title: API 参考
+title: API Reference
 sidebar:
   order: 2
-  label: API 参考
+  label: API Reference
 ---
 
-# API 参考
+# API Reference
 
-本页给出 GoJet 核心 API 操作的请求格式和常见响应。示例中的域名和凭据需要替换为你自己的站点与工作区信息。
+This page shows the request shape and common responses for core GoJet API operations. Replace the example host and credentials with values from your own installation and workspace.
 
 ## POST `/api/links`
 
-使用具备创建短链接权限的 API 密钥，在工作区中创建一条短链接。
+Creates a short link in a workspace using an API key that has permission to create links.
 
-**鉴权：** `Authorization: Bearer <API_KEY>`
+**Authentication:** `Authorization: Bearer <API_KEY>`
 
-### 请求体
+### Request body
 ```json
 {
   "destination": "https://example.com/campaign",
@@ -25,9 +25,9 @@ sidebar:
 }
 ```
 
-`destination` 是访问者最终需要到达的完整地址；`domain` 与 `slug` 在接口和工作区允许的情况下用于指定公开地址；`title` 是 GoJet 后台中用于识别该链接的名称。
+`destination` is the full URL visitors should reach. `domain` and `slug` identify the requested public address when the endpoint and workspace allow them. `title` is the internal name shown in GoJet.
 
-### curl 示例
+### curl example
 ```bash
 curl -X POST 'https://gojet.example/api/links' \
   -H 'Authorization: Bearer YOUR_API_KEY' \
@@ -35,7 +35,7 @@ curl -X POST 'https://gojet.example/api/links' \
   -d '{"destination":"https://example.com/campaign","slug":"launch"}'
 ```
 
-### JavaScript 示例
+### JavaScript example
 ```javascript
 const response = await fetch('https://gojet.example/api/links', {
   method: 'POST',
@@ -48,7 +48,7 @@ const response = await fetch('https://gojet.example/api/links', {
 const link = await response.json();
 ```
 
-### PHP 示例
+### PHP example
 ```php
 $ch = curl_init('https://gojet.example/api/links');
 curl_setopt_array($ch, [
@@ -66,7 +66,7 @@ curl_setopt_array($ch, [
 $result = curl_exec($ch);
 ```
 
-### Go 示例
+### Go example
 ```go
 payload := strings.NewReader(`{"destination":"https://example.com/campaign","slug":"launch"}`)
 req, _ := http.NewRequest(http.MethodPost, "https://gojet.example/api/links", payload)
@@ -75,8 +75,8 @@ req.Header.Set("Content-Type", "application/json")
 resp, err := http.DefaultClient.Do(req)
 ```
 
-### 成功响应
-创建成功后返回已经保存的链接信息，其中包括资源编号、公开地址、目标地址和当前状态。
+### Successful response
+A successful create returns the saved link, including its identifier, public address, destination and current status.
 
 ```json
 {
@@ -87,31 +87,31 @@ resp, err := http.DefaultClient.Do(req)
 }
 ```
 
-### 常见错误
-- `400`：请求无法解析或缺少必要的结构信息。
-- `401`：API 密钥缺失、无效或已经失效。
-- `403`：API 密钥有效，但没有所需工作区权限。
-- `409`：请求使用的域名、短路径或资源状态与现有内容冲突。
-- `422`：提交数据没有通过验证或策略检查。
-- `429`：达到当前限流，需要稍后重试。
+### Common errors
+- `400` — the request cannot be parsed or a required structural value is missing.
+- `401` — the API key is missing, invalid or expired.
+- `403` — the API key is valid but does not have the required workspace permission.
+- `409` — the requested domain/path or resource state conflicts with an existing value.
+- `422` — validation or a policy rule rejects the submitted values.
+- `429` — the caller has reached the current rate limit and should retry later.
 
-限流应以当前部署接口实际返回的信息为准，不要在集成中写死一个全局固定次数。
+Use rate-limit information returned by the deployed API rather than hard-coding one universal request count.
 
 ## GET `/api/links/{id}`
 
-API 密钥具备读取权限时，返回指定短链接当前已经保存的信息。
+Returns the current saved representation of a link when the API key has read access.
 
-**鉴权：** `Authorization: Bearer <API_KEY>`
+**Authentication:** `Authorization: Bearer <API_KEY>`
 
-### 路径参数
-- `id`：GoJet 返回的短链接资源编号。
+### Path parameter
+- `id` — the link identifier returned by GoJet.
 
-### curl 示例
+### curl example
 ```bash
 curl 'https://gojet.example/api/links/lnk_01' \
   -H 'Authorization: Bearer YOUR_API_KEY'
 ```
 
-成功响应包含当前短链接字段。鉴权失败、权限不足、资源不存在或达到限流时，接口可能分别返回 `401`、`403`、`404` 或 `429`。
+A successful response contains the link's current saved fields. `401`, `403`, `404` and `429` can be returned when authentication, permission, existence or rate-limit checks fail.
 
-**最后更新：** 2026-08-20
+**Last updated:** 2026-08-20

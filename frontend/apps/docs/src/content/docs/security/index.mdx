@@ -1,0 +1,36 @@
+---
+title: Account and Content Protection
+sidebar:
+  order: 6
+  label: Account & Content Protection
+---
+
+# Account and Content Protection
+
+This guide explains the protections that affect sign-in, administrator access, public destinations and uploaded files. It also explains what to do when GoJet shows a warning or blocks an action.
+
+## Protect sign-in sessions
+
+Use a unique password and enable two-step verification when the installation offers it. Email verification may be required before protected account actions are available. Sign out sessions you no longer recognize and change the password when you believe another person may know it. Administrator access uses a separate administrator session and does not become valid simply because a normal workspace account is signed in.
+
+## Understand permission errors
+
+A `403` response means the signed-in account does not have permission for that action. Changing page markup or calling the endpoint directly does not bypass the permission check because the service validates the account and role again. Ask a workspace owner or authorized administrator to change the role when the access is legitimately required.
+
+## Destination checks
+
+GoJet can inspect public destinations for supported risk signals before or while a link is operated. A warning should identify what action the account owner can take without exposing detection details that would help an abusive sender evade future checks. When the service blocks a destination, changing only the browser form does not make the link safe or publishable.
+
+## Uploaded-file scanning
+
+Uploaded files can move through pending, scanning, ready, infected or error states depending on the configured scanning service. Do not distribute a public file URL until the file is in an allowed state. If scanning fails repeatedly, review the file-worker and scanning-service health instead of treating the browser upload completion as proof that the file is safe.
+
+## Abuse reports and security events
+
+Abuse reports record complaints about public content, while security events record suspicious or high-risk activity detected by the installation. Authorized administrators can review the relevant account or resource, record the investigation result and apply the supported restriction or restoration action. Changes that require a reason should retain that reason in the audit record.
+
+## Report a security problem
+
+Use the security contact published by the GoJet deployment. Include the affected URL or feature, the steps needed to reproduce the issue and the impact you observed. Do not include passwords, API keys, session cookies or unrelated personal information in the initial report.
+
+**Last updated:** 2026-08-20

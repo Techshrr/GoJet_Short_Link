@@ -1,0 +1,28 @@
+---
+title: Maintenance, Backups and Rollback
+sidebar:
+  order: 2
+  label: Maintenance & Backups
+---
+
+# Maintenance, Backups and Rollback
+
+A working homepage does not prove every GoJet service is healthy. Use the checks below before and after upgrades, and keep recovery material outside the server you are trying to protect.
+
+## Check service health
+
+Verify the redirect service, platform API, background workers, mail worker, file-scanning worker, database, Redis and configured storage. Also perform a small end-to-end test: sign in, open a workspace, create or inspect a link, load the administrator area with an administrator account, and confirm any enabled mail or file workflow. Record failures individually instead of replacing them with a single hard-coded green status.
+
+## Back up persistent data
+
+Back up MySQL and every persistent storage location that contains user uploads or other required assets. Protect encryption keys and environment configuration separately so an attacker who obtains one backup does not automatically obtain every secret needed to use it. Schedule restoration tests; creating a backup file is not proof that it can be restored.
+
+## Upgrade safely
+
+Read the release notes and migration requirements first. Take and verify backups, stop or drain work where the release instructions require it, apply database migrations once, deploy the new binaries and built frontend assets, restart the required services, then run smoke tests for redirects, account sign-in, workspace pages, administrator sign-in, billing callbacks, file scanning and mail.
+
+## Plan rollback before deployment
+
+Rollback has to account for both application files and database compatibility. If the release contains a migration that cannot safely be reversed, use the documented forward-fix or restore procedure instead of placing an older binary on top of a newer incompatible schema. Keep the previous deployable package until the new release has passed the required checks.
+
+**Last updated:** 2026-08-20

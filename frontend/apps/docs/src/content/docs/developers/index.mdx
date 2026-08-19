@@ -1,0 +1,34 @@
+---
+title: API and Automation
+sidebar:
+  order: 5
+  label: API & Automation
+---
+
+# API and Automation
+
+Use GoJet's API when another application needs to create, read or manage workspace content without operating the browser interface. Use webhook notifications when your system needs to react to events that happen in GoJet.
+
+## Authenticate API requests
+
+Create a workspace API key with only the permissions the integration needs. Send the secret in the `Authorization: Bearer <API_KEY>` header over HTTPS. Do not place an API key in a URL, frontend bundle, analytics field, log message or source repository. If a key may have been exposed, revoke it and create a replacement.
+
+## Build requests that can be retried safely
+
+Send JSON bodies for endpoints that expect JSON, use the resource identifiers returned by GoJet, and follow pagination fields when a list spans more than one page. For create or update operations that document idempotency support, reuse the same idempotency value when retrying the same logical request so a network retry does not create duplicate work.
+
+## Handle errors explicitly
+
+Treat `401` as missing or invalid authentication and `403` as authenticated but not allowed to perform the requested action. A `409` response indicates a state conflict where documented, such as a public path that is already in use. A `422` response means submitted data or a policy rule prevented the change. A `429` response means the caller should slow down and retry according to the returned rate-limit information.
+
+## Verify webhook notifications
+
+Verify the GoJet signature before trusting a webhook body. Use the delivery identifier to make repeated delivery harmless, record enough information to investigate a failed delivery, and return a success response only after your application has durably accepted the event. Never disable signature verification merely to make a development test pass.
+
+## Keep browser and API behavior consistent
+
+Changes made through the API use the same workspace permissions and saved resource state as changes made in the browser. Routing, content availability, account limits and security decisions are determined by the service handling the request, so an integration should always use the returned status instead of assuming a change succeeded locally.
+
+See **API Reference** for endpoint-specific examples.
+
+**Last updated:** 2026-08-20
