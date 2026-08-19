@@ -208,6 +208,8 @@ func (s *server) linkCreatePolicy(r *http.Request) links.CreatePolicy {
 				out = append(out, text)
 			}
 			return out
+		case string:
+			return nil
 		default:
 			return nil
 		}
@@ -253,6 +255,17 @@ func (s *server) updateLink(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 400, map[string]string{"error": "invalid link"})
 		return
 	}
+	current, err := s.links.Get(r.Context(), currentUser(r).ID, wid, id)
+	if err != nil {
+		jsonResponse(w, 404, map[string]string{"error": "链接不存在或无权访问"})
+		return
+	}
+	if linkDestinationRiskInputsChanged(current, input.Link) {
+		if err = s.invalidateLinkDestinationRiskFailClosed(r.Context(), wid, id); err != nil {
+			jsonResponse(w, 503, map[string]string{"error": "目标风险状态无法安全失效，请稍后重试"})
+			return
+		}
+	}
 	item, err := s.links.Update(r.Context(), currentUser(r).ID, wid, id, input.Link, input.Reason)
 	if err != nil {
 		jsonResponse(w, 422, map[string]string{"error": err.Error()})
@@ -288,6 +301,10 @@ func (s *server) restoreLinkVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	if e1 != nil || e2 != nil || e3 != nil {
 		jsonResponse(w, 400, map[string]string{"error": "invalid revision"})
+		return
+	}
+	if err := s.invalidateLinkDestinationRiskFailClosed(r.Context(), wid, id); err != nil {
+		jsonResponse(w, 503, map[string]string{"error": "目标风险状态无法安全失效，请稍后重试"})
 		return
 	}
 	item, err := s.links.Restore(r.Context(), currentUser(r).ID, wid, id, revision, input.Reason)
