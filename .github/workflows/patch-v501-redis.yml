@@ -1,0 +1,182 @@
+name: Apply v5.0.1 Redis compatibility patch
+
+on:
+  push:
+    branches: ["rebuild/v5-specification-rebuild"]
+    paths: [".github/workflows/patch-v501-redis.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rebuild/v5-specification-rebuild
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Apply source-level v5.0.1 Redis and package-integrity fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new, label):
+              p=Path(path); t=p.read_text()
+              if old not in t:
+                  raise SystemExit(f'{path}: anchor missing for {label}')
+              if t.count(old) != 1:
+                  raise SystemExit(f'{path}: non-unique anchor for {label}: {t.count(old)}')
+              p.write_text(t.replace(old,new,1))
+
+          # install.sh must itself be production-correct. Packaging is not allowed
+          # to silently change installer semantics.
+          p=Path('install.sh'); t=p.read_text()
+          t=t.replace('''\nif [[ "${1:-}" == "--docker" ]]; then\n  exec "$ROOT/scripts/installdocker.sh"\nfi\n''','\n')
+          needle='command -v gzip >/dev/null 2>&1 || die "需要 gzip"\n'
+          if 'PDF_FONT="$ROOT/resources/fonts/NotoSansSCRegular.ttf"' not in t:
+              if needle not in t: raise SystemExit('install.sh gzip anchor missing')
+              t=t.replace(needle,needle+'PDF_FONT="$ROOT/resources/fonts/NotoSansSCRegular.ttf"\n[[ -s "$PDF_FONT" ]] || die "Native 包缺少 PDF 中文字体：$PDF_FONT"\n',1)
+          p.write_text(t)
+
+          # Native deployment source owns its final font path and Redis contract.
+          for rel in ('deploy/native/gojet@.service','deploy/native/gojet.env.example'):
+              p=Path(rel); t=p.read_text()
+              t=t.replace('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc','__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf')
+              p.write_text(t)
+          p=Path('deploy/native/gojet.env.example'); t=p.read_text()
+          if 'REDIS_USERNAME=' not in t:
+              t=t.replace('REDIS_ADDRESS=127.0.0.1:6379\n','REDIS_ADDRESS=127.0.0.1:6379\n# Optional Redis ACL username. Leave empty for default user / requirepass mode.\nREDIS_USERNAME=\n',1)
+          t=t.replace('REDIS_PASSWORD=replace-with-a-strong-redis-password\n','REDIS_PASSWORD=\n')
+          p.write_text(t)
+
+          for rel in ('.env.example','.env.production.example'):
+              p=Path(rel)
+              if not p.exists(): continue
+              t=p.read_text()
+              if 'REDIS_ADDRESS=' in t and 'REDIS_USERNAME=' not in t:
+                  t=t.replace('REDIS_ADDRESS=', 'REDIS_USERNAME=\nREDIS_ADDRESS=', 1)
+              p.write_text(t)
+
+          # Background Native installer: local no-auth, password and ACL; remote
+          # no-auth is rejected before any service configuration is written.
+          p=Path('scripts/nativeinstallerapply.sh'); t=p.read_text()
+          t=t.replace('MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_PORT|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)',
+                      'MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_HOST|REDIS_PORT|REDIS_USERNAME|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)')
+          t=t.replace('for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do',
+                      'for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_HOST REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do')
+          t=t.replace('redis_password=${cfg[REDIS_PASSWORD]-}', 'redis_host=${cfg[REDIS_HOST]:-127.0.0.1}\nredis_username=${cfg[REDIS_USERNAME]-}\nredis_password=${cfg[REDIS_PASSWORD]-}')
+          t=t.replace("[[ ${#mysql_password} -le 512 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 密码过长'",
+                      "[[ ${#mysql_password} -le 512 && ${#redis_username} -le 256 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 认证参数过长'")
+          t=t.replace('for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do',
+                      'for key in MYSQL_PASSWORD REDIS_HOST REDIS_USERNAME REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do')
+          old='''status redis 38 '正在验证 Redis'\nredis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}")\nif [[ -n "${cfg[REDIS_PASSWORD]:-}" ]]; then\n  redis_args+=(-a "${cfg[REDIS_PASSWORD]}")\nfi\n"$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 连接或密码验证失败'\n'''
+          new='''status redis 38 '正在验证 Redis'\nis_loopback_redis_host(){\n  local h=${1#[}\n  h=${h%]}\n  case "${h,,}" in localhost|::1|127.*) return 0;; *) return 1;; esac\n}\n[[ "$redis_host" != *$'\\n'* && "$redis_host" != *$'\\r'* && "$redis_host" != *[[:space:]]* ]] || fail 'Redis 地址格式无效'\n[[ -z "$redis_username" || -n "$redis_password" ]] || fail 'Redis ACL 用户名已填写时必须同时填写密码'\nif ! is_loopback_redis_host "$redis_host" && [[ -z "$redis_password" ]]; then\n  fail '远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'\nfi\nredis_args=(-h "$redis_host" -p "${cfg[REDIS_PORT]}")\nif [[ -n "$redis_username" ]]; then\n  redis_args+=(--user "$redis_username")\nfi\nif [[ -n "$redis_password" ]]; then\n  REDISCLI_AUTH="$redis_password" "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 认证连接失败；请检查地址、端口、用户名和密码'\nelse\n  "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail '本机 Redis 连接失败；如 Redis 已启用认证请填写密码或 ACL 用户名/密码'\nfi\n'''
+          if old not in t: raise SystemExit('nativeinstallerapply Redis block anchor missing')
+          t=t.replace(old,new,1)
+          t=t.replace("printf 'REDIS_ADDRESS=%s\\n' \"$(envq \"127.0.0.1:${cfg[REDIS_PORT]}\")\"\n  printf 'REDIS_PASSWORD=%s\\n' \"$(envq \"${cfg[REDIS_PASSWORD]:-}\")\"",
+                      "printf 'REDIS_ADDRESS=%s\\n' \"$(envq \"${redis_host}:${cfg[REDIS_PORT]}\")\"\n  printf 'REDIS_USERNAME=%s\\n' \"$(envq \"$redis_username\")\"\n  printf 'REDIS_PASSWORD=%s\\n' \"$(envq \"$redis_password\")\"")
+          old_admin='''"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" | grep -Fq 'method="post" action="/api/admin/auth/login"' || fail '管理员登录页安全回退验证失败；已恢复安装前 rewrite'\n"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/styles.css" | grep -Fq ':root{' || fail '管理员后台 CSS 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'\n"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/app.js" | grep -Fq 'loginForm' || fail '管理员后台 JavaScript 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'\n'''
+          new_admin='''admin_html=$(mktemp)\n"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" > "$admin_html" || fail '管理员 V5 SPA 入口无法读取；已恢复安装前 rewrite'\ngrep -Fq '<div id="root"></div>' "$admin_html" || fail '管理员 V5 SPA root mount 缺失；已恢复安装前 rewrite'\nadmin_asset=$(grep -oE '/admin/assets/[^" ]+\\.js' "$admin_html" | head -n1 || true)\n[[ -n "$admin_asset" ]] || fail '管理员 V5 hashed JavaScript 资产引用缺失；已恢复安装前 rewrite'\n"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN$admin_asset" >/dev/null || fail '管理员 V5 hashed JavaScript 无法读取；已恢复安装前 rewrite'\nrm -f "$admin_html"\n'''
+          if old_admin in t: t=t.replace(old_admin,new_admin,1)
+          p.write_text(t)
+
+          # Web installer Redis policy + ACL UI.
+          p=Path('installer/index.php'); t=p.read_text()
+          old='''function redisCheck(int $port, string $password): array {\n    $errno = 0; $errstr = '';\n    $socket = @stream_socket_client("tcp://127.0.0.1:$port", $errno, $errstr, 2, STREAM_CLIENT_CONNECT);\n    if (!$socket) return [false, "无法连接 Redis：$errstr"];\n    stream_set_timeout($socket, 2);\n    if ($password !== '') {\n        $cmd = "*2\\r\\n$4\\r\\nAUTH\\r\\n$" . strlen($password) . "\\r\\n$password\\r\\n";\n        fwrite($socket, $cmd);\n        $reply = fgets($socket);\n        if (!is_string($reply) || !str_starts_with($reply, '+OK')) { fclose($socket); return [false, 'Redis 密码验证失败']; }\n    }\n    fwrite($socket, "*1\\r\\n$4\\r\\nPING\\r\\n");\n    $reply = fgets($socket);\n    fclose($socket);\n    return [is_string($reply) && str_starts_with($reply, '+PONG'), 'Redis PING 未返回 PONG'];\n}\n'''
+          new='''function redisResp(array $parts): string {\n    $cmd = '*' . count($parts) . "\\r\\n";\n    foreach ($parts as $part) { $part=(string)$part; $cmd .= '$' . strlen($part) . "\\r\\n" . $part . "\\r\\n"; }\n    return $cmd;\n}\nfunction redisLoopback(string $host): bool {\n    $host = strtolower(trim($host, '[]'));\n    if ($host === 'localhost' || $host === '::1') return true;\n    return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false && str_starts_with($host, '127.');\n}\nfunction redisCheck(string $host, int $port, string $username, string $password): array {\n    $host=trim($host); $username=trim($username);\n    if ($host === '' || preg_match('/[\\s\\r\\n]/', $host)) return [false, 'Redis 地址格式无效'];\n    if ($username !== '' && $password === '') return [false, 'Redis ACL 用户名已填写时必须同时填写密码'];\n    if (!redisLoopback($host) && $password === '') return [false, '远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'];\n    $target = filter_var(trim($host,'[]'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? 'tcp://[' . trim($host,'[]') . "]:$port" : "tcp://$host:$port";\n    $errno=0; $errstr='';\n    $socket=@stream_socket_client($target,$errno,$errstr,2,STREAM_CLIENT_CONNECT);\n    if (!$socket) return [false, "无法连接 Redis：$errstr"];\n    stream_set_timeout($socket,2);\n    if ($password !== '') {\n        fwrite($socket, redisResp($username !== '' ? ['AUTH',$username,$password] : ['AUTH',$password]));\n        $reply=fgets($socket);\n        if (!is_string($reply) || !str_starts_with($reply,'+OK')) { fclose($socket); return [false,'Redis 认证失败，请检查用户名和密码']; }\n    }\n    fwrite($socket, redisResp(['PING']));\n    $reply=fgets($socket); fclose($socket);\n    return [is_string($reply) && str_starts_with($reply,'+PONG'),'Redis PING 未返回 PONG'];\n}\n'''
+          if old not in t: raise SystemExit('installer redisCheck anchor missing')
+          t=t.replace(old,new,1)
+          t=t.replace("['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_PORT','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL']",
+                      "['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_HOST','REDIS_PORT','REDIS_USERNAME','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL']",1)
+          t=t.replace("$redisPort = (int)post('redis_port', '6379');\n        $redisPassword = (string)($_POST['redis_password'] ?? '');",
+                      "$redisHost = post('redis_host', '127.0.0.1');\n        $redisPort = (int)post('redis_port', '6379');\n        $redisUsername = post('redis_username');\n        $redisPassword = (string)($_POST['redis_password'] ?? '');",1)
+          t=t.replace("[$redisOk, $redisMessage] = redisCheck($redisPort, $redisPassword);",
+                      "[$redisOk, $redisMessage] = redisCheck($redisHost, $redisPort, $redisUsername, $redisPassword);",1)
+          t=t.replace("$_SESSION['redis'] = ['port' => $redisPort, 'password' => $redisPassword];",
+                      "$_SESSION['redis'] = ['host' => $redisHost, 'port' => $redisPort, 'username' => $redisUsername, 'password' => $redisPassword];",1)
+          t=t.replace("'REDIS_PORT' => (string)$redis['port'], 'REDIS_PASSWORD' => (string)$redis['password'],",
+                      "'REDIS_HOST' => (string)$redis['host'], 'REDIS_PORT' => (string)$redis['port'], 'REDIS_USERNAME' => (string)$redis['username'], 'REDIS_PASSWORD' => (string)$redis['password'],",1)
+          t=t.replace("$redisData = $_SESSION['redis'] ?? ['port' => 6379];",
+                      "$redisData = $_SESSION['redis'] ?? ['host' => '127.0.0.1', 'port' => 6379, 'username' => ''];",1)
+          old_form='''<h2>Redis</h2><div class="grid"><label>Redis 地址<input class="fixed" value="127.0.0.1" disabled></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData['port'])?>" required></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 未设置密码时可留空。</span></label></div>'''
+          new_form='''<h2>Redis</h2><div class="grid"><label>Redis 地址<input name="redis_host" value="<?=h((string)$redisData['host'])?>" required><span class="muted">本机默认 127.0.0.1；远程 Redis 必须启用认证。</span></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData['port'])?>" required></label><label>Redis ACL 用户名（可选）<input name="redis_username" value="<?=h((string)$redisData['username'])?>" autocomplete="username"><span class="muted">使用 requirepass/default 用户时留空。</span></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 可留空；远程 Redis 必须填写密码，ACL 模式同时填写用户名。</span></label></div>'''
+          if old_form not in t: raise SystemExit('installer Redis form anchor missing')
+          t=t.replace(old_form,new_form,1)
+          t=t.replace("<dt>Redis</dt><dd>127.0.0.1:<?=h((string)$redis['port'])?></dd>",
+                      "<dt>Redis</dt><dd><?=h((string)$redis['host'])?>:<?=h((string)$redis['port'])?><?=((string)$redis['username']!=='')?' / ACL '.h((string)$redis['username']):(((string)$redis['password']!=='')?' / 密码认证':' / 本机无认证')?></dd>",1)
+          p.write_text(t)
+
+          # Runtime Go Redis clients: add ACL username alongside existing password,
+          # or add both auth fields to redis.Options blocks that currently only set Addr.
+          changed=[]
+          block_re=re.compile(r'redis\.Options\s*\{.*?\}', re.S)
+          for p in Path('services').rglob('*.go'):
+              text=p.read_text(); original=text
+              def fix_block(m):
+                  b=m.group(0)
+                  if 'Username:' in b: return b
+                  if 'Password:' in b:
+                      lines=b.splitlines()
+                      for i,line in enumerate(lines):
+                          if 'Password:' in line:
+                              indent=re.match(r'\s*',line).group(0)
+                              lines.insert(i, indent+'Username: os.Getenv("REDIS_USERNAME"),')
+                              return '\n'.join(lines)
+                  lines=b.splitlines()
+                  for i,line in enumerate(lines):
+                      if 'Addr:' in line:
+                          indent=re.match(r'\s*',line).group(0)
+                          lines.insert(i+1, indent+'Username: os.Getenv("REDIS_USERNAME"),')
+                          lines.insert(i+2, indent+'Password: os.Getenv("REDIS_PASSWORD"),')
+                          return '\n'.join(lines)
+                  return b
+              if 'redis.Options' in text:
+                  text=block_re.sub(fix_block,text)
+                  if text != original:
+                      if 'os.Getenv(' in text and '"os"' not in text:
+                          text=text.replace('import (\n','import (\n\t"os"\n',1)
+                      p.write_text(text); changed.append(str(p))
+          print('Runtime Redis auth files:', *changed, sep='\n- ')
+
+          # P21 must never alter these source-controlled security semantics.
+          p=Path('scripts/packagev5native.sh'); t=p.read_text()
+          start="printf '==> normalize staged installer to frozen V5 Native architecture\\n'\n"
+          end="printf '==> write exact-version manifest and CycloneDX SBOM\\n'\n"
+          if start not in t or end not in t: raise SystemExit('packaging normalization anchors missing')
+          a=t.index(start); b=t.index(end,a)
+          integrity='''printf '==> verify source/package installer byte identity\\n'\nfor rel in installer/index.php scripts/nativeinstallerapply.sh scripts/nativeinstallerrun.sh deploy/native/gojet.env.example install.sh; do\n  cmp -s "$ROOT/$rel" "$STAGE/$rel" || { echo "P21 source/package integrity failure: $rel" >&2; exit 1; }\ndone\n\n'''
+          t=t[:a]+integrity+t[b:]
+          t=t.replace("'cache':'redis-authenticated'", "'cache':'redis-local-noauth-or-authenticated'")
+          p.write_text(t)
+
+          # Self-removing patch workflow: implementation history remains auditable,
+          # final source tree does not keep a one-shot mutation controller.
+          Path('.github/workflows/patch-v501-redis.yml').unlink()
+          PY
+
+          # Format any Go files touched by the generic Redis auth patch.
+          mapfile -t gofiles < <(grep -R -l 'REDIS_USERNAME' services --include='*.go' || true)
+          if ((${#gofiles[@]})); then gofmt -w "${gofiles[@]}"; fi
+
+          bash -n install.sh scripts/nativeinstallerapply.sh scripts/packagev5native.sh
+          php -l installer/index.php
+          grep -Fq 'REDIS_USERNAME=' deploy/native/gojet.env.example
+          grep -Fq 'P21 source/package integrity failure' scripts/packagev5native.sh
+          if grep -Fq 'REDIS_PASSWORD REDIS_PORT' scripts/packagev5native.sh; then exit 1; fi
+          go test ./...
+
+          git config user.name 'gojet-v501-patch[bot]'
+          git config user.email 'gojet-v501-patch[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(v5.0.1): support Redis no-auth password and ACL modes'
+          git push origin HEAD:rebuild/v5-specification-rebuild
