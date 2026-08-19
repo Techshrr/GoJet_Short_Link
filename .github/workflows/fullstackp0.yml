@@ -48,6 +48,20 @@ jobs:
         run: python3 scripts/checknames.py
       - name: Install integration dependencies
         run: |
+          set -euo pipefail
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+            if [[ -f "$source" ]]; then
+              sudo sed -i \
+                -e 's#http://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+                -e 's#https://azure.archive.ubuntu.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+                "$source"
+            fi
+          done
+          sudo tee /etc/apt/apt.conf.d/80gojet-fullstack >/dev/null <<'EOF'
+          Acquire::Retries "5";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
           sudo apt-get update
           sudo apt-get install -y default-mysql-client nginx zbar-tools
       - name: Validate canonical release namespaces
