@@ -64,6 +64,17 @@ find "$PKG/public/admin/assets" -type f -name '*.js' -print -quit | grep -q . ||
 find "$PKG/public/app" -type f -name '*.js' -print -quit | grep -q . || { echo 'Workspace JS payload missing' >&2; exit 1; }
 [[ -d "$PKG/public/docs/_astro" || -d "$PKG/public/docs/pagefind" ]] || { echo 'Docs static output missing Astro/Pagefind assets' >&2; exit 1; }
 
+# Docs is Astro static output rooted at public/docs/index.html. The packaged
+# aaPanel rewrite must serve that directory tree directly and must never point
+# at the retired /docs.html path, otherwise a successful fresh install produces
+# a deterministic public /docs/ 404.
+DOCS_REWRITE="$PKG/deploy/nginx/gojetbtrewrite.conf"
+! grep -Fq '/docs.html' "$DOCS_REWRITE" || { echo 'Native Nginx rewrite still points Docs at retired /docs.html' >&2; exit 1; }
+grep -A3 -F 'location ^~ /docs/' "$DOCS_REWRITE" | grep -Fq 'try_files $uri $uri/ =404;' || {
+  echo 'Native Nginx rewrite does not serve the packaged public/docs static tree' >&2
+  exit 1
+}
+
 # The archive itself is the deployable product: no build-time or V4 production runtime is allowed inside it.
 if find "$PKG" -type d \( -name node_modules -o -name userconsole -o -name adminconsole \) -print -quit | grep -q .; then
   echo 'forbidden Node/legacy console directory present in Native package' >&2; exit 1
