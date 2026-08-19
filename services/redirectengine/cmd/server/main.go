@@ -28,7 +28,7 @@ func main() {
 	if limit < 1 {
 		log.Fatal("VISIT_RATE_LIMIT_PER_MINUTE must be positive")
 	}
-	s := store.NewRedis(address, os.Getenv("REDIS_PASSWORD"), db, limit)
+	s := store.NewRedis(address, os.Getenv("REDIS_USERNAME"), os.Getenv("REDIS_PASSWORD"), db, limit)
 	logger := observability.NewLogger("redirectengine", observability.WriterFromEnvironment())
 	server := &http.Server{Addr: getenv("HTTP_ADDRESS", ":8080"), Handler: logger.Middleware(httpapi.New(s, required("VISITOR_HASH_KEY"), required("QR_TRACKING_KEY"))), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("redirect engine listening on %s", server.Addr)
