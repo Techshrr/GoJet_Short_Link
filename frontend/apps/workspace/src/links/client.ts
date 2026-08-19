@@ -1,5 +1,6 @@
 import { api } from "@gojet/auth";
-import { createLinksClient, type WorkspaceSummary } from "@gojet/api-client";
+import { ApiError, createLinksClient, type WorkspaceSummary } from "@gojet/api-client";
+import { localizedError, type GoJetLocale } from "@gojet/ui/locale";
 
 export const linksClient = createLinksClient(api);
 
@@ -19,12 +20,20 @@ export function shortUrl(domain: string, code: string): string {
   return hostname ? `https://${hostname}/${code}` : `/${code}`;
 }
 
+function currentLocale(): GoJetLocale {
+  return typeof document !== "undefined" && document.documentElement.lang === "zh-CN" ? "zh-CN" : "en";
+}
+
 export function formatDate(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(currentLocale() === "zh-CN" ? "zh-CN" : "en", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-export function errorMessage(error: unknown, fallback = "请求失败，请重试"): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+export function errorMessage(error: unknown, fallback?: string): string {
+  const locale = currentLocale();
+  if (error instanceof ApiError) return localizedError(error.message, locale, error.status);
+  if (error instanceof Error && error.message) return localizedError(error.message, locale);
+  return fallback ? localizedError(fallback, locale) : localizedError(undefined, locale);
 }
