@@ -58,6 +58,10 @@ cp -R "$ROOT/frontend/apps/admin/dist/." "$TARGET/public/admin/"
 cp -R "$ROOT/frontend/apps/docs/dist/." "$TARGET/public/docs/"
 cp -R "$ROOT/public/install/." "$TARGET/public/install/"
 
+# Development-only visual verification pages must never be reachable from a
+# production release, even if a local build left their static fixture behind.
+rm -rf "$TARGET/public/dev"
+
 # Production must contain real V5 product surfaces and both languages, including
 # legal routes that previously disappeared behind redirect-engine fallback.
 for required in \
@@ -73,6 +77,7 @@ for required in \
   public/docs/zh-CN/index.html; do
   test -s "$TARGET/$required" || { echo "production UI is missing $required" >&2; exit 1; }
 done
+[ ! -e "$TARGET/public/dev" ] || { echo 'internal design verification route leaked into production' >&2; exit 1; }
 
 grep -Fq 'footer-columns' "$TARGET/public/index.html" || { echo 'complete website footer is missing from production build' >&2; exit 1; }
 grep -Fq 'Privacy Policy' "$TARGET/public/legal/privacy/index.html" || { echo 'English privacy policy is missing' >&2; exit 1; }
