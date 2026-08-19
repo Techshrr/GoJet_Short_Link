@@ -9,22 +9,29 @@ const visibleAttributes = new Set([
   'title', 'description', 'label', 'help', 'placeholder', 'aria-label', 'alt',
   'triggerLabel', 'confirmLabel', 'cancelLabel', 'emptyLabel', 'loadingLabel'
 ]);
+const visibleProperties = new Set([
+  'title', 'description', 'label', 'help', 'placeholder', 'body', 'message', 'emptyLabel',
+  'loadingLabel', 'successMessage', 'errorMessage', 'confirmLabel', 'cancelLabel'
+]);
 const engineering = [
-  /\bcontrol plane\b/i, /server[- ]authoritative/i, /\bserver authority\b/i,
-  /\bredirect layer\b/i, /\bbackend capability\b/i, /\boperational source\b/i,
-  /\bexact[- ]head\b/i, /\bfrozen shell\b/i, /\bP(?:0?[1-9]|1[0-9])\b/,
-  /\bRBAC\b/, /visit_type\s*=/i, /\bmock(?:ed|ing)?\b/i,
-  /\bfake data\b/i, /\bV5 does not\b/i
+  /\bcontrol plane\b/i,
+  /server[- ]authoritative/i,
+  /\bserver authority\b/i,
+  /\bredirect layer\b/i,
+  /\bbackend capability\b/i,
+  /\boperational source\b/i,
+  /\bexact[- ]head\b/i,
+  /\bfrozen shell\b/i,
+  /\bP(?:0?[1-9]|1[0-9])\b/,
+  /\bRBAC\b/,
+  /visit_type\s*=/i,
+  /\bmock(?:ed|ing)?\b/i,
+  /\bfake data\b/i,
+  /\bV5 does not\b/i,
+  /\bserver[- ]enforced\b/i,
+  /\bbackend service\b/i
 ];
 const technicalOnly = /^(?:GoJet(?:\s+Admin)?|API|APIs|Webhook|Webhooks|QR|QR Codes|PNG|SVG|PDF|CSV|OAuth|Turnstile|DNS|HTTPS|HTTP|URL|URLs|IP|CNAME|TXT|JSON|HTML|Markdown|ClamAV|MySQL|Redis|SMTP|TOTP|2FA|UTC|GB|MB|KB|px|[A-Z]{2,8}|[0-9 .:/+%#()_-]+)$/;
-
-const copySources = [
-  fs.readFileSync(path.join(root, 'packages/ui/src/locale.tsx'), 'utf8'),
-  fs.readFileSync(path.join(root, 'packages/ui/src/locale-copy.ts'), 'utf8')
-].join('\n');
-const copyKeys = new Set();
-for (const match of copySources.matchAll(/(?:^|\n)\s*["']([^"'\n]+)["']\s*:\s*\{\s*en\s*:/g)) copyKeys.add(match[1]);
-for (const match of copySources.matchAll(/(?:^|\n)\s*["']([^"'\n]+)["']\s*:\s*\{\s*["']?en["']?\s*:/g)) copyKeys.add(match[1]);
 
 function filesUnder(relative) {
   const base = path.join(root, relative);
@@ -36,6 +43,45 @@ function filesUnder(relative) {
   }
   return result;
 }
+
+function propertyName(node) {
+  if (!node) return '';
+  if (ts.isIdentifier(node) || ts.isStringLiteralLike(node)) return node.text;
+  return node.getText().replace(/^['"]|['"]$/g, '');
+}
+
+function staticText(node) {
+  if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  return undefined;
+}
+
+const registryValues = new Set();
+for (const localeFile of ['packages/ui/src/locale.tsx', 'packages/ui/src/locale-copy.ts']) {
+  const source = fs.readFileSync(path.join(root, localeFile), 'utf8');
+  const ast = ts.createSourceFile(localeFile, source, ts.ScriptTarget.Latest, true, localeFile.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  function collect(node) {
+    if (ts.isPropertyAssignment(node)) {
+      const key = propertyName(node.name);
+      if (key && node.parent && ts.isObjectLiteralExpression(node.parent)) {
+        const localeChildren = new Map();
+        for (const child of node.parent.properties) {
+          if (!ts.isPropertyAssignment(child)) continue;
+          const childKey = propertyName(child.name);
+          const value = staticText(child.initializer);
+          if ((childKey === 'en' || childKey === 'zh-CN') && value !== undefined) localeChildren.set(childKey, value);
+        }
+        if (localeChildren.has('en') && localeChildren.has('zh-CN')) {
+          registryValues.add(key);
+          registryValues.add(localeChildren.get('en'));
+          registryValues.add(localeChildren.get('zh-CN'));
+        }
+      }
+    }
+    ts.forEachChild(node, collect);
+  }
+  collect(ast);
+}
+
 function human(value) {
   const text = value.replace(/\s+/g, ' ').trim();
   if (text.length < 2) return '';
@@ -44,48 +90,94 @@ function human(value) {
   if (!/[A-Za-z\u3400-\u9fff]/.test(text)) return '';
   return text;
 }
-function pairedInSource(source, value) {
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`text\\(\\s*["']${escaped}["']\\s*,`).test(source) ||
-    new RegExp(`localized\\(\\s*["']${escaped}["']`).test(source);
-}
-function accepted(source, value) {
-  return copyKeys.has(value) || pairedInSource(source, value);
-}
 
 const failures = [];
+function issue(file, ast, node, kind, text, reason) {
+  failures.push({ file, line: ast.getLineAndCharacterOfPosition(node.getStart()).line + 1, kind, text, reason });
+}
+
 for (const file of surfaceRoots.flatMap(filesUnder)) {
   const source = fs.readFileSync(path.join(root, file), 'utf8');
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  function check(value, node, kind) {
+  const locallyPaired = new Set();
+
+  function scanPairs(node) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'text' && node.arguments.length >= 2) {
+      for (const argument of node.arguments.slice(0, 2)) {
+        const value = staticText(argument);
+        if (value !== undefined) locallyPaired.add(value);
+      }
+    }
+    ts.forEachChild(node, scanPairs);
+  }
+  scanPairs(ast);
+
+  function checkEngineering(value, node, kind) {
     const text = human(value);
     if (!text) return;
-    for (const rule of engineering) if (rule.test(text)) failures.push({ file, line: ast.getLineAndCharacterOfPosition(node.getStart()).line + 1, kind, text, reason: 'engineering/internal wording' });
-    const hasChinese = /[\u3400-\u9fff]/.test(text);
-    const hasEnglish = /[A-Za-z]{2}/.test(text);
-    if ((hasChinese || hasEnglish) && !accepted(source, text)) failures.push({ file, line: ast.getLineAndCharacterOfPosition(node.getStart()).line + 1, kind, text, reason: 'visible literal has no zh-CN/en pair' });
+    for (const rule of engineering) if (rule.test(text)) issue(file, ast, node, kind, text, 'engineering/internal wording');
   }
+
+  function checkPair(value, node, kind) {
+    const text = human(value);
+    if (!text) return;
+    checkEngineering(text, node, kind);
+    if (!registryValues.has(text) && !locallyPaired.has(text)) issue(file, ast, node, kind, text, 'visible literal has no zh-CN/en pair');
+  }
+
+  function insidePairCall(node) {
+    let current = node.parent;
+    while (current && !ts.isJsxExpression(current) && !ts.isJsxAttribute(current) && !ts.isSourceFile(current)) {
+      if (ts.isCallExpression(current) && ts.isIdentifier(current.expression) && (current.expression.text === 'text' || current.expression.text === 'localized')) return true;
+      current = current.parent;
+    }
+    return false;
+  }
+
+  function scanJsxExpression(node) {
+    if ((ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) && !insidePairCall(node)) checkPair(node.text, node, 'jsx-expression');
+    ts.forEachChild(node, scanJsxExpression);
+  }
+
   function visit(node) {
-    if (ts.isJsxText(node)) check(node.getText(), node, 'text');
+    if (ts.isJsxText(node)) checkPair(node.getText(), node, 'text');
+
     if (ts.isJsxAttribute(node) && visibleAttributes.has(node.name.getText())) {
       const init = node.initializer;
-      if (init && ts.isStringLiteral(init)) check(init.text, init, `attribute:${node.name.getText()}`);
-      if (init && ts.isJsxExpression(init) && init.expression && ts.isStringLiteralLike(init.expression)) check(init.expression.text, init.expression, `attribute:${node.name.getText()}`);
+      if (init && ts.isStringLiteral(init)) checkPair(init.text, init, `attribute:${node.name.getText()}`);
+      if (init && ts.isJsxExpression(init) && init.expression) scanJsxExpression(init.expression);
+    } else if (ts.isJsxExpression(node) && node.expression) {
+      scanJsxExpression(node.expression);
     }
+
+    if (ts.isPropertyAssignment(node) && visibleProperties.has(propertyName(node.name))) {
+      const value = staticText(node.initializer);
+      if (value !== undefined) checkPair(value, node.initializer, `property:${propertyName(node.name)}`);
+    }
+
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'text') {
+      for (const argument of node.arguments.slice(0, 2)) {
+        const value = staticText(argument);
+        if (value !== undefined) checkEngineering(value, argument, 'localized-copy');
+      }
+    }
+
     ts.forEachChild(node, visit);
   }
   visit(ast);
 }
 
-// React error messages returned by the Go API must never force a different script
-// into the selected UI. Unknown server messages are handled by localizedError().
 const localeSource = fs.readFileSync(path.join(root, 'packages/ui/src/locale.tsx'), 'utf8');
 if (!localeSource.includes('export function localizedError')) failures.push({ file: 'packages/ui/src/locale.tsx', line: 1, kind: 'contract', text: 'localizedError', reason: 'missing locale-safe server error fallback' });
+if (!localeSource.includes('const reverse = new Map')) failures.push({ file: 'packages/ui/src/locale.tsx', line: 1, kind: 'contract', text: 'bidirectional locale registry', reason: 'locale lookup must recognize both language values' });
 
 if (failures.length) {
-  console.error(`VISIBLE_LOCALE_GATE failed with ${failures.length} issue(s). Every visible literal must have an explicit en/zh-CN pair or a registered translation key.`);
-  for (const issue of failures.slice(0, 250)) console.error(`${issue.file}:${issue.line} [${issue.kind}] ${issue.reason}: ${JSON.stringify(issue.text)}`);
-  if (failures.length > 250) console.error(`... ${failures.length - 250} more issue(s)`);
+  const unique = new Map();
+  for (const item of failures) unique.set(`${item.file}:${item.line}:${item.kind}:${item.reason}:${item.text}`, item);
+  const list = [...unique.values()];
+  console.error(`VISIBLE_LOCALE_GATE failed with ${list.length} issue(s). Every visible literal must have an explicit en/zh-CN pair or a registered translation key.`);
+  for (const item of list.slice(0, 400)) console.error(`${item.file}:${item.line} [${item.kind}] ${item.reason}: ${JSON.stringify(item.text)}`);
+  if (list.length > 400) console.error(`... ${list.length - 400} more issue(s)`);
   process.exit(1);
 }
 console.log(`VISIBLE_LOCALE_GATE passed: ${surfaceRoots.join(', ')} contain no unpaired visible literals or forbidden engineering wording.`);
