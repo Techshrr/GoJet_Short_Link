@@ -5,10 +5,6 @@ die(){ echo "GoJet installer bootstrap: $*" >&2; exit 1; }
 [[ $(id -u) -eq 0 ]] || die "请使用 sudo ./install.sh"
 case "$ROOT" in *' '*) die "安装路径不能包含空格";; esac
 
-if [[ "${1:-}" == "--docker" ]]; then
-  exec "$ROOT/scripts/installdocker.sh"
-fi
-
 find_cmd(){
   local name=$1; shift
   local p
@@ -26,6 +22,8 @@ command -v openssl >/dev/null 2>&1 || die "需要 openssl"
 command -v base64 >/dev/null 2>&1 || die "需要 base64"
 command -v curl >/dev/null 2>&1 || die "需要 curl"
 command -v gzip >/dev/null 2>&1 || die "需要 gzip"
+PDF_FONT="$ROOT/resources/fonts/NotoSansSCRegular.ttf"
+[[ -s "$PDF_FONT" ]] || die "Native 包缺少 PDF 中文字体：$PDF_FONT"
 
 "$PHP" -r 'exit(version_compare(PHP_VERSION,"8.3.0",">=")?0:1);' || die "PHP 8.3 或更高版本才受支持"
 REQUIRED_PHP_EXTENSIONS=(pdo_mysql openssl session filter json hash)
