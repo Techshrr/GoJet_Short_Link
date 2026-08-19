@@ -14,7 +14,10 @@ need(){ command -v "$1" >/dev/null 2>&1 || { echo "missing packaging tool: $1" >
 for x in git go pnpm python3 tar sha256sum; do need "$x"; done
 
 rm -rf "$OUT/stage"
-mkdir -p "$STAGE/bin" "$STAGE/public" "$STAGE/scripts" "$STAGE/deploy" "$OUT"
+mkdir -p "$STAGE/bin" "$STAGE/public" "$STAGE/scripts" "$STAGE/deploy" "$STAGE/resources/fonts" "$OUT"
+
+printf '==> prepare pinned static Unicode PDF font\n'
+bash "$ROOT/scripts/preparepdffonts.sh"
 
 printf '==> build V5 frontend\n'
 pnpm --dir "$ROOT/frontend" build
@@ -42,6 +45,7 @@ cp -a "$ROOT/installer" "$STAGE/installer"
 cp -a "$ROOT/database" "$STAGE/database"
 cp -a "$ROOT/deploy/native" "$STAGE/deploy/native"
 cp -a "$ROOT/deploy/nginx" "$STAGE/deploy/nginx"
+cp -a "$ROOT/resources/fonts/." "$STAGE/resources/fonts/"
 cp -a "$ROOT/scripts/runmigrations.sh" "$STAGE/scripts/"
 cp -a "$ROOT/scripts/nativeinstallerapply.sh" "$STAGE/scripts/"
 cp -a "$ROOT/scripts/nativeinstallerrun.sh" "$STAGE/scripts/"
@@ -61,7 +65,7 @@ p=s/'install.sh'
 t=p.read_text()
 t=t.replace('''\nif [[ "${1:-}" == "--docker" ]]; then\n  exec "$ROOT/scripts/installdocker.sh"\nfi\n''','\n')
 needle='command -v gzip >/dev/null 2>&1 || die "需要 gzip"\n'
-font='''command -v gzip >/dev/null 2>&1 || die "需要 gzip"\nPDF_FONT=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc\nif [[ ! -f "$PDF_FONT" ]]; then\n  command -v apt-get >/dev/null 2>&1 || die "缺少 Noto CJK 字体且系统没有 apt-get"\n  DEBIAN_FRONTEND=noninteractive apt-get update\n  DEBIAN_FRONTEND=noninteractive apt-get install -y fonts-noto-cjk\nfi\n[[ -f "$PDF_FONT" ]] || die "缺少 PDF 中文字体：$PDF_FONT"\n'''
+font='''command -v gzip >/dev/null 2>&1 || die "需要 gzip"\nPDF_FONT="$ROOT/resources/fonts/NotoSansSCRegular.ttf"\n[[ -s "$PDF_FONT" ]] || die "Native 包缺少 PDF 中文字体：$PDF_FONT"\n'''
 if needle not in t: raise SystemExit('install.sh font insertion anchor missing')
 t=t.replace(needle,font)
 p.write_text(t)
@@ -84,11 +88,15 @@ if old not in t: raise SystemExit('legacy Admin verification block missing')
 t=t.replace(old,new)
 p.write_text(t)
 
-font_old='__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf'
-font_new='/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+# gopdf v0.38.0 is validated against the pinned static TrueType font prepared
+# above. Do not point Native services at a system TTC collection.
+font_system='/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+font_native='__GOJET_ROOT__/resources/fonts/NotoSansSCRegular.ttf'
 for rel in ('deploy/native/gojet@.service','deploy/native/gojet.env.example'):
     p=s/rel
-    if p.exists(): p.write_text(p.read_text().replace(font_old,font_new))
+    if p.exists():
+        text=p.read_text().replace(font_system,font_native)
+        p.write_text(text)
 p=s/'deploy/native/gojet.env.example'
 t=p.read_text().replace('REDIS_PASSWORD=\n','REDIS_PASSWORD=replace-with-a-strong-redis-password\n')
 p.write_text(t)
