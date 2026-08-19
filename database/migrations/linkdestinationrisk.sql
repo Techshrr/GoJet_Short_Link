@@ -42,18 +42,9 @@ SELECT
 FROM short_links
 WHERE deleted_at IS NULL;
 
-CREATE TRIGGER short_links_destination_risk_invalidate
-AFTER UPDATE ON short_links
-FOR EACH ROW
-UPDATE link_destination_risk
-SET next_scan_at=UTC_TIMESTAMP(),
-    manual_decision=NULL,
-    manual_reason=NULL,
-    manual_administrator_id=NULL,
-    manual_at=NULL
-WHERE link_id=NEW.id
-  AND (
-    NOT (OLD.destination <=> NEW.destination)
-    OR NOT (OLD.routing_rules <=> NEW.routing_rules)
-    OR NOT (OLD.ab_destinations <=> NEW.ab_destinations)
-  );
+-- Destination-risk invalidation is authoritative in the Go API boundary, not a
+-- MySQL trigger. Before any destination/routing/A-B mutation, the server clears
+-- manual override fields and schedules an immediate rescan; if invalidation
+-- fails, the mutation is rejected fail-closed. Version restore uses the same
+-- invalidation path. This preserves the safety invariant without requiring
+-- SUPER or log_bin_trust_function_creators on MySQL 8 fresh installs.
