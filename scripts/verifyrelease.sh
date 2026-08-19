@@ -21,12 +21,34 @@ unique_count=$(grep -ve '^[[:space:]]*$' "$CATALOG" | sort -u | wc -l | tr -d '[
 for migration in linkdestinationrisk.sql socialauth.sql socialsubjectwidth.sql billingcycles.sql; do
   grep -Fxq "$migration" "$CATALOG" || { echo "migration catalog is missing $migration" >&2; exit 1; }
 done
-for path in public/install/index.php public/install/install.css public/install/wizard.css public/install/install.js database/migrations/supportticketmessageip.sql database/migrations/officialshortdomains.sql database/migrations/emailauthcodes.sql database/migrations/mailinvoicepresentation.sql database/migrations/linkdestinationrisk.sql database/migrations/socialauth.sql database/migrations/socialsubjectwidth.sql database/migrations/billingcycles.sql scripts/installgeoip.sh deploy/native/gojet@.service; do
+
+for path in \
+  public/install/index.php public/install/install.css public/install/wizard.css public/install/install.js \
+  public/index.html public/zh-CN/index.html \
+  public/legal/privacy/index.html public/legal/terms/index.html public/legal/acceptable-use/index.html \
+  public/zh-CN/legal/privacy/index.html public/zh-CN/legal/terms/index.html public/zh-CN/legal/acceptable-use/index.html \
+  public/report-abuse/index.html public/app/index.html public/admin/index.html public/docs/index.html public/docs/zh-CN/index.html \
+  database/migrations/supportticketmessageip.sql database/migrations/officialshortdomains.sql \
+  database/migrations/emailauthcodes.sql database/migrations/mailinvoicepresentation.sql \
+  database/migrations/linkdestinationrisk.sql database/migrations/socialauth.sql \
+  database/migrations/socialsubjectwidth.sql database/migrations/billingcycles.sql \
+  scripts/installgeoip.sh deploy/native/gojet@.service; do
   [ -s "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
+
+grep -Fq 'footer-columns' "$ROOT/public/index.html" || { echo 'release website footer is incomplete' >&2; exit 1; }
+grep -Fq 'Privacy Policy' "$ROOT/public/legal/privacy/index.html" || { echo 'release privacy policy is not rendered' >&2; exit 1; }
+grep -Fq '隐私政策' "$ROOT/public/zh-CN/legal/privacy/index.html" || { echo 'release zh-CN privacy policy is not rendered' >&2; exit 1; }
+grep -Fq '<html lang="en">' "$ROOT/public/index.html" || { echo 'release English website locale is invalid' >&2; exit 1; }
+grep -Fq '<html lang="zh-CN">' "$ROOT/public/zh-CN/index.html" || { echo 'release Simplified Chinese website locale is invalid' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html $uri/index.html' "$ROOT/deploy/nginx/gojetnative.conf" || { echo 'native Nginx cannot serve nested static pages' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html $uri/index.html' "$ROOT/deploy/nginx/gojethost.conf" || { echo 'host Nginx cannot serve nested static pages' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html $uri/index.html' "$ROOT/deploy/nginx/gojet.conf" || { echo 'container Nginx cannot serve nested static pages' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html $uri/index.html' "$ROOT/deploy/nginx/gojetbtrewrite.conf" || { echo 'aaPanel Nginx cannot serve nested static pages' >&2; exit 1; }
+
 grep -Fq 'scripts/installgeoip.sh' "$ROOT/install.sh" || { echo 'release bootstrap does not require GeoIP installer' >&2; exit 1; }
 grep -Fq 'GEOIP_MMDB=__GOJET_ROOT__/deploy/data/geoip/city.mmdb' "$ROOT/deploy/native/gojet@.service" || { echo 'release service is missing City MMDB runtime contract' >&2; exit 1; }
 grep -Fq 'test -s __GOJET_ROOT__/deploy/data/geoip/city.mmdb' "$ROOT/deploy/native/gojet@.service" || { echo 'release service does not fail closed without City MMDB' >&2; exit 1; }
 bash -n "$ROOT/scripts/installgeoip.sh"
 (cd "$ROOT" && sha256sum -c MANIFEST.sha256 >/dev/null)
-printf 'fresh-install release verification passed: %s (%s migrations)\n' "$ARCHIVE" "$catalog_count"
+printf 'fresh-install V5 release verification passed: %s (%s migrations)\n' "$ARCHIVE" "$catalog_count"
