@@ -34,16 +34,12 @@ mysqlq "UPDATE system_settings SET setting_value='0',is_encrypted=FALSE WHERE se
 mysqlq "UPDATE system_settings SET setting_value='{\"USD/CNY\":\"7.20\"}',is_encrypted=FALSE WHERE setting_key='billing.fx.manual_rates';"
 mysqlq "DELETE FROM fx_rate_cache;"
 
-python3 - <<'PY'
-from fontTools.ttLib import TTFont
-font=TTFont('resources/fonts/NotoSansSCRegular.ttf', lazy=True)
-cmap={cp for table in font['cmap'].tables for cp in table.cmap}
-text='霍召席账单验收的工作区专业版购买套餐服务方客户支付期限结算金额最终自动生成汇率快照'
-missing=[ch for ch in text if ord(ch) not in cmap]
-if missing:
-    raise SystemExit('PDF font misses required Chinese glyphs: '+''.join(sorted(set(missing))))
-print('PDF Chinese glyph coverage: PASS')
-PY
+# Production Native uses the system Noto CJK collection. Glyph correctness is
+# validated below through the actual generated PDF (pdftotext + raster), rather
+# than a source-tree fontTools preflight against a legacy bundled font path.
+PDF_FONT_PATH=${PDF_FONT_PATH:-/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc}
+[[ -f "$PDF_FONT_PATH" ]] || { echo "production PDF font missing: $PDF_FONT_PATH" >&2; exit 1; }
+printf 'Production PDF font present: %s\n' "$PDF_FONT_PATH"
 
 logo="$OUT_DIR/acceptance-logo.png"
 python3 - "$logo" <<'PY'
