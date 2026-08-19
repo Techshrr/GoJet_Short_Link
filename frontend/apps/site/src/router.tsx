@@ -3,6 +3,7 @@ import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/re
 import { useLocale } from "@gojet/ui/locale";
 import { WebsiteShellPreview } from "./routes/ShellPreviews";
 import AuthPage from "./routes/AuthPage";
+import ReportAbusePage from "./routes/ReportAbusePage";
 
 const LoginShellPreview = () => <AuthPage mode="login" />;
 const RegisterShellPreview = () => <AuthPage mode="register" />;
@@ -29,6 +30,7 @@ const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: "/forgo
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/reset-password", component: () => <AuthPage mode="reset" /> });
 const legacyVerifyRoute = createRoute({ getParentRoute: () => rootRoute, path: "/verifyemail", component: () => <AuthPage mode="verify" /> });
 const legacyResetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/resetpassword", component: () => <AuthPage mode="reset" /> });
+const abuseReportRoute = createRoute({ getParentRoute: () => rootRoute, path: "/reportabuse", component: ReportAbusePage });
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
@@ -39,6 +41,7 @@ const routeTree = rootRoute.addChildren([
   resetRoute,
   legacyVerifyRoute,
   legacyResetRoute,
+  abuseReportRoute,
 ]);
 
 export const router = createRouter({ routeTree });
