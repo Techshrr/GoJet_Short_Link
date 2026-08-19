@@ -30,27 +30,52 @@ upload(){
   curl "${args[@]}" "$BASE/api/workspaces/$wid/fileshares"
 }
 
-# This product-lifecycle test intentionally does not replace the separate real
-# ClamAV/EICAR acceptance. It simulates the successful scanner transition using
-# the same durable states and filesystem move used by FinishFileScan: pending ->
-# scanning -> clean, quarantine/<storage_name> -> clean/<storage_name>.
+native_scanner_active(){
+  command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet 'gojet@fileworker.service'
+}
+
+# P20 runs this lifecycle without the Native systemd scanner, so it simulates
+# the successful scanner transition using the same durable states and filesystem
+# move used by FinishFileScan. P22 is different: its real fileworker + ClamAV are
+# already active. In that environment the worker may consume quarantine within
+# one second, so the acceptance must wait for and verify the real pending ->
+# scanning -> clean transition instead of racing the production worker.
 activate(){
-  local id=$1 storage source target changed
+  local id=$1 storage source target changed state scan_status file_status
   storage=$(mysqlq "SELECT storage_name FROM file_shares WHERE id=$id AND deleted_at IS NULL;")
   [[ -n "$storage" && "$storage" != */* && "$storage" != .* ]] || { echo "invalid storage_name for file $id: $storage" >&2; exit 1; }
   source="$FILE_ROOT/quarantine/$storage"
   target="$FILE_ROOT/clean/$storage"
-  [[ -f "$source" ]] || { echo "quarantined object missing for file $id: $source" >&2; exit 1; }
 
+  if native_scanner_active; then
+    for _ in $(seq 1 60); do
+      state=$(mysqlq "SELECT CONCAT(scan_status,'|',status) FROM file_shares WHERE id=$id AND deleted_at IS NULL;" || true)
+      scan_status=${state%%|*}
+      file_status=${state#*|}
+      if [[ "$scan_status" == clean && "$file_status" == active ]]; then
+        [[ -f "$target" ]] || { echo "scanner marked file $id clean but object is missing: $target" >&2; exit 1; }
+        [[ ! -f "$source" ]] || { echo "scanner left duplicate quarantine object for file $id: $source" >&2; exit 1; }
+        return 0
+      fi
+      if [[ "$scan_status" == infected || "$scan_status" == error ]]; then
+        echo "real scanner rejected lifecycle fixture for file $id: $state" >&2
+        exit 1
+      fi
+      [[ "$scan_status" == pending || "$scan_status" == scanning ]] || { echo "unexpected scanner state for file $id: $state" >&2; exit 1; }
+      sleep 1
+    done
+    echo "real scanner did not activate file $id within 60 seconds" >&2
+    exit 1
+  fi
+
+  [[ -f "$source" ]] || { echo "quarantined object missing for file $id: $source" >&2; exit 1; }
   changed=$(mysqlq "UPDATE file_shares SET scan_status='scanning',scan_attempts=scan_attempts+1,next_scan_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 10 MINUTE) WHERE id=$id AND scan_status='pending'; SELECT ROW_COUNT();" | tail -n1)
   [[ "$changed" == 1 ]] || { echo "file $id could not enter scanning state" >&2; exit 1; }
 
   mkdir -p "$FILE_ROOT/clean"
-  # In the Native Gate this script runs as root while platformapi/fileworker run
-  # as the dedicated gojet user. FinishFileScan would create/move within a
-  # gojet-owned object-store tree, so preserve the quarantine directory owner
-  # and mode instead of accidentally creating root-owned clean/ and turning the
-  # later production DeleteFile rename into EACCES.
+  # In non-Native integration this script can run as root while platformapi may
+  # use another account. Preserve the quarantine directory owner and mode so
+  # later DeleteFile moves retain the same production object-store semantics.
   if [[ $(id -u) -eq 0 ]]; then
     chown --reference="$FILE_ROOT/quarantine" "$FILE_ROOT/clean"
     chmod --reference="$FILE_ROOT/quarantine" "$FILE_ROOT/clean"
