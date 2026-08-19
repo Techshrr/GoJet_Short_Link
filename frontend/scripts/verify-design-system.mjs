@@ -95,10 +95,10 @@ requireAll('layout region styles', layoutCss, ['.gj-data-region', '.gj-settings-
 
 const siteMain = read('apps/site/src/main.tsx');
 requireAll('UI verification runtime/style wiring', siteMain, ['ToastProvider', '@gojet/ui/css', '@gojet/ui/patterns.css', '@gojet/ui/overlays.css', '@gojet/ui/data.css', '@gojet/ui/feedback.css', '@gojet/ui/layout.css']);
-const devRoute = read('apps/site/src/router.tsx');
+const siteRouter = read('apps/site/src/router.tsx');
 const devPage = read('apps/site/src/routes/DevUi.tsx');
-requireAll('internal UI route', devRoute, ['path: "/dev/ui"', 'lazy(() => import("./routes/DevUi"))']);
-requireAll('internal UI verification matrix', devPage, [
+if (siteRouter.includes('/dev/ui') || siteRouter.includes('routes/DevUi')) throw new Error('internal design verification page must not be routable from the production website');
+requireAll('internal UI verification source matrix', devPage, [
   'Foundation Modes / 基础模式', 'Buttons / Actions', 'Forms / Controls', 'Status / Feedback / Toast',
   'DataTable / ColumnManager', 'Data / Tabs / Filtering', 'Overlay / Destructive / Command', 'Shell Building Blocks',
   'Layout Regions', 'Resource States', 'applyThemePreference', '"light", "dark", "system"', '"zh-CN" | "en"',
@@ -108,4 +108,4 @@ requireAll('internal UI verification matrix', devPage, [
 if (fs.existsSync(path.join(root, 'packages/ui/src/index.ts'))) throw new Error('stale P01 packages/ui/src/index.ts must not shadow the P03 TSX entry');
 if (fs.existsSync(path.join(root, '../.github/workflows/v5-lockfile-refresh.yml'))) throw new Error('one-time P03 lockfile refresh workflow must be removed after use');
 
-console.log('P03 design system foundation contract verified.');
+console.log('P03 design system foundation contract verified with the internal verification matrix excluded from public website routing.');
