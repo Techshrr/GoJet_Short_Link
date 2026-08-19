@@ -13,27 +13,13 @@ on:
       - 'frontend/adminconsole/billingadmin.js'
       - 'frontend/adminconsole/index.html'
       - 'services/platformapi/cmd/server/**'
-      - 'scripts/runmigrations.sh'
+      - 'scripts/**'
       - 'tests/integration/paymentcallbackpublic.sh'
       - '.github/workflows/paymentcallbackpublic.yml'
       - '.github/workflows/paymentcallbackbrowser.yml'
   push:
     branches:
-      - rebuild/v4-rc12-real-install-fixes
-    paths:
-      - 'app/payments/**'
-      - 'app/billing/**'
-      - 'app/observability/**'
-      - 'database/**'
-      - 'deploy/nginx/**'
-      - 'frontend/adminconsole/paymentcallbacks.js'
-      - 'frontend/adminconsole/billingadmin.js'
-      - 'frontend/adminconsole/index.html'
-      - 'services/platformapi/cmd/server/**'
-      - 'scripts/runmigrations.sh'
-      - 'tests/integration/paymentcallbackpublic.sh'
-      - '.github/workflows/paymentcallbackpublic.yml'
-      - '.github/workflows/paymentcallbackbrowser.yml'
+      - rebuild/v5.0.2-auth-i18n-product-copy
 
 concurrency:
   group: gojetpaymentcallbackpublic${{ github.ref }}
@@ -68,11 +54,11 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      - name: Normalize Ubuntu package sources
+        run: bash scripts/aptstable.sh
+
       - name: Install public ingress dependencies
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y default-mysql-client nginx
+        run: sudo apt-get install -y default-mysql-client nginx
 
       - name: Validate source naming schema and callback surface
         run: |
@@ -152,7 +138,6 @@ jobs:
           rm -rf "$ROOT"
           mkdir -p "$ROOT/public/app" "$ROOT/public/admin"
           python3 scripts/buildpublicsite.py --output "$ROOT/public"
-          mkdir -p "$ROOT/public/app" "$ROOT/public/admin"
           chmod -R a+rX "$ROOT"
           python3 - "$ROOT" <<'PY'
           from pathlib import Path
@@ -196,8 +181,6 @@ jobs:
           sudo cat /var/log/nginx/error.log 2>/dev/null || true
           echo '===== payment callbacks ====='
           mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public -e 'SELECT id,provider,request_id,merchant_order_no,provider_reference,transaction_id,invoice_id,outcome,response_status,remote_ip,created_at FROM payment_callback_events ORDER BY id DESC LIMIT 20;' 2>/dev/null || true
-          echo '===== payment transactions ====='
-          mysql -h127.0.0.1 -P3306 -uroot gojet_payment_public -e 'SELECT id,invoice_id,provider,merchant_order_no,provider_order_id,status,amount_cents,currency,updated_at FROM payment_transactions ORDER BY id DESC LIMIT 20;' 2>/dev/null || true
 
       - name: Stop payment callback runtime
         if: always()
