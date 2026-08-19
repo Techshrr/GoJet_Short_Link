@@ -147,6 +147,9 @@ export function localizedError(value: string | undefined, locale: GoJetLocale, s
 interface LocaleContextValue { locale: GoJetLocale; setLocale: (locale: GoJetLocale) => void; }
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
+function englishText(en: string, _zh: string): string { return en; }
+function chineseText(_en: string, zh: string): string { return zh; }
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<GoJetLocale>(() => initialLocale());
   const setLocale = (next: GoJetLocale) => {
@@ -161,7 +164,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 export function useLocale() {
   const value = useContext(LocaleContext);
   if (!value) throw new Error("LocaleProvider is required");
-  return { ...value, text: (en: string, zh: string) => value.locale === "zh-CN" ? zh : en };
+  return { ...value, text: value.locale === "zh-CN" ? chineseText : englishText };
 }
 
 export function LocaleSwitch() {
