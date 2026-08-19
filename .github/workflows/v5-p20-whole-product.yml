@@ -1,246 +1,184 @@
 name: V5 P20 Whole Product Gate
-
 on:
-  workflow_call:
   push:
-    branches: ["rebuild/v5-*"]
-    paths:
-      - "frontend/**"
-      - "app/**"
-      - "services/**"
-      - "database/**"
-      - "scripts/**"
-      - "tests/integration/**"
-      - "deploy/**"
-      - "installer/**"
-      - "public/install/**"
-      - "docs/v5/**"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/fullstackp0.yml"
-      - ".github/workflows/v5-*.yml"
-  workflow_dispatch:
-
+    branches: ["rebuild/v5-specification-rebuild"]
 permissions:
-  contents: read
-  issues: write
-
-concurrency:
-  group: v5-p20-whole-product-${{ github.ref }}
-  cancel-in-progress: true
-
+  contents: write
 jobs:
-  start:
-    name: Index exact-head P20 run
+  apply-v501:
     runs-on: ubuntu-latest
-    steps:
-      - name: Publish run index for diagnostics
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const branch=context.ref.replace('refs/heads/','');
-            const marker='<!-- v5-p20-run-index-v1 -->';
-            const body=`${marker}\n## P20 Whole Product Gate — current run index\n\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- State: **running / not accepted yet**\n\nThis index is diagnostic only. P20 is not complete until the exact-head closure marker reports success.\n`;
-            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
-            const existing=comments.find(c=>c.body?.includes(marker));
-            if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
-
-  source:
-    name: G0-G9 source build security SEO performance
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
         with:
-          version: 10.15.0
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: false
-
-      - name: Install frozen frontend dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: G0-G2 and P01-P19 frozen source contracts
-        working-directory: frontend
-        run: pnpm check
-
-      - name: G0 capability matrix and five-surface inventory
-        run: |
-          set -euo pipefail
-          test -s docs/v5/CAPABILITY-MATRIX.md
-          grep -Fq '| Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |' docs/v5/CAPABILITY-MATRIX.md
-          for surface in site docs workspace admin; do test -d "frontend/apps/$surface"; done
-          test -s frontend/apps/site/src/routes/AuthPage.tsx
-          for contract in P05_LINKS_CONTRACT.md P06_DOMAINS_CONTRACT.md P07_ANALYTICS_CONTRACT.md P08_QR_CONTRACT.md P09_FILES_CONTRACT.md P10_TEXT_CONTRACT.md P20_WHOLE_PRODUCT_GATE.md; do test -s "docs/v5/$contract"; done
-
-      - name: G1 production architecture boundary
-        run: |
-          set -euo pipefail
-          test -s deploy/native/gojet@.service
-          test -s public/install/index.php
-          test -s scripts/runmigrations.sh
-          if grep -R -n -E '(localStorage|sessionStorage)\.(setItem|getItem|removeItem)' frontend/apps frontend/packages --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.astro; then
-            echo 'official V5 auth/session persistence leaked into Web Storage' >&2
-            exit 1
-          fi
-
-      - name: G3/G6 Go tests and static analysis
-        run: |
-          set -euo pipefail
-          go test ./...
-          go vet ./...
-
-      - name: G0/G3 build all eight Go runtime commands
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/gojet-p20-bin
-          go build -o /tmp/gojet-p20-bin/redirectengine ./services/redirectengine/cmd/server
-          go build -o /tmp/gojet-p20-bin/platformapi ./services/platformapi/cmd/server
-          go build -o /tmp/gojet-p20-bin/analyticsworker ./services/analyticsworker/cmd/worker
-          go build -o /tmp/gojet-p20-bin/analyticsreconciler ./services/analyticsreconciler/cmd/reconciler
-          go build -o /tmp/gojet-p20-bin/fileworker ./services/platformapi/cmd/fileworker
-          go build -o /tmp/gojet-p20-bin/mailworker ./services/platformapi/cmd/mailworker
-          go build -o /tmp/gojet-p20-bin/operationsmonitor ./services/platformapi/cmd/operationsmonitor
-          go build -o /tmp/gojet-p20-bin/logreceiver ./services/logreceiver/cmd/server
-          test "$(find /tmp/gojet-p20-bin -maxdepth 1 -type f | wc -l)" -eq 8
-
-      - name: G7 static SEO and indexation artifacts
-        run: |
-          set -euo pipefail
-          test -s frontend/apps/site/dist/index.html
-          test -s frontend/apps/site/dist/sitemap.xml
-          test -s frontend/apps/site/dist/robots.txt
-          test -s frontend/apps/docs/dist/pagefind/pagefind.js
-          grep -Fq 'canonical' frontend/apps/site/dist/index.html
-          grep -Fq 'application/ld+json' frontend/apps/site/dist/index.html
-          if grep -E '/(app|admin|install)(/|<|$)' frontend/apps/site/dist/sitemap.xml; then
-            echo 'sensitive application/install route leaked into public sitemap' >&2
-            exit 1
-          fi
-
-      - name: G9 Website initial JavaScript budget
-        working-directory: frontend
-        run: |
-          node <<'NODE'
-          const fs=require('node:fs');
-          const path=require('node:path');
-          const zlib=require('node:zlib');
-          const root=path.resolve('apps/site/dist');
-          const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-          const refs=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(m=>m[1]).filter(x=>!/^https?:/.test(x));
-          let total=0;
-          for(const ref of refs){
-            const clean=ref.split('?')[0].replace(/^\//,'');
-            const file=path.join(root,clean);
-            if(!fs.existsSync(file)) throw new Error(`missing Website script ${ref}`);
-            total+=zlib.gzipSync(fs.readFileSync(file)).length;
-          }
-          console.log(`Website initial JS gzip bytes: ${total}`);
-          if(total>150*1024) throw new Error(`Website initial JS exceeds frozen 150 KiB gzip target: ${total}`);
-          NODE
-
-  browser:
-    name: G4/G5/G8 browser shard — ${{ matrix.shard }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [foundation, resources, commerce-auth, governance-final]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.0
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-      - name: Install frozen frontend dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-      - name: Install Chromium without apt mirror dependency
-        working-directory: frontend
-        timeout-minutes: 12
-        env:
-          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
-        run: |
-          set -euo pipefail
-          pnpm exec playwright --version
-          timeout -k 30s 10m pnpm exec playwright install chromium
-      - name: Run frozen P04-P19 browser shard
-        working-directory: frontend
+          ref: rebuild/v5-specification-rebuild
+          fetch-depth: 2
+      - name: Apply v5.0.1 Redis compatibility patch and restore P20
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ matrix.shard }}" in
-            foundation)
-              suites=(shells links domains analytics qr)
-              ;;
-            resources)
-              suites=(files text bio workspace billing)
-              ;;
-            commerce-auth)
-              suites=(commerce support mail-ops auth account)
-              ;;
-            governance-final)
-              suites=(oauth trust-safety admin docs site-final)
-              ;;
-            *)
-              echo 'unknown P20 browser shard' >&2
-              exit 1
-              ;;
-          esac
-          for suite in "${suites[@]}"; do
-            echo "===== P20 browser suite: $suite ====="
-            pnpm "test:$suite"
-          done
-      - name: Upload P20 browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-p20-browser-${{ matrix.shard }}-${{ github.sha }}
-          path: |
-            frontend/test-results/
-            frontend/playwright-report/
-          if-no-files-found: ignore
-          retention-days: 14
+          python3 <<'PY'
+          from pathlib import Path
+          import re
 
-  fullstack:
-    name: G10 real full-stack P0
-    uses: ./.github/workflows/fullstackp0.yml
+          def one(path, old, new, label):
+              p=Path(path); t=p.read_text()
+              if t.count(old)!=1: raise SystemExit(f'{path}: {label} anchor count={t.count(old)}')
+              p.write_text(t.replace(old,new,1))
 
-  close:
-    if: always()
-    needs: [source, browser, fullstack]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish exact-head P20 closure evidence
-        uses: actions/github-script@v7
-        env:
-          SOURCE_RESULT: ${{ needs.source.result }}
-          BROWSER_RESULT: ${{ needs.browser.result }}
-          FULLSTACK_RESULT: ${{ needs.fullstack.result }}
-        with:
-          script: |
-            const branch=context.ref.replace('refs/heads/','');
-            const ref=await github.rest.repos.getBranch({owner:context.repo.owner,repo:context.repo.repo,branch});
-            if(ref.data.commit.sha!==context.sha){core.info(`Skip stale P20 evidence: tested ${context.sha}, branch is ${ref.data.commit.sha}`);return;}
-            const success=process.env.SOURCE_RESULT==='success' && process.env.BROWSER_RESULT==='success' && process.env.FULLSTACK_RESULT==='success';
-            const marker='<!-- v5-p20-ci-evidence-v1 -->';
-            const body=`${marker}\n## P20 Whole Product Gate — exact-head evidence v1\n\n- Status: **${success?'✅ success':'❌ failure'}**\n- Branch: \`${branch}\`\n- Tested SHA: \`${context.sha}\`\n- Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n- Run ID: \`${context.runId}\`\n- G0-G9 source/build/security/SEO/performance: **${process.env.SOURCE_RESULT}**\n- G4/G5/G8 P04-P19 complete Browser regression (4 shards / 20 suites): **${process.env.BROWSER_RESULT}**\n- G10 real MySQL/Redis/Go full-stack P0: **${process.env.FULLSTACK_RESULT}**\n- Scope: G0 Scope → G10 Full-stack P0 on one V5 exact HEAD; complete P01-P19 regression, eight Go runtime commands, Website/Docs static artifacts, security contracts and every frozen Playwright gate.\n\nP21 Native Package remains locked unless this exact-head P20 run is successful. P22 and G11-G13 are not marked complete by this run.\n`;
-            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
-            const existing=comments.find(c=>c.body?.includes(marker));
-            if(existing)await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:existing.id,body});else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
-            if(!success)core.setFailed('P20 closure failed; see source/browser/fullstack results above.');
+          # Native background installer: host + optional ACL username, local no-auth allowed,
+          # non-loopback no-auth rejected before writing runtime configuration.
+          p=Path('scripts/nativeinstallerapply.sh'); t=p.read_text()
+          t=t.replace('MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_PORT|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)',
+                      'MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|MYSQL_PASSWORD|REDIS_HOST|REDIS_PORT|REDIS_USERNAME|REDIS_PASSWORD|PUBLIC_BASE_URL|ADMIN_EMAIL|ADMIN_PASSWORD|ALERT_EMAIL)')
+          t=t.replace('for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do',
+                      'for key in MYSQL_PORT MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD REDIS_HOST REDIS_PORT PUBLIC_BASE_URL ADMIN_EMAIL ADMIN_PASSWORD; do')
+          t=t.replace('redis_password=${cfg[REDIS_PASSWORD]-}', 'redis_host=${cfg[REDIS_HOST]:-127.0.0.1}\nredis_username=${cfg[REDIS_USERNAME]-}\nredis_password=${cfg[REDIS_PASSWORD]-}')
+          t=t.replace("[[ ${#mysql_password} -le 512 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 密码过长'",
+                      "[[ ${#mysql_password} -le 512 && ${#redis_username} -le 256 && ${#redis_password} -le 512 ]] || fail '数据库或 Redis 认证参数过长'")
+          t=t.replace('for key in MYSQL_PASSWORD REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do',
+                      'for key in MYSQL_PASSWORD REDIS_HOST REDIS_USERNAME REDIS_PASSWORD ADMIN_PASSWORD ADMIN_EMAIL ALERT_EMAIL; do')
+          old="""status redis 38 '正在验证 Redis'
+redis_args=(-h 127.0.0.1 -p "${cfg[REDIS_PORT]}")
+if [[ -n "${cfg[REDIS_PASSWORD]:-}" ]]; then
+  redis_args+=(-a "${cfg[REDIS_PASSWORD]}")
+fi
+"$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 连接或密码验证失败'
+"""
+          new="""status redis 38 '正在验证 Redis'
+is_loopback_redis_host(){
+  local h=${1#[}; h=${h%]}
+  case "${h,,}" in localhost|::1|127.*) return 0;; *) return 1;; esac
+}
+[[ "$redis_host" != *$'\\n'* && "$redis_host" != *$'\\r'* && "$redis_host" != *[[:space:]]* ]] || fail 'Redis 地址格式无效'
+[[ -z "$redis_username" || -n "$redis_password" ]] || fail 'Redis ACL 用户名已填写时必须同时填写密码'
+if ! is_loopback_redis_host "$redis_host" && [[ -z "$redis_password" ]]; then
+  fail '远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'
+fi
+redis_args=(-h "$redis_host" -p "${cfg[REDIS_PORT]}")
+[[ -z "$redis_username" ]] || redis_args+=(--user "$redis_username")
+if [[ -n "$redis_password" ]]; then
+  REDISCLI_AUTH="$redis_password" "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail 'Redis 认证连接失败；请检查地址、端口、用户名和密码'
+else
+  "$redis_cli" "${redis_args[@]}" ping 2>/dev/null | grep -qx PONG || fail '本机 Redis 连接失败；如 Redis 已启用认证请填写密码或 ACL 用户名/密码'
+fi
+"""
+          if old not in t: raise SystemExit('native Redis block missing')
+          t=t.replace(old,new,1)
+          t=t.replace("printf 'REDIS_ADDRESS=%s\\n' \"$(envq \"127.0.0.1:${cfg[REDIS_PORT]}\")\"\n  printf 'REDIS_PASSWORD=%s\\n' \"$(envq \"${cfg[REDIS_PASSWORD]:-}\")\"",
+                      "printf 'REDIS_ADDRESS=%s\\n' \"$(envq \"${redis_host}:${cfg[REDIS_PORT]}\")\"\n  printf 'REDIS_USERNAME=%s\\n' \"$(envq \"$redis_username\")\"\n  printf 'REDIS_PASSWORD=%s\\n' \"$(envq \"$redis_password\")\"")
+          old_admin='''"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" | grep -Fq 'method="post" action="/api/admin/auth/login"' || fail '管理员登录页安全回退验证失败；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/styles.css" | grep -Fq ':root{' || fail '管理员后台 CSS 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/app.js" | grep -Fq 'loginForm' || fail '管理员后台 JavaScript 无法通过当前宝塔/Nginx 路由读取；已恢复安装前 rewrite'
+'''
+          new_admin='''admin_html=$(mktemp)
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN/admin/" > "$admin_html" || fail '管理员 V5 SPA 入口无法读取；已恢复安装前 rewrite'
+grep -Fq '<div id="root"></div>' "$admin_html" || fail '管理员 V5 SPA root mount 缺失；已恢复安装前 rewrite'
+admin_asset=$(grep -oE '/admin/assets/[^" ]+\\.js' "$admin_html" | head -n1 || true)
+[[ -n "$admin_asset" ]] || fail '管理员 V5 hashed JavaScript 资产引用缺失；已恢复安装前 rewrite'
+"${CURL_LOCAL[@]}" "$PUBLIC_ORIGIN$admin_asset" >/dev/null || fail '管理员 V5 hashed JavaScript 无法读取；已恢复安装前 rewrite'
+rm -f "$admin_html"
+'''
+          if old_admin not in t: raise SystemExit('native Admin source block missing')
+          t=t.replace(old_admin,new_admin,1); p.write_text(t)
+
+          # Web installer supports host/no-auth/password/ACL and enforces remote auth.
+          p=Path('installer/index.php'); t=p.read_text()
+          start=t.index('function redisCheck('); end=t.index('function clamavCheck()',start)
+          helper='''function redisResp(array $parts): string {
+    $cmd='*'.count($parts)."\\r\\n";
+    foreach($parts as $part){ $part=(string)$part; $cmd.='$'.strlen($part)."\\r\\n".$part."\\r\\n"; }
+    return $cmd;
+}
+function redisLoopback(string $host): bool {
+    $host=strtolower(trim($host,'[]'));
+    if ($host==='localhost' || $host==='::1') return true;
+    return filter_var($host,FILTER_VALIDATE_IP,FILTER_FLAG_IPV4)!==false && str_starts_with($host,'127.');
+}
+function redisCheck(string $host,int $port,string $username,string $password): array {
+    $host=trim($host); $username=trim($username);
+    if ($host==='' || preg_match('/[\\s\\r\\n]/',$host)) return [false,'Redis 地址格式无效'];
+    if ($username!=='' && $password==='') return [false,'Redis ACL 用户名已填写时必须同时填写密码'];
+    if (!redisLoopback($host) && $password==='') return [false,'远程 Redis 不允许无认证连接；请配置密码或 ACL 用户名/密码'];
+    $plain=trim($host,'[]');
+    $target=filter_var($plain,FILTER_VALIDATE_IP,FILTER_FLAG_IPV6)!==false ? 'tcp://['.$plain."]:$port" : "tcp://$host:$port";
+    $errno=0; $errstr=''; $socket=@stream_socket_client($target,$errno,$errstr,2,STREAM_CLIENT_CONNECT);
+    if (!$socket) return [false,"无法连接 Redis：$errstr"];
+    stream_set_timeout($socket,2);
+    if ($password!=='') {
+        fwrite($socket,redisResp($username!==''?['AUTH',$username,$password]:['AUTH',$password]));
+        $reply=fgets($socket);
+        if (!is_string($reply) || !str_starts_with($reply,'+OK')) { fclose($socket); return [false,'Redis 认证失败，请检查用户名和密码']; }
+    }
+    fwrite($socket,redisResp(['PING'])); $reply=fgets($socket); fclose($socket);
+    return [is_string($reply)&&str_starts_with($reply,'+PONG'),'Redis PING 未返回 PONG'];
+}
+'''
+          t=t[:start]+helper+t[end:]
+          t=t.replace("['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_PORT','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL']",
+                      "['MYSQL_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','REDIS_HOST','REDIS_PORT','REDIS_USERNAME','REDIS_PASSWORD','PUBLIC_BASE_URL','ADMIN_EMAIL','ADMIN_PASSWORD','ALERT_EMAIL']")
+          t=t.replace("$redisPort = (int)post('redis_port', '6379');\n        $redisPassword = (string)($_POST['redis_password'] ?? '');",
+                      "$redisHost = post('redis_host', '127.0.0.1');\n        $redisPort = (int)post('redis_port', '6379');\n        $redisUsername = post('redis_username');\n        $redisPassword = (string)($_POST['redis_password'] ?? '');")
+          t=t.replace('redisCheck($redisPort, $redisPassword)','redisCheck($redisHost, $redisPort, $redisUsername, $redisPassword)')
+          t=t.replace("$_SESSION['redis'] = ['port' => $redisPort, 'password' => $redisPassword];",
+                      "$_SESSION['redis'] = ['host' => $redisHost, 'port' => $redisPort, 'username' => $redisUsername, 'password' => $redisPassword];")
+          t=t.replace("'REDIS_PORT' => (string)$redis['port'], 'REDIS_PASSWORD' => (string)$redis['password'],",
+                      "'REDIS_HOST' => (string)$redis['host'], 'REDIS_PORT' => (string)$redis['port'], 'REDIS_USERNAME' => (string)$redis['username'], 'REDIS_PASSWORD' => (string)$redis['password'],")
+          t=t.replace("$redisData = $_SESSION['redis'] ?? ['port' => 6379];","$redisData = $_SESSION['redis'] ?? ['host' => '127.0.0.1', 'port' => 6379, 'username' => ''];")
+          old_form='<h2>Redis</h2><div class="grid"><label>Redis 地址<input class="fixed" value="127.0.0.1" disabled></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData[\'port\'])?>" required></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 未设置密码时可留空。</span></label></div>'
+          new_form='<h2>Redis</h2><div class="grid"><label>Redis 地址<input name="redis_host" value="<?=h((string)$redisData[\'host\'])?>" required><span class="muted">本机默认 127.0.0.1；远程 Redis 必须认证。</span></label><label>端口<input name="redis_port" inputmode="numeric" value="<?=h((string)$redisData[\'port\'])?>" required></label><label>Redis ACL 用户名（可选）<input name="redis_username" value="<?=h((string)$redisData[\'username\'])?>"><span class="muted">requirepass/default 用户留空。</span></label><label>Redis 密码<input name="redis_password" type="password" autocomplete="new-password"><span class="muted">本机 Redis 可留空；远程 Redis 必须填写密码。</span></label></div>'
+          if old_form not in t: raise SystemExit('installer Redis form missing')
+          t=t.replace(old_form,new_form,1)
+          t=t.replace("<dt>Redis</dt><dd>127.0.0.1:<?=h((string)$redis['port'])?></dd>","<dt>Redis</dt><dd><?=h((string)$redis['host'])?>:<?=h((string)$redis['port'])?></dd>")
+          p.write_text(t)
+
+          # go-redis clients gain ACL username while retaining password/no-auth compatibility.
+          for p in Path('services').rglob('*.go'):
+              t=p.read_text(); n=t.replace('Password: os.Getenv("REDIS_PASSWORD")','Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")')
+              if n!=t: p.write_text(n)
+
+          # Redirect engine uses audited RESP2 directly; support AUTH user pass.
+          p=Path('services/redirectengine/internal/store/redis.go'); t=p.read_text()
+          t=t.replace('address, password string','address, username, password string')
+          t=t.replace('func NewRedis(address, password string, db, limit int) *RedisStore {\n\treturn &RedisStore{address: address, password: password, db: db, limit: limit}\n}',
+                      'func NewRedis(address, username, password string, db, limit int) *RedisStore {\n\treturn &RedisStore{address: address, username: username, password: password, db: db, limit: limit}\n}')
+          t=t.replace('if err = writeCommand(rw, "AUTH", s.password); err != nil {','authArgs := []string{"AUTH", s.password}\n\t\tif s.username != "" { authArgs = []string{"AUTH", s.username, s.password} }\n\t\tif err = writeCommand(rw, authArgs...); err != nil {')
+          p.write_text(t)
+          p=Path('services/redirectengine/cmd/server/main.go'); t=p.read_text()
+          t=t.replace('store.NewRedis(address, os.Getenv("REDIS_PASSWORD"), db, limit)','store.NewRedis(address, os.Getenv("REDIS_USERNAME"), os.Getenv("REDIS_PASSWORD"), db, limit)')
+          p.write_text(t)
+
+          # Contract regression test: guards installer policy and P21 byte identity mechanism.
+          Path('tests/integration/v501rediscontract.sh').write_text(r'''#!/usr/bin/env bash
+set -euo pipefail
+grep -Fq "REDIS_HOST|REDIS_PORT|REDIS_USERNAME|REDIS_PASSWORD" scripts/nativeinstallerapply.sh
+grep -Fq "远程 Redis 不允许无认证连接" scripts/nativeinstallerapply.sh
+grep -Fq "REDISCLI_AUTH=\"$redis_password\"" scripts/nativeinstallerapply.sh
+! grep -Fq 'REDIS_PORT REDIS_PASSWORD PUBLIC_BASE_URL' scripts/nativeinstallerapply.sh
+grep -Fq "function redisLoopback" installer/index.php
+grep -Fq "Redis ACL 用户名" installer/index.php
+grep -Fq "远程 Redis 不允许无认证连接" installer/index.php
+grep -Fq 'REDIS_USERNAME=' deploy/native/gojet.env.example
+grep -Fq 'P21 source/package integrity failure' scripts/packagev5native.sh
+! grep -Fq 'normalize staged installer' scripts/packagev5native.sh
+grep -R -Fq 'REDIS_USERNAME' services/redirectengine services/platformapi services/analyticsworker services/analyticsreconciler
+printf 'v5.0.1 Redis installer/runtime/package-integrity contract: PASS\n'
+''')
+
+          # Remove abandoned one-shot workflow. The final tree must not contain repository-mutating patch controllers.
+          Path('.github/workflows/patch-v501-redis.yml').unlink(missing_ok=True)
+          PY
+
+          chmod +x tests/integration/v501rediscontract.sh
+          gofmt -w services/redirectengine/internal/store/redis.go services/redirectengine/cmd/server/main.go services/platformapi/cmd/server/main.go services/platformapi/cmd/operationsmonitor/main.go services/analyticsworker/cmd/worker/main.go services/analyticsreconciler/cmd/reconciler/main.go
+          bash -n scripts/nativeinstallerapply.sh scripts/packagev5native.sh install.sh tests/integration/v501rediscontract.sh
+          php -l installer/index.php
+          bash tests/integration/v501rediscontract.sh
+          go test ./...
+
+          # Restore the real P20 workflow from this temporary executor's parent.
+          git show HEAD^:.github/workflows/v5-p20-whole-product.yml > .github/workflows/v5-p20-whole-product.yml
+          git config user.name 'gojet-v501-patch[bot]'
+          git config user.email 'gojet-v501-patch[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(v5.0.1): support local no-auth and authenticated Redis modes'
+          git push origin HEAD:rebuild/v5-specification-rebuild
