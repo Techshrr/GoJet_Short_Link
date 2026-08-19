@@ -57,12 +57,7 @@ has("apps/site/src/routes/AuthPage.tsx", [
   'href="/legal/privacy/"',
   'href="/legal/acceptable-use/"'
 ]);
-
-has("apps/site/src/TurnstileField.tsx", [
-  "/api/public/turnstile",
-  "challenges.cloudflare.com/turnstile",
-  "data-turnstile-surface"
-]);
+has("apps/site/src/TurnstileField.tsx", ["/api/public/turnstile", "challenges.cloudflare.com/turnstile", "data-turnstile-surface"]);
 has("packages/ui/src/locale.tsx", ["localizedError", "gojet_locale", '"zh-CN"', '"en"']);
 
 has("../services/platformapi/cmd/server/identity.go", [
@@ -81,51 +76,25 @@ matches("apps/workspace/src/router.tsx", [
   /path\s*:\s*"\/settings\/sessions"/,
   /path\s*:\s*"\/settings\/connected-accounts"/
 ]);
-has("apps/workspace/src/routes/SettingsPage.tsx", [
-  "data-p15-settings",
-  "Authenticator app",
-  "backup codes",
-  "Revoke all other sessions",
-  "Connected Accounts",
-  "/api/me/social-identities"
-]);
+has("apps/workspace/src/routes/SettingsPage.tsx", ["data-p15-settings", "Authenticator app", "backup codes", "Revoke all other sessions", "Connected Accounts", "/api/me/social-identities"]);
 
 matches("apps/admin/src/router.tsx", [/path\s*:\s*"\/oauth"/]);
-has("apps/admin/src/routes/OAuthPage.tsx", [
-  "data-p15-admin-oauth",
-  "Write-only secret",
-  "/api/admin/auth/providers",
-  "/api/admin/settings/socialauth"
-]);
+has("apps/admin/src/routes/OAuthPage.tsx", ["data-p15-admin-oauth", "Write-only secret", "/api/admin/auth/providers", "/api/admin/settings/socialauth"]);
 
-has("packages/auth/src/index.ts", ["gojet_csrf", "cookieCsrf", "getCsrfToken"]);
+has("packages/auth/src/index.ts", [
+  'cookieValue("gojet_csrf")',
+  'cookieValue("gojet_admin_csrf")',
+  "requestCsrf",
+  "getCsrfToken",
+  "currentCsrfToken",
+  "currentAdminCsrfToken"
+]);
 has("packages/api-client/src/index.ts", ['credentials: "include"', "X-CSRF-Token"]);
-has("../services/platformapi/cmd/server/accountsecurity.go", [
-  "gojet_session",
-  "HttpOnly:true",
-  "validCookieCSRF",
-  "verifyTOTP",
-  "user_backup_codes",
-  "/api/me/sessions"
-]);
-has("../services/platformapi/cmd/server/p15social.go", [
-  "p15SocialAuthHandoff",
-  "userMFAEnabled",
-  "setUserSessionCookies",
-  "p15SocialRegistrationComplete"
-]);
-has("../database/migrations/useraccountsecurity.sql", [
-  "CREATE TABLE user_mfa",
-  "CREATE TABLE user_backup_codes",
-  "CREATE TABLE user_mfa_challenges"
-]);
+has("../services/platformapi/cmd/server/accountsecurity.go", ["gojet_session", "HttpOnly:true", "validCookieCSRF", "verifyTOTP", "user_backup_codes", "/api/me/sessions"]);
+has("../services/platformapi/cmd/server/p15social.go", ["p15SocialAuthHandoff", "userMFAEnabled", "setUserSessionCookies", "p15SocialRegistrationComplete"]);
+has("../database/migrations/useraccountsecurity.sql", ["CREATE TABLE user_mfa", "CREATE TABLE user_backup_codes", "CREATE TABLE user_mfa_challenges"]);
 
-for (const file of [
-  "apps/site/src/routes/AuthPage.tsx",
-  "apps/workspace/src/routes/SettingsPage.tsx",
-  "apps/admin/src/routes/OAuthPage.tsx",
-  "packages/auth/src/index.ts"
-]) lacks(file, ["localStorage.setItem", "sessionStorage.setItem", "localStorage.getItem", "sessionStorage.getItem"]);
+for (const file of ["apps/site/src/routes/AuthPage.tsx", "apps/workspace/src/routes/SettingsPage.tsx", "apps/admin/src/routes/OAuthPage.tsx", "packages/auth/src/index.ts"]) lacks(file, ["localStorage.setItem", "sessionStorage.setItem", "localStorage.getItem", "sessionStorage.getItem"]);
 lacks("apps/admin/src/routes/OAuthPage.tsx", ['value={String(values[prefix+"client_secret"]', 'value="********"']);
 
 console.log("P15 Auth/Account contract verified: bilingual sign-in/register/recovery/legal links, locale-safe API errors, Turnstile, remember-session, OAuth handoff, cookie+CSRF sessions, TOTP/backup codes, session revocation, connected accounts and write-only OAuth secrets.");
