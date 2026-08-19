@@ -27,7 +27,7 @@ expect(){
 }
 field(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
 
-mysqlq "UPDATE plans SET monthly_price_cents=1234,currency='USD' WHERE code='pro';"
+mysqlq "UPDATE plans SET monthly_price_cents=1234,currency='USD',billing_periods=JSON_ARRAY('monthly') WHERE code='pro';"
 mysqlq "UPDATE system_settings SET setting_value='CNY',is_encrypted=FALSE WHERE setting_key='billing.settlement_currency';"
 mysqlq "UPDATE system_settings SET setting_value='manual',is_encrypted=FALSE WHERE setting_key='billing.fx.provider';"
 mysqlq "UPDATE system_settings SET setting_value='0',is_encrypted=FALSE WHERE setting_key='billing.fx.markup_bps';"
@@ -75,7 +75,7 @@ workspaces=$(expect 200 "$(req GET /api/workspaces '' "$token")" workspaces)
 wid=$(printf '%s' "$workspaces" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])')
 workspace_name=$(mysqlq "SELECT name FROM workspaces WHERE id=$wid;")
 [[ "$workspace_name" == '霍召席账单验收 的工作区' ]] || { echo "unexpected Chinese workspace name: $workspace_name" >&2; exit 1; }
-invoice=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase"}' "$token")" create-invoice)
+invoice=$(expect 201 "$(req POST "/api/workspaces/$wid/billing/invoices" '{"plan_code":"pro","type":"purchase","billing_cycle":"monthly"}' "$token")" create-invoice)
 invoice_id=$(printf '%s' "$invoice" | field "['id']")
 invoice_number=$(mysqlq "SELECT invoice_number FROM billing_invoices WHERE id=$invoice_id AND workspace_id=$wid;")
 amount=$(mysqlq "SELECT CONCAT(UPPER(currency),' ',FORMAT(amount_cents/100,2,'en_US')) FROM billing_invoices WHERE id=$invoice_id AND workspace_id=$wid;")
