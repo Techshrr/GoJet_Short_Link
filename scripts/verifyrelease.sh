@@ -36,6 +36,7 @@ for path in \
   [ -s "$ROOT/$path" ] || { echo "release is missing $path" >&2; exit 1; }
 done
 
+[ ! -e "$ROOT/public/dev" ] || { echo 'release contains an internal design verification route' >&2; exit 1; }
 grep -Fq 'footer-columns' "$ROOT/public/index.html" || { echo 'release website footer is incomplete' >&2; exit 1; }
 grep -Fq 'Privacy Policy' "$ROOT/public/legal/privacy/index.html" || { echo 'release privacy policy is not rendered' >&2; exit 1; }
 grep -Fq '隐私政策' "$ROOT/public/zh-CN/legal/privacy/index.html" || { echo 'release zh-CN privacy policy is not rendered' >&2; exit 1; }
