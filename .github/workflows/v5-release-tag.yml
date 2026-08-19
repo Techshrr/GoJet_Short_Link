@@ -38,10 +38,17 @@ jobs:
           test "$(tr -d '\r\n' < VERSION)" = "$GOJET_RELEASE_VERSION"
           test ! -e .github/workflows/finalcandidate.yml
           test ! -e .github/workflows/releasepackage.yml
-          if grep -R -nF 'rebuild/v4-rc12-real-install-fixes' .github/workflows/v5-*.yml; then
-            echo 'V4 branch authority leaked into a V5 workflow' >&2
-            exit 1
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          banned = 'rebuild/' + 'v4-' + 'rc12-real-install-fixes'
+          leaked = []
+          for path in Path('.github/workflows').glob('v5-*.yml'):
+              if banned in path.read_text():
+                  leaked.append(str(path))
+          if leaked:
+              raise SystemExit('V4 branch authority leaked into V5 workflow(s): ' + ', '.join(leaked))
+          print('V5 workflow authority guard: PASS')
+          PY
 
       - name: Release capability matrix hard gate
         run: |
