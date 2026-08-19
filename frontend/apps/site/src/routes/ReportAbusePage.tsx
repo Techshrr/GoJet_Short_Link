@@ -9,6 +9,7 @@ type AbuseResponse = { reference?: number | string };
 export default function ReportAbusePage() {
   const { locale, text } = useLocale();
   const params = new URLSearchParams(location.search);
+  const legalPrefix = locale === "zh-CN" ? "/zh-CN" : "";
   const [url, setUrl] = useState(params.get("url") ?? "");
   const [reason, setReason] = useState("");
   const [email, setEmail] = useState("");
@@ -52,11 +53,11 @@ export default function ReportAbusePage() {
       <label>{text("Reason for report", "举报原因")}<select required value={reason} onChange={(event) => setReason(event.target.value)}><option value="">{text("Choose a reason", "请选择举报原因")}</option><option value="malware">{text("Malware or harmful download", "恶意软件或有害下载")}</option><option value="phishing">{text("Phishing or credential theft", "网络钓鱼或凭据窃取")}</option><option value="spam">{text("Spam or deceptive promotion", "垃圾信息或欺骗性推广")}</option><option value="copyright">{text("Copyright or other rights infringement", "版权或其他权利侵害")}</option><option value="other">{text("Other prohibited use", "其他禁止行为")}</option></select></label>
       <label>{text("Contact email (optional)", "联系邮箱（可选）")}<input type="email" maxLength={320} autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label>{text("Additional details (optional)", "补充说明（可选）")}<textarea rows={7} maxLength={5000} placeholder={text("Describe what you observed and include only information needed to review the report.", "请说明发现的问题，并只提供审核举报所需的信息。") } value={details} onChange={(event) => setDetails(event.target.value)} /></label>
-      <TurnstileField surface="abuse_report" onToken={setTurnstileToken} />
+      <TurnstileField surface="abuse" onToken={setTurnstileToken} />
       {error ? <div className="auth-alert is-error" role="alert">{error}</div> : null}
       {success ? <div className="auth-alert is-success" role="status">{success}</div> : null}
       <button className="auth-submit" disabled={busy}>{busy ? text("Submitting…", "提交中…") : text("Submit report", "提交举报")}</button>
-      <div className="auth-legal-links"><a href="/legal/terms/">{text("Terms of Service", "服务条款")}</a><a href="/legal/acceptable-use/">{text("Acceptable Use Policy", "可接受使用政策")}</a><a href="/legal/privacy/">{text("Privacy Policy", "隐私政策")}</a></div>
+      <div className="auth-legal-links"><a href={`${legalPrefix}/legal/terms/`}>{text("Terms of Service", "服务条款")}</a><a href={`${legalPrefix}/legal/acceptable-use/`}>{text("Acceptable Use Policy", "可接受使用政策")}</a><a href={`${legalPrefix}/legal/privacy/`}>{text("Privacy Policy", "隐私政策")}</a></div>
     </form>
   </AuthShell>;
 }
