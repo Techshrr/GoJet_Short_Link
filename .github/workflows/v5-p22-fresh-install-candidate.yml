@@ -135,6 +135,14 @@ jobs:
           MYSQL_PWD: root
         run: sudo --preserve-env=TESTED_SHA,P21_ARTIFACT_DIR,SOURCE_ROOT,MYSQL_PWD bash scripts/v5p22freshinstall.sh
 
+      - name: Normalize P22 evidence permissions
+        if: always()
+        run: |
+          if [[ -d /tmp/gojet-p22-evidence ]]; then
+            sudo find /tmp/gojet-p22-evidence -type d -exec chmod 0755 {} +
+            sudo find /tmp/gojet-p22-evidence -type f -exec chmod 0644 {} +
+          fi
+
       - name: Upload P22 evidence
         if: always()
         uses: actions/upload-artifact@v4
