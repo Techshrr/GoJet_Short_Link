@@ -26,9 +26,10 @@ mustContain("packages/api-client/src/domains.ts", [
 mustContain("apps/workspace/src/routes/DomainsPage.tsx", [
   "data-p06-domains",
   "can_manage",
-  "domainsClient.custom.create",
-  "domainsClient.custom.verify",
-  "domainsClient.custom.remove"
+  "domainsClient.create",
+  "domainsClient.verify",
+  "domainsClient.rotate",
+  "domainsClient.available"
 ]);
 mustContain("../services/platformapi/cmd/server/domains.go", ["listDomains", "createDomain", "verifyDomain", "domainDNSRecord"]);
 mustContain("../app/domains/service.go", ['workspace.Allowed(role, "manage")', 'LookupTXT', 'tls.DialWithDialer']);
