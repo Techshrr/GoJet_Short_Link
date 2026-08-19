@@ -8,26 +8,13 @@ on:
       - 'deploy/nginx/**'
       - 'frontend/adminconsole/**'
       - 'services/platformapi/cmd/server/**'
-      - 'scripts/runmigrations.sh'
+      - 'scripts/**'
       - 'tests/e2e/paymentcallbackadmin.spec.js'
       - '.github/workflows/paymentcallbackbrowser.yml'
       - '.github/workflows/paymentcallbackpublic.yml'
   push:
     branches:
-      - rebuild/v4-rc12-real-install-fixes
-    paths:
-      - 'database/**'
-      - 'deploy/nginx/**'
-      - 'frontend/adminconsole/**'
-      - 'services/platformapi/cmd/server/**'
-      - 'scripts/runmigrations.sh'
-      - 'tests/e2e/paymentcallbackadmin.spec.js'
-      - '.github/workflows/paymentcallbackbrowser.yml'
-      - '.github/workflows/paymentcallbackpublic.yml'
-
-concurrency:
-  group: gojetpaymentcallbackbrowser${{ github.ref }}
-  cancel-in-progress: true
+      - rebuild/v5.0.2-auth-i18n-product-copy
 
 jobs:
   browser:
@@ -63,13 +50,15 @@ jobs:
           cache: npm
           cache-dependency-path: packagelock.json
 
+      - name: Normalize Ubuntu package sources
+        run: bash scripts/aptstable.sh
+
       - name: Install browser callback dependencies
         run: |
           set -euo pipefail
-          sudo apt-get update
           sudo apt-get install -y default-mysql-client nginx
           bash scripts/npmci.sh
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Validate callback browser sources
         run: |
@@ -131,14 +120,13 @@ jobs:
             test "$i" -lt 60
           done
 
-      - name: Serve administrator through real host Nginx template
+      - name: Serve administrator callback fixture
         run: |
           set -euo pipefail
           ROOT=/tmp/gojetcallbackbrowserroot
           rm -rf "$ROOT"
           mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
           python3 scripts/buildpublicsite.py --output "$ROOT/public"
-          mkdir -p "$ROOT/public/admin" "$ROOT/public/app"
           cp -a frontend/adminconsole/. "$ROOT/public/admin/"
           cp -a frontend/userconsole/. "$ROOT/public/app/"
           chmod -R a+rX "$ROOT"
