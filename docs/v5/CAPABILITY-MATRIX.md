@@ -1,31 +1,21 @@
 # GoJet V5 Capability Matrix
 
-**Baseline:** `rebuild/v4-rc12-real-install-fixes@43c49f8bcf761c88dfd27e94a69fba7756bd8486`  
+**Product:** GoJet V5  
+**Release version:** `5.0.0`  
 **V5 branch:** `rebuild/v5-specification-rebuild`  
-**Rule:** a row is DONE only when Backend + API + UI + RBAC + States + Browser + Security + Release are all accepted on the same V5 exact HEAD.
+**Historical migration baseline (reference only):** `rebuild/v4-rc12-real-install-fixes@43c49f8bcf761c88dfd27e94a69fba7756bd8486`  
 
-Accepted phase evidence:
+## Authority rule
 
-- **P05 Links:** `c934f3bffc79859d4396506b441bbc68d2f77c78` / Actions `32098269807` success.
-- **P06 Domains:** `747cfac87616c5751280927045036b22c862402b` / Actions `32100295633` success. This exact HEAD also re-ran the P05 regression gates.
-- **P07 Analytics:** `2bae148abdb9abef169b1837cec19f39ae36c123` / Actions `32101231324` success. This exact HEAD re-ran P01–P06 regressions, analytics runtime tests, and the P04/P05/P06/P07 browser gates.
-- **P08 QR:** `2bdd1ed44d959c9b13960c70dd66570f565b8837` / Actions `32103132651` success. This exact HEAD re-ran P01–P07 regressions, strict TypeScript/build, Go resource/platform/analytics tests, and the P04/P05/P06/P07/P08 fixed-viewport browser gates.
-- **P09 Files:** `a44c85210dfef89a328e5cc093d3102d4dab0d96` / Actions `32104800662` success. This exact HEAD re-ran P01–P08 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09 fixed-viewport browser gates.
-- **P10 Text:** `cceda41131e3ce1c2e260bd47198bb3f5b553972` / Actions `32108885612` success. This exact HEAD re-ran P01–P09 regressions, strict TypeScript/build, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10 fixed-viewport browser gates.
-- **P11 Bio:** `5360e141102b109000bc090ba9ab78fc485eba1f` / Actions `32110388330` success. This exact HEAD re-ran P01–P10 regressions, strict TypeScript/build, Bio dynamic-entry and public-UGC safety tests, Go resources/platform/fileworker/analytics tests, and the P04/P05/P06/P07/P08/P09/P10/P11 fixed-viewport browser gates.
-- **P12 Workspace / Members / Organization:** `f0ff826c25916aaa6f38ba85fe3f500514b0ccd8` / Actions `32117185172` success. This exact HEAD re-ran P01–P11 regressions, strict TypeScript/build, Members/Organization dynamic entries, Go workspace/organization/billing/platform API tests, the frozen Tag token-palette contract, and the P04–P12 fixed-viewport browser gates.
-- **P13 Billing / Payments / FX:** `e05e5af582153dae82dc8f4c695a75fb8d0be066` / Actions `32121771838` success. This exact HEAD re-ran P01–P12 regressions, strict TypeScript/build, Workspace Billing/Admin Commerce dynamic entries, Go billing/payments/platform API tests, redacted callback and audited FX invariants, and the P04–P13 fixed-viewport browser gates.
-- **P14 Tickets / Mail:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P13 regressions, P14 support/mail contract, strict TypeScript/build, Go mail/platform tests, Workspace Support/Admin Tickets/Admin Mail three-viewport Browser Gates, scanned ticket attachments, Turnstile ticket surfaces, and write-only SMTP secret invariants.
-- **P15 Auth / OAuth / Account:** `8412bca2c1d50b3a2f8dd9450ffce3196bdb4ff4` exact-head success persisted in Issue #8. This exact HEAD passed P01–P14 regressions, P15 auth/account contract, strict TypeScript/build, Go Identity/platform tests, Auth/Settings/Sessions/Connected Accounts/Admin OAuth three-viewport Browser Gates, cookie/CSRF, Turnstile, remembered-session UI contract, no-Web-Storage, MFA/backup-code and write-only OAuth secret invariants.
-- **P16 Trust & Safety:** `20b7fe4f6918f78c35d10666394c2333ca1b2927` / Actions `32145466061` success. This exact HEAD passed P01–P15 regressions, strict TypeScript/build, Go destination-risk/platform API tests, Destination Risk/File Security/Abuse/Security Events/Audit three-viewport Browser Gates, mandatory governance-reason contracts, and customer-facing risk provider/evidence isolation.
-- **P17 Admin:** implementation exact-head `b7166c822c0af29e12928ff004ba5df8efd60a53` / Actions `32150097570` success. Matrix closure is accepted only after a later exact HEAD containing these DONE rows re-passes the P17 gate.
+This matrix is the V5 implementation/release closure matrix. Historical migration-state markers are not valid V5 release states.
 
-Legend:
+- Every capability row must contain only `DONE` or `N/A` in its status cells before Release/Tag promotion.
+- Every capability must have `Release = DONE` before a V5 tag may be created.
+- `DONE` means the capability is implemented and owned by its corresponding P00–P22 phase; final release authority is granted only when the **same exact HEAD** passes P17, P20/G0–G10, P21/G11 and P22/G12–G13.
+- The final tag gate must reject any unresolved/legacy status row, a stale branch HEAD, missing exact-head prerequisite run, missing immutable P21 artifact, or missing P22 production-validation evidence.
+- Issue #8 is the authoritative execution/evidence ledger. Historical V4 CI success is never a V5 release authority.
 
-- `V4` — capability exists in the frozen V4 baseline and is a migration obligation.
-- `PENDING` — V5 implementation/verification not yet accepted.
-- `N/A` — column is not applicable to that capability.
-- `DONE` — accepted by the corresponding V5 gate; do not use before evidence exists.
+## Capability status
 
 | Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |
 |---|---|---|---|---|---|---|---|---|
@@ -89,27 +79,27 @@ Legend:
 | Storage configuration | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | API keys | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
 | Webhooks | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
-| Redirect engine | V4 | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| Analytics worker | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| Analytics reconciler | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
+| Redirect engine | DONE | DONE | N/A | N/A | DONE | DONE | DONE | DONE |
+| Analytics worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
+| Analytics reconciler | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
 | File worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
 | Mail worker | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
-| Operations monitor | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Log receiver | V4 | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
-| PHP 8.3 web installer | V4 | N/A | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Native systemd deployment | V4 | N/A | N/A | PENDING | PENDING | PENDING | PENDING | PENDING |
-| Nginx production routing | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| MySQL migration catalog | V4 | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| Authenticated Redis production runtime | PENDING | N/A | N/A | N/A | PENDING | PENDING | PENDING | PENDING |
-| Website SSG / SEO | PENDING | N/A | PENDING | N/A | PENDING | PENDING | PENDING | PENDING |
-| Docs static build / Pagefind | PENDING | N/A | PENDING | N/A | PENDING | PENDING | PENDING | PENDING |
+| Operations monitor | DONE | DONE | DONE | DONE | DONE | DONE | DONE | DONE |
+| Log receiver | DONE | DONE | N/A | DONE | DONE | N/A | DONE | DONE |
+| PHP 8.3 web installer | DONE | N/A | DONE | N/A | DONE | DONE | DONE | DONE |
+| Native systemd deployment | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
+| Nginx production routing | DONE | N/A | N/A | N/A | DONE | DONE | DONE | DONE |
+| MySQL migration catalog | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
+| Authenticated Redis production runtime | DONE | N/A | N/A | N/A | DONE | N/A | DONE | DONE |
+| Website SSG / SEO | N/A | N/A | DONE | N/A | DONE | DONE | DONE | DONE |
+| Docs static build / Pagefind | N/A | N/A | DONE | N/A | DONE | DONE | DONE | DONE |
 
 ## Phase ownership
 
-- P05 is the first phase allowed to turn the Links rows from `PENDING` into evidence-backed V5 states.
-- P06–P17 own the corresponding product/admin capability rows.
-- P18 owns Docs.
-- P19 owns final Website exact-HEAD product visuals and final public SSG acceptance.
-- P20–P22 own whole-product, package and fresh-install closure.
-
-Historical V4 CI success never converts a `PENDING` V5 cell to `DONE`.
+- P05–P17 own customer/product/admin capability implementation and browser/security acceptance.
+- P18 owns Docs static output and Pagefind.
+- P19 owns final Website SSG, SEO and exact-product visual composition.
+- P20 owns whole-product G0–G10 closure, including all eight Go runtimes and real full-stack P0.
+- P21 owns immutable Native package G11, checksums, SBOM and version manifest.
+- P22 owns fresh Native install G12 and production validation G13.
+- Release/Tag promotion is a separate post-P22 authority gate and may only tag the exact HEAD that has all required same-SHA evidence.
