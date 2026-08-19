@@ -1,0 +1,292 @@
+name: V5 Release / Tag Gate
+
+on:
+  push:
+    branches: ["rebuild/v5-*"]
+    paths:
+      - "VERSION"
+      - "docs/v5/**"
+      - ".github/workflows/v5-*.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: v5-release-tag-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOJET_RELEASE_VERSION: "5.0.0"
+  GOJET_RELEASE_TAG: "v5.0.0"
+
+jobs:
+  release:
+    name: Exact-head release readiness and tag promotion
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release metadata and legacy-controller guard
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < VERSION)" = "$GOJET_RELEASE_VERSION"
+          test ! -e .github/workflows/finalcandidate.yml
+          test ! -e .github/workflows/releasepackage.yml
+          if grep -R -nF 'rebuild/v4-rc12-real-install-fixes' .github/workflows/v5-*.yml; then
+            echo 'V4 branch authority leaked into a V5 workflow' >&2
+            exit 1
+          fi
+
+      - name: Release capability matrix hard gate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path=Path('docs/v5/CAPABILITY-MATRIX.md')
+          text=path.read_text()
+          lines=text.splitlines()
+          header='| Capability | Backend | API | UI | RBAC | States | Browser | Security | Release |'
+          try:
+              start=lines.index(header)
+          except ValueError:
+              raise SystemExit('Capability Matrix canonical header missing')
+
+          rows=[]
+          for line in lines[start+2:]:
+              if not line.startswith('|'):
+                  break
+              cells=[x.strip() for x in line.strip().strip('|').split('|')]
+              if len(cells)!=9:
+                  raise SystemExit(f'invalid Capability Matrix row: {line}')
+              rows.append(cells)
+
+          if len(rows) < 70:
+              raise SystemExit(f'Capability Matrix unexpectedly incomplete: {len(rows)} rows')
+
+          allowed={'DONE','N/A'}
+          seen=set()
+          required={
+              'Redirect engine','Analytics worker','Analytics reconciler','File worker','Mail worker',
+              'Operations monitor','Log receiver','PHP 8.3 web installer','Native systemd deployment',
+              'Nginx production routing','MySQL migration catalog','Authenticated Redis production runtime',
+              'Website SSG / SEO','Docs static build / Pagefind'
+          }
+          for cells in rows:
+              capability=cells[0]
+              if capability in seen:
+                  raise SystemExit(f'duplicate capability row: {capability}')
+              seen.add(capability)
+              bad=[x for x in cells[1:] if x not in allowed]
+              if bad:
+                  raise SystemExit(f'unresolved/legacy state in {capability}: {bad}')
+              if cells[-1] != 'DONE':
+                  raise SystemExit(f'Release column not DONE for {capability}: {cells[-1]}')
+
+          missing=sorted(required-seen)
+          if missing:
+              raise SystemExit('release-critical capability rows missing: '+', '.join(missing))
+
+          if '| PENDING |' in text or '| V4 |' in text:
+              raise SystemExit('legacy/unresolved table state remains in Capability Matrix')
+
+          print(f'GoJet V5 release Capability Matrix: PASS ({len(rows)} rows, DONE/N/A only)')
+          PY
+
+      - id: promote
+        name: Require exact-head P17/P20/P21/P22 and create V5 tag
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ env.GOJET_RELEASE_TAG }}
+          RELEASE_VERSION: ${{ env.GOJET_RELEASE_VERSION }}
+        with:
+          script: |
+            const fs=require('fs');
+            const owner=context.repo.owner, repo=context.repo.repo;
+            const branch=context.ref.replace('refs/heads/','');
+            const tested=context.sha;
+            const required=[
+              ['P17','v5-p17-admin.yml'],
+              ['P20 / G0-G10','v5-p20-whole-product.yml'],
+              ['P21 / G11','v5-p21-native-package.yml'],
+              ['P22 / G12-G13','v5-p22-fresh-install-candidate.yml'],
+            ];
+
+            async function currentHead(){
+              const ref=await github.rest.repos.getBranch({owner,repo,branch});
+              return ref.data.commit.sha;
+            }
+
+            async function latestExact(workflow){
+              const runs=await github.rest.actions.listWorkflowRuns({
+                owner,repo,workflow_id:workflow,branch,event:'push',per_page:100
+              });
+              return runs.data.workflow_runs
+                .filter(r=>r.head_sha===tested)
+                .sort((a,b)=>b.id-a.id)[0] || null;
+            }
+
+            const accepted={};
+            for(let attempt=0;attempt<720;attempt++){
+              const head=await currentHead();
+              if(head!==tested) throw new Error(`release HEAD moved from ${tested} to ${head}`);
+
+              let complete=true;
+              for(const [label,workflow] of required){
+                const run=await latestExact(workflow);
+                if(!run || run.status!=='completed'){
+                  complete=false;
+                  continue;
+                }
+                if(run.conclusion!=='success'){
+                  throw new Error(`${label} exact-head run ${run.id} concluded ${run.conclusion}`);
+                }
+                accepted[label]=run;
+              }
+              if(complete) break;
+              if(attempt===719) throw new Error('timed out waiting for exact-head P17/P20/P21/P22 release prerequisites');
+              await new Promise(resolve=>setTimeout(resolve,15000));
+            }
+
+            for(const [label] of required){
+              if(!accepted[label]) throw new Error(`missing accepted exact-head run for ${label}`);
+            }
+
+            const p21=accepted['P21 / G11'];
+            const p22=accepted['P22 / G12-G13'];
+            const p21Artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,{
+              owner,repo,run_id:p21.id,per_page:100
+            });
+            const p22Artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,{
+              owner,repo,run_id:p22.id,per_page:100
+            });
+            const p21Name=`gojet-v5-native-linux-amd64-${tested}`;
+            const p22Name=`gojet-v5-p22-evidence-${tested}`;
+            if(!p21Artifacts.some(a=>a.name===p21Name && !a.expired))
+              throw new Error(`immutable P21 artifact missing or expired: ${p21Name}`);
+            if(!p22Artifacts.some(a=>a.name===p22Name && !a.expired))
+              throw new Error(`P22 production evidence artifact missing or expired: ${p22Name}`);
+
+            const tag=process.env.RELEASE_TAG;
+            let existing=null;
+            try{
+              existing=await github.rest.git.getRef({owner,repo,ref:`tags/${tag}`});
+            }catch(error){
+              if(error.status!==404) throw error;
+            }
+            if(existing){
+              const sha=existing.data.object.sha;
+              if(sha!==tested) throw new Error(`tag ${tag} already exists at ${sha}; refusing to move immutable release tag to ${tested}`);
+              core.info(`tag ${tag} already exists at exact release HEAD ${tested}; treating as idempotent success`);
+            }else{
+              await github.rest.git.createRef({owner,repo,ref:`refs/tags/${tag}`,sha:tested});
+              core.info(`created immutable release tag ${tag} -> ${tested}`);
+            }
+
+            const runIds=Object.fromEntries(Object.entries(accepted).map(([k,v])=>[k,v.id]));
+            const evidence=[
+              `product=GoJet`,
+              `version=${process.env.RELEASE_VERSION}`,
+              `tag=${tag}`,
+              `tested_sha=${tested}`,
+              `branch=${branch}`,
+              `p17_run_id=${runIds['P17']}`,
+              `p20_run_id=${runIds['P20 / G0-G10']}`,
+              `p21_run_id=${runIds['P21 / G11']}`,
+              `p22_run_id=${runIds['P22 / G12-G13']}`,
+              `p21_artifact=${p21Name}`,
+              `p22_evidence_artifact=${p22Name}`,
+              `capability_matrix=DONE_NA_ONLY`,
+              `legacy_v4_release_controllers=ABSENT`,
+            ].join('\n')+'\n';
+            fs.writeFileSync('/tmp/GOJET_V5_RELEASE_TAG_EVIDENCE.txt',evidence);
+
+            const issueNumber=8;
+            const issue=await github.rest.issues.get({owner,repo,issue_number:issueNumber});
+            let body=issue.data.body || '';
+            body=body.replace(
+              /> \*\*状态：[^\n]+\*\*/,
+              `> **状态：RELEASED / ${tag} / P00–P22 + G0–G13 VERIFIED / V5 正式发布基线**`
+            );
+
+            const releaseSection=[
+              '### Release / Tag ✅',
+              `Final authoritative exact-head：\`${tested}\`。`,
+              '',
+              `- Release version：\`${process.env.RELEASE_VERSION}\`；`,
+              `- Immutable Git tag：\`${tag}\` → \`${tested}\`；`,
+              `- P17 Actions：\`${runIds['P17']}\` success；`,
+              `- P20 / G0–G10 Actions：\`${runIds['P20 / G0-G10']}\` success；`,
+              `- P21 / G11 Actions：\`${runIds['P21 / G11']}\` success；`,
+              `- P22 / G12–G13 Actions：\`${runIds['P22 / G12-G13']}\` success；`,
+              `- P21 immutable artifact：\`${p21Name}\`；`,
+              `- P22 evidence artifact：\`${p22Name}\`；`,
+              '- `docs/v5/CAPABILITY-MATRIX.md` 已收口为 DONE/N/A-only，Release 列全部 DONE；',
+              '- V5 分支已移除冻结 V4 的 Final Candidate / Release Package 发布控制器；V4 只保留为历史迁移基线，不再参与 V5 发布 authority；',
+              '- Release/Tag promotion 只接受同一 exact HEAD，不允许移动已存在的正式 tag。'
+            ].join('\n');
+
+            if(!body.includes('### Release / Tag ✅')){
+              body=body.replace('\n## 5. 当前执行点', `\n\n${releaseSection}\n\n## 5. 当前执行点`);
+            }else{
+              body=body.replace(/### Release \/ Tag ✅[\s\S]*?(?=\n## 5\. 当前执行点)/,releaseSection);
+            }
+
+            const current=[
+              '## 5. 当前执行点',
+              '',
+              '**Release / Tag — COMPLETE**',
+              '',
+              `P00–P22 已按强制顺序完成并在 release exact HEAD \`${tested}\` 上重新通过 authoritative prerequisite chain；G0–G13 完整验证，Capability Matrix 无未收口状态。`,
+              '',
+              `**当前执行点：GoJet V5 \`${tag}\` 已创建并冻结。** Issue #8 的 V5 rebuild / verification / release-tag 生命周期已完整收口；后续任何源码变更必须使用新的版本号与新的 tag，不得移动 \`${tag}\`。`
+            ].join('\n');
+            body=body.replace(/## 5\. 当前执行点[\s\S]*?(?=\n## 6\. Gate)/,current.trimEnd());
+
+            await github.rest.issues.update({
+              owner,repo,issue_number:issueNumber,body,state:'closed',state_reason:'completed'
+            });
+
+            const marker='<!-- v5-release-tag-evidence-v1 -->';
+            const comment=[
+              marker,
+              `## GoJet V5 ${tag} — authoritative release closure ✅`,
+              '',
+              `- Exact HEAD: \`${tested}\``,
+              `- Tag: \`${tag}\``,
+              `- P17: Actions \`${runIds['P17']}\` success`,
+              `- P20 / G0–G10: Actions \`${runIds['P20 / G0-G10']}\` success`,
+              `- P21 / G11: Actions \`${runIds['P21 / G11']}\` success`,
+              `- P22 / G12–G13: Actions \`${runIds['P22 / G12-G13']}\` success`,
+              `- Native artifact: \`${p21Name}\``,
+              `- Production evidence: \`${p22Name}\``,
+              '- Capability Matrix: DONE/N/A-only; every Release cell DONE',
+              '- Frozen V4 release-controller leakage: removed from the V5 branch',
+              '',
+              'Issue #8 is now closed as the completed GoJet V5 rebuild and release-tag authority ledger.'
+            ].join('\n');
+            const comments=await github.paginate(github.rest.issues.listComments,{owner,repo,issue_number:issueNumber,per_page:100});
+            const prior=comments.find(c=>c.body && c.body.includes(marker));
+            if(prior) await github.rest.issues.updateComment({owner,repo,comment_id:prior.id,body:comment});
+            else await github.rest.issues.createComment({owner,repo,issue_number:issueNumber,body:comment});
+
+            core.setOutput('tag',tag);
+            core.setOutput('tested_sha',tested);
+            core.setOutput('p17_run_id',String(runIds['P17']));
+            core.setOutput('p20_run_id',String(runIds['P20 / G0-G10']));
+            core.setOutput('p21_run_id',String(runIds['P21 / G11']));
+            core.setOutput('p22_run_id',String(runIds['P22 / G12-G13']));
+
+      - name: Upload immutable release-tag evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v5-release-tag-evidence-${{ steps.promote.outputs.tested_sha }}
+          path: /tmp/GOJET_V5_RELEASE_TAG_EVIDENCE.txt
+          if-no-files-found: error
+          retention-days: 90
