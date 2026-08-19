@@ -9,6 +9,7 @@ on:
       - "services/**"
       - "database/**"
       - "scripts/**"
+      - "tests/**"
       - "deploy/**"
       - "installer/**"
       - "public/install/**"
