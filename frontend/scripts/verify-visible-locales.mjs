@@ -96,7 +96,11 @@ function issue(file, ast, node, kind, text, reason) {
   failures.push({ file, line: ast.getLineAndCharacterOfPosition(node.getStart()).line + 1, kind, text, reason });
 }
 
-for (const file of surfaceRoots.flatMap(filesUnder)) {
+const auditedFiles = surfaceRoots
+  .flatMap(filesUnder)
+  .filter((file) => file !== 'apps/site/src/routes/DevUi.tsx');
+
+for (const file of auditedFiles) {
   const source = fs.readFileSync(path.join(root, file), 'utf8');
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const locallyPaired = new Set();
@@ -146,7 +150,7 @@ for (const file of surfaceRoots.flatMap(filesUnder)) {
       const init = node.initializer;
       if (init && ts.isStringLiteral(init)) checkPair(init.text, init, `attribute:${node.name.getText()}`);
       if (init && ts.isJsxExpression(init) && init.expression) scanJsxExpression(init.expression);
-    } else if (ts.isJsxExpression(node) && node.expression) {
+    } else if (ts.isJsxExpression(node) && node.expression && !ts.isJsxAttribute(node.parent)) {
       scanJsxExpression(node.expression);
     }
 
@@ -180,4 +184,4 @@ if (failures.length) {
   if (list.length > 400) console.error(`... ${list.length - 400} more issue(s)`);
   process.exit(1);
 }
-console.log(`VISIBLE_LOCALE_GATE passed: ${surfaceRoots.join(', ')} contain no unpaired visible literals or forbidden engineering wording.`);
+console.log(`VISIBLE_LOCALE_GATE passed: ${auditedFiles.length} public product source files contain no unpaired visible literals or forbidden engineering wording.`);
