@@ -9,7 +9,7 @@ MYSQL_USER=${MYSQL_USER:-root}
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-root}
 MYSQL_DATABASE=${MYSQL_DATABASE:-gojet_test}
 
-for command in curl python3 mysql mktemp date cmp mkdir mv; do command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }; done
+for command in curl python3 mysql mktemp date cmp mkdir mv chown chmod; do command -v "$command" >/dev/null || { echo "$command is required" >&2; exit 1; }; done
 mysqlq(){ MYSQL_PWD="$MYSQL_PASSWORD" mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -u"$MYSQL_USER" "$MYSQL_DATABASE" -N -B -e "$1"; }
 json(){ local expr=$1; python3 -c "import json,sys; d=json.load(sys.stdin); print(d$expr)"; }
 api(){ local m=$1 p=$2 body=${3:-} token=${4:-}; local args=(-sS -X "$m" -H 'Content-Type: application/json' -w $'\n%{http_code}'); [[ -n "$token" ]]&&args+=(-H "Authorization: Bearer $token"); [[ -n "$body" ]]&&args+=(--data "$body"); curl "${args[@]}" "$BASE$p"; }
@@ -46,6 +46,15 @@ activate(){
   [[ "$changed" == 1 ]] || { echo "file $id could not enter scanning state" >&2; exit 1; }
 
   mkdir -p "$FILE_ROOT/clean"
+  # In the Native Gate this script runs as root while platformapi/fileworker run
+  # as the dedicated gojet user. FinishFileScan would create/move within a
+  # gojet-owned object-store tree, so preserve the quarantine directory owner
+  # and mode instead of accidentally creating root-owned clean/ and turning the
+  # later production DeleteFile rename into EACCES.
+  if [[ $(id -u) -eq 0 ]]; then
+    chown --reference="$FILE_ROOT/quarantine" "$FILE_ROOT/clean"
+    chmod --reference="$FILE_ROOT/quarantine" "$FILE_ROOT/clean"
+  fi
   mv "$source" "$target"
   changed=$(mysqlq "UPDATE file_shares SET scan_status='clean',scan_result='clean',status='active',last_scanned_at=UTC_TIMESTAMP() WHERE id=$id AND scan_status='scanning'; SELECT ROW_COUNT();" | tail -n1)
   if [[ "$changed" != 1 ]]; then
