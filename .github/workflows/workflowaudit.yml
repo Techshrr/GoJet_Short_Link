@@ -1,0 +1,19 @@
+name: Workflow Package Source Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/aptstable.sh'
+      - 'scripts/workflowaudit.sh'
+  push:
+    branches:
+      - rebuild/v5.0.2-auth-i18n-product-copy
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/workflowaudit.sh
