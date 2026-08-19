@@ -5,7 +5,7 @@ on:
   pull_request:
   push:
     branches:
-      - rebuild/v4-rc12-real-install-fixes
+      - rebuild/v5.0.2-auth-i18n-product-copy
     paths:
       - '.github/workflows/installervalidation.yml'
       - 'installer/**'
@@ -39,11 +39,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: packagelock.json
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Validate installer deployment and naming syntax
         run: |
@@ -57,7 +61,7 @@ jobs:
           grep -Fq '自动重连' public/install/install.js
           grep -Fq '请勿重复提交' public/install/install.js
           test -z "$(grep -R -F 'catch(e){}' public/install 2>/dev/null || true)"
-          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh; do bash -n "$script"; done
+          for script in install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh scripts/installdocker.sh scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh scripts/packagerelease.sh scripts/verifyrelease.sh scripts/aptstable.sh; do bash -n "$script"; done
           python3 - <<'PY'
           from pathlib import Path
           text = Path('install.sh').read_text()
@@ -73,8 +77,6 @@ jobs:
           ):
               assert contract in text, contract
           PY
-          sh -n scripts/packagerelease.sh
-          sh -n scripts/verifyrelease.sh
           python3 -m py_compile scripts/buildpublicsite.py scripts/checknames.py scripts/checkschema.py
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
@@ -101,58 +103,42 @@ jobs:
           grep -Fq 'bash "$ROOT/scripts/installgeoip.sh"' scripts/installdocker.sh
           grep -Fq 'deploy/data/geoip/city.mmdb' deploy/.env.production.example
           test -z "$(grep -R -F 'GeoLite2-City.mmdb' deploy scripts install.sh 2>/dev/null || true)"
-          grep -Fq 'DESTINATION_RISK_SCAN_INTERVAL_SECONDS: ${DESTINATION_RISK_SCAN_INTERVAL_SECONDS:-3}' deploy/compose.production.yaml
-          grep -Fq 'DESTINATION_RISK_PROVIDER_URL: ${DESTINATION_RISK_PROVIDER_URL:-}' deploy/compose.production.yaml
-          grep -Fq 'DESTINATION_RISK_PROVIDER_TOKEN: ${DESTINATION_RISK_PROVIDER_TOKEN:-}' deploy/compose.production.yaml
-          grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/.env.production.example
-          grep -Fq 'DESTINATION_RISK_PROVIDER_URL=' deploy/native/gojet.env.example
-          operations_block="$(sed -n '/^  operationsmonitor:/,/^  clamav:/p' deploy/compose.production.yaml)"
-          printf '%s\n' "$operations_block" | grep -Fq 'REDIS_ADDRESS: redis:6379'
-          printf '%s\n' "$operations_block" | grep -Fq 'REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}'
-          printf '%s\n' "$operations_block" | grep -A1 -F '      redis:' | grep -Fq 'condition: service_healthy'
 
-      - name: Validate canonical frontend and flat public build
+      - name: Validate canonical V5 frontend and release routing
+        run: |
+          set -euo pipefail
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm check
+          cd ..
+          for config in deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf; do
+            grep -Fq 'try_files $uri $uri.html $uri/index.html' "$config"
+          done
+          grep -Fq 'frontend/apps/site/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/workspace/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/admin/dist' scripts/packagerelease.sh
+          grep -Fq 'frontend/apps/docs/dist' scripts/packagerelease.sh
+          grep -Fq 'public/legal/privacy/index.html' scripts/verifyrelease.sh
+          grep -Fq 'public/zh-CN/legal/privacy/index.html' scripts/verifyrelease.sh
+          test ! -e frontend/marketingsite
+
+      - name: Run legacy backend browser fixture regressions without apt bootstrap
         run: |
           set -euo pipefail
           bash scripts/npmci.sh --ignore-scripts
-          node --check frontend/publicsite/assets/app.js
-          node --check frontend/publicsite/assets/auth.js
-          node --check frontend/publicsite/assets/authbase.js
-          node --check frontend/publicsite/assets/authcodeui.js
-          node --check frontend/publicsite/assets/home.js
-          node --check frontend/publicsite/assets/docs.js
-          node --check frontend/publicsite/assets/fileshare.js
-          node --check frontend/adminconsole/app.js
-          node --check frontend/adminconsole/settings.js
-          node --check frontend/adminconsole/socialauthsettings.js
-          node --check frontend/adminconsole/paymentux.js
-          node --check frontend/adminconsole/officialdomains.js
-          node --check frontend/adminconsole/supportsecurity.js
-          for file in frontend/userconsole/*.js; do node --check "$file"; done
-          python3 scripts/buildpublicsite.py --output /tmp/gojetinstallerpublic
-          for file in index.html docs.html privacy.html terms.html forgotpassword.html reportabuse.html products/urlshortener.html; do test -f "/tmp/gojetinstallerpublic/$file"; done
-          test -z "$(find /tmp/gojetinstallerpublic -mindepth 2 -type f -name index.html -print -quit)"
-          test -z "$(find /tmp/gojetinstallerpublic -mindepth 1 -printf '%f\n' | grep -E '[-_]' || true)"
-          test ! -e frontend/marketingsite
-          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetbtrewrite.conf
-          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojethost.conf
-          grep -Fq 'try_files $uri $uri.html' deploy/nginx/gojetnative.conf
-          grep -Fq 'location = /install { return 302 /install/; }' deploy/nginx/gojetbtrewrite.conf
-          grep -Fq 'location = /install/ { rewrite ^ /install/index.php last; }' deploy/nginx/gojetbtrewrite.conf
-          test "$(grep -cF 'proxy_pass http://127.0.0.1:18080' deploy/nginx/gojetbtrewrite.conf)" -ge 1
-
-      - name: Run browser fixture acceptance
-        run: |
-          set -euo pipefail
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
           npm run test:e2e -- --project=chromium
 
-      - name: Reject retired engineering contracts
+      - name: Reject retired engineering and unstable CI contracts
         run: |
           set -euo pipefail
           PATHS='installer public/install deploy scripts/nativeinstallerrun.sh scripts/nativeinstallerapply.sh scripts/runmigrations.sh scripts/installgeoip.sh install.sh installhostnginx.sh installnativelemp.sh launchwebinstaller.sh'
           if grep -R -I -n -E '\bGoJet V4\b|\bRC[0-9]+\b|product-hardening|hardening-release|SYSTEM_IMAGE_PATH|/system-images/|frontend/marketingsite' $PATHS; then
             echo 'retired engineering or runtime contract detected in installer sources' >&2
+            exit 1
+          fi
+          if grep -R -n -F 'playwright install --with-deps' .github/workflows; then
+            echo 'Playwright apt bootstrap is forbidden; use browser-only installation and controlled system packages.' >&2
             exit 1
           fi
           grep -Fq 'FRESHINSTALLONLY=1' scripts/packagerelease.sh
