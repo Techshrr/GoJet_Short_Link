@@ -40,22 +40,13 @@ INSERT INTO system_settings(setting_key,setting_value,is_encrypted) VALUES
 ('billing.fx.manual_rates','{}',FALSE)
 ON DUPLICATE KEY UPDATE setting_key=VALUES(setting_key);
 
-DROP TRIGGER IF EXISTS billing_invoice_active_payment_guard;
-DELIMITER $$
-CREATE TRIGGER billing_invoice_active_payment_guard
-BEFORE UPDATE ON billing_invoices
-FOR EACH ROW
-BEGIN
-    IF OLD.status IN ('pending','overdue')
-       AND NEW.status IN ('paid','void')
-       AND EXISTS(
-           SELECT 1 FROM payment_transactions p
-           WHERE p.invoice_id=OLD.id AND p.status IN ('created','pending')
-       ) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='账单存在进行中的在线支付，请先等待支付结果';
-    END IF;
-END$$
-DELIMITER ;
+-- Billing and payment state is authoritative in the Go service layer. Manual
+-- settlement is guarded transactionally in billing.Service.Settle(): the
+-- invoice row is locked FOR UPDATE and active created/pending payment rows are
+-- rejected before any paid/void transition. Do not duplicate that invariant
+-- with a MySQL trigger: on MySQL 8 servers with binary logging enabled,
+-- CREATE TRIGGER requires SUPER or log_bin_trust_function_creators=1 and would
+-- make a normal least-privilege application database user unable to install.
 
 INSERT INTO mail_templates(template_key,name,subject_template,html_template,status) VALUES
 ('verification','邮箱验证','验证您的 {{site_name}} 邮箱','<h1>验证邮箱</h1><p>您好，{{display_name}}。</p><p>感谢注册 {{site_name}}。请完成邮箱验证后继续使用账户。</p><p><a class="button" href="{{verification_url}}">验证邮箱</a></p><p class="muted">验证链接：{{verification_url}}</p>','active'),
