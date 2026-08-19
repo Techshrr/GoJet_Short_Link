@@ -26,7 +26,7 @@ func main() {
 		log.Fatalf("mysql unavailable: %v", err)
 	}
 	redisDB, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
-	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "127.0.0.1:6379"), Password: os.Getenv("REDIS_PASSWORD"), DB: redisDB})
+	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "127.0.0.1:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), DB: redisDB})
 	defer rdb.Close()
 	if err = rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("redis unavailable: %v", err)
