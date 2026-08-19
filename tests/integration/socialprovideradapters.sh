@@ -4,7 +4,7 @@ BASE=${GOJET_TEST_BASE:-http://127.0.0.1:18091};MYSQL_PASSWORD=${MYSQL_PASSWORD:
 mysqlq(){ MYSQL_PWD="$MYSQL_PASSWORD" mysql -h127.0.0.1 -P3306 -uroot "$MYSQL_DATABASE" -N -B -e "$1"; }
 req(){ local m=$1 p=$2 b=${3:-} t=${4:-};local a=(-sS -X "$m" -H 'Content-Type: application/json' -w $'\n%{http_code}');[[ -n "$t" ]]&&a+=(-H "Authorization: Bearer $t");[[ -n "$b" ]]&&a+=(--data "$b");curl "${a[@]}" "$BASE$p"; }
 status(){ printf '%s\n' "$1"|tail -n1; };body(){ printf '%s\n' "$1"|sed '$d'; };expect(){ local want=$1 got=$2 label=$3 s;s=$(status "$got");[[ "$s" == "$want" ]]||{ echo "FAIL $label expected $want got $s" >&2;body "$got" >&2;exit 1;};body "$got"; };field(){ local expr=$1;python3 -c "import json,sys;d=json.load(sys.stdin);print(d$expr)"; }
-for i in {1..60};do curl -fsS "$BASE/health" >/dev/null 2>&1&&break;sleep 1;[[ $i -lt 60 ]]||exit 1;done
+for i in {1..60};do curl -fsS "$BASE/api/public/auth/providers" >/dev/null 2>&1&&break;sleep 1;[[ $i -lt 60 ]]||exit 1;done
 ADMIN=$(expect 200 "$(req POST /api/admin/auth/login '{"email":"owner@example.test","password":"OwnerPassword!2026"}')" admin-login|field "['token']")
 H=$(mktemp);trap 'rm -f "$H"' EXIT
 
