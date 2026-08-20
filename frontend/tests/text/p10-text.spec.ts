@@ -22,6 +22,7 @@ async function fixture(page: Page, options: Options = {}): Promise<State> {
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType:"application/json", body:JSON.stringify(body) });
   await page.route("**/api/**", async (route) => {
     const request = route.request(); const url = new URL(request.url()); const path = url.pathname; const method = request.method(); state.requests.push(`${method} ${path}`);
+    if (method === "GET" && path === "/api/session") return json(route,{authenticated:true,identity:{id:7,email:"owner@example.com",displayName:"P10 Owner",emailVerified:true},csrfToken:"p10-csrf"});
     if (method === "GET" && path === "/api/workspaces") return json(route,{data:[{id:1,name:"P10 Workspace",type:"personal",role:options.viewer?"viewer":"owner"}]});
     if (method === "GET" && path === "/api/workspaces/1/text-shares") { if (options.failList) return json(route,{error:"text service temporarily unavailable"},503); return json(route,{data:items}); }
     if (method === "GET" && /^\/api\/workspaces\/1\/text-shares\/\d+$/.test(path)) { const id=Number(path.split("/").pop()); const item=items.find((row)=>row.id===id); if (!item) return json(route,{error:"not found"},404); return json(route,{...item,content:content.get(id)??""}); }
