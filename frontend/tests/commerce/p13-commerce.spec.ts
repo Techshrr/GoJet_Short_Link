@@ -16,6 +16,7 @@ async function fixture(page: Page) {
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/api/**", async (route) => {
     const req = route.request(); const path = new URL(req.url()).pathname; const method = req.method();
+    if (method === "GET" && path === "/api/admin/auth/me") return json(route, { id: 1, email: "admin@gojet.cc", display_name: "Commerce Admin", role: "super_admin", permissions: ["*"] });
     if (path.includes("csrf")) return json(route, { csrf_token: "test-csrf" });
     if (method === "GET" && path === "/api/admin/plans") return json(route, { data: [plan] });
     if (method === "GET" && path === "/api/admin/invoices") return json(route, { data: [invoice] });
