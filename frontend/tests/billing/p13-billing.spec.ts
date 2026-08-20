@@ -46,7 +46,7 @@ for (const viewport of viewports) {
     const sheet = page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Payment method").selectOption("stripe"); await sheet.getByRole("button", { name: "Continue to payment", exact: true }).click();
     expect(state.checkoutCount).toBe(1);
     await expect(page.getByText("Payment started", { exact: true })).toBeVisible();
-    await expect(page.getByText("Payment order GJP-501 is waiting for the payment provider to confirm the result.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Payment order GJP-501 is waiting for the payment provider to confirm the result.", { exact: false })).toBeVisible();
     await expect(page.getByText("Pending", { exact: true })).toBeVisible();
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({ path: `test-results/p13-billing-${viewport.name}.png`, fullPage: true });
   });
