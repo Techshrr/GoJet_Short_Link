@@ -7,6 +7,7 @@ on:
     branches:
       - rebuild/v5.0.2-auth-i18n-product-copy
       - rebuild/v5.0.3-systemic-product-rebuild
+      - rebuild/v5.0.3-final
     paths:
       - '.github/workflows/installervalidation.yml'
       - 'installer/**'
@@ -138,7 +139,9 @@ jobs:
             echo 'retired engineering or runtime contract detected in installer sources' >&2
             exit 1
           fi
-          if grep -R -n -F 'playwright install --with-deps' .github/workflows; then
+          forbidden='playwright install --with'
+          forbidden+='-deps'
+          if grep -R -n -F "$forbidden" .github/workflows; then
             echo 'Playwright apt bootstrap is forbidden; use browser-only installation and controlled system packages.' >&2
             exit 1
           fi
