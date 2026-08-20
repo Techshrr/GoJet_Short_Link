@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/monitoring"
 	"github.com/Techshrr/GoJet_Short_Link/app/observability"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirectengine/internal/httpapi"
 	"github.com/Techshrr/GoJet_Short_Link/services/redirectengine/internal/store"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -29,6 +32,12 @@ func main() {
 		log.Fatal("VISIT_RATE_LIMIT_PER_MINUTE must be positive")
 	}
 	s := store.NewRedis(address, os.Getenv("REDIS_USERNAME"), os.Getenv("REDIS_PASSWORD"), db, limit)
+	healthRedis := redis.NewClient(&redis.Options{Addr: address, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), DB: db})
+	defer healthRedis.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := healthRedis.Ping(ctx).Err(); err != nil { log.Fatalf("redis unavailable: %v", err) }
+	monitoring.StartRuntimeHeartbeat(ctx, healthRedis, "redirectengine")
 	logger := observability.NewLogger("redirectengine", observability.WriterFromEnvironment())
 	server := &http.Server{Addr: getenv("HTTP_ADDRESS", ":8080"), Handler: logger.Middleware(httpapi.New(s, required("VISITOR_HASH_KEY"), required("QR_TRACKING_KEY"))), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("redirect engine listening on %s", server.Addr)
