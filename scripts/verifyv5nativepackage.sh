@@ -66,8 +66,8 @@ find "$PKG/public/app" -type f -name '*.js' -print -quit | grep -q . || { echo '
 
 DOCS_REWRITE="$PKG/deploy/nginx/gojetbtrewrite.conf"
 ! grep -Fq '/docs.html' "$DOCS_REWRITE" || { echo 'Native Nginx rewrite still points Docs at retired /docs.html' >&2; exit 1; }
-grep -A3 -F 'location ^~ /docs/' "$DOCS_REWRITE" | grep -Fq 'try_files $uri $uri/ =404;' || {
-  echo 'Native Nginx rewrite does not serve the packaged public/docs static tree' >&2
+grep -A3 -F 'location ^~ /docs/' "$DOCS_REWRITE" | grep -Fq 'try_files $uri $uri/ $uri/index.html =404;' || {
+  echo 'Native Nginx rewrite does not serve the packaged public/docs static tree and nested index routes' >&2
   exit 1
 }
 
