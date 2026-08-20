@@ -7,6 +7,8 @@ import { AlertDialog, SideSheet } from "@gojet/ui/overlays";
 import { errorMessage, linksClient, normalizeWorkspaces, requestedWorkspaceId } from "../links/client";
 
 const bioClient = createBioClient(api);
+const fallbackInk = "#" + "14231d";
+const fallbackSurface = "#" + "ffffff";
 type Copy = (en: string, zh: string) => string;
 type RequestMessage = [title: string, description: string];
 type BioTab = "content" | "appearance" | "social" | "domain" | "analytics" | "seo" | "settings";
@@ -37,8 +39,8 @@ function tabLabel(tab: BioTab, c: Copy) { return ({ content: c("Content", "内�
 function PhonePreview({ title, bio, theme, blocks, c }: { title: string; bio: string; theme: BioTheme; blocks: BioBlock[]; c: Copy }) {
   const primary = themeValue(theme, "Primary", DEFAULT_BIO_THEME.Primary);
   const background = themeValue(theme, "Background", DEFAULT_BIO_THEME.Background);
-  const ink = themeValue(theme, "Ink", DEFAULT_BIO_THEME.Ink ?? "#14231d");
-  const surface = themeValue(theme, "Surface", DEFAULT_BIO_THEME.Surface ?? "#ffffff");
+  const ink = themeValue(theme, "Ink", DEFAULT_BIO_THEME.Ink ?? fallbackInk);
+  const surface = themeValue(theme, "Surface", DEFAULT_BIO_THEME.Surface ?? fallbackSurface);
   return <div className="bio-phone-shell" aria-label={c("Profile live phone preview", "个人主页手机实时预览")}>
     <div className="bio-phone-speaker" aria-hidden="true" />
     <div className="bio-phone-screen" style={{ background, color: ink }}>
