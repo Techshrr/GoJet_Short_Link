@@ -43,15 +43,54 @@ async function noOverflow(page: Page) { const size=await page.evaluate(()=>({scr
 for (const viewport of viewports) {
   test(`P10 Text vertical slice · ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({width:viewport.width,height:viewport.height}); const errors=runtimeErrors(page); const state=await fixture(page); await page.goto("/app/text?workspace=1");
-    await expect(page.getByRole("heading",{name:"Text",exact:true})).toBeVisible(); await expect(page.getByText("Release notes")).toBeVisible(); await expect(page.getByText("Single use log")).toBeVisible();
-    await page.getByRole("button",{name:"Release notes"}).click(); await expect(page.getByText("TEXT DETAIL")).toBeVisible(); await expect(page.getByLabel("Text live preview")).toContainText("Production");
-    await page.getByRole("button",{name:"Create Text"}).click(); const sheet=page.locator(".gj-side-sheet-popup"); await expect(sheet).toBeVisible(); await sheet.getByLabel("Title").fill("Browser contract"); await sheet.getByLabel("Format").selectOption("markdown"); await sheet.getByLabel("Content").fill("# Browser\n\nP10 exact head"); await sheet.getByLabel("Custom code").fill("browser-contract"); await sheet.getByRole("checkbox",{name:/One-time share/}).click(); await sheet.getByRole("button",{name:"Create Text",exact:true}).click(); await expect(sheet.getByText("Text created")).toBeVisible(); expect(state.creates).toBe(1);
+    await expect(page.getByRole("heading",{name:"Text sharing",exact:true})).toBeVisible();
+    await expect(page.getByText("Release notes")).toBeVisible();
+    await expect(page.getByText("Single use log")).toBeVisible();
+    await expect(page.locator('[data-text-id="11"]')).toHaveAttribute("data-text-state","active");
+    await expect(page.locator('[data-text-id="12"]')).toHaveAttribute("data-text-state","consumed");
+
+    await page.getByRole("button",{name:"New text share"}).click();
+    const sheet=page.locator(".gj-side-sheet-popup");
+    await expect(sheet).toBeVisible();
+    const box=await sheet.boundingBox(); expect(box).not.toBeNull();
+    if(viewport.name==="mobile") expect(Math.round(box!.width)).toBeGreaterThanOrEqual(viewport.width-1); else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
+    await sheet.getByLabel("Title").fill("Browser contract");
+    await sheet.getByLabel("Display format").selectOption("markdown");
+    await sheet.getByLabel("Content").fill("# Browser\n\nP10 exact head");
+    await sheet.getByLabel("Public slug").fill("browser-contract");
+    await sheet.getByRole("checkbox",{name:"One-time access"}).click();
+    await sheet.getByRole("button",{name:"Create text share",exact:true}).click();
+    await expect.poll(()=>state.creates).toBe(1);
+    await expect(page.getByText("Browser contract")).toBeVisible();
+
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({path:`test-results/p10-text-${viewport.name}.png`,fullPage:true});
   });
 }
 
-test("P10 Text read-only RBAC", async ({page})=>{ await fixture(page,{viewer:true}); await page.goto("/app/text?workspace=1"); await expect(page.getByText("Read-only Text access")).toBeVisible(); await expect(page.getByRole("button",{name:"Create Text"})).toHaveCount(0); await page.getByRole("button",{name:"Release notes"}).click(); await expect(page.getByRole("button",{name:"Save changes"})).toHaveCount(0); });
-test("P10 Text empty state", async ({page})=>{ await fixture(page,{empty:true}); await page.goto("/app/text?workspace=1"); await expect(page.getByText("No Text shares")).toBeVisible(); });
-test("P10 Text disabled state", async ({page})=>{ await fixture(page,{failList:true}); await page.goto("/app/text?workspace=1"); await expect(page.getByText("Text service disabled")).toBeVisible(); });
-test("P10 Text quota state", async ({page})=>{ await fixture(page,{quotaOnCreate:true}); await page.goto("/app/text?workspace=1"); await page.getByRole("button",{name:"Create Text"}).click(); const sheet=page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Title").fill("Quota test"); await sheet.getByLabel("Content").fill("quota"); await sheet.getByRole("button",{name:"Create Text",exact:true}).click(); await expect(sheet.getByText("Quota exceeded")).toBeVisible(); });
-test("P10 Text terminal consumed state", async ({page})=>{ await fixture(page); await page.goto("/app/text?workspace=1"); await page.getByRole("button",{name:"Single use log"}).click(); await expect(page.getByText("Terminal share")).toBeVisible(); await expect(page.getByRole("button",{name:"Save changes"})).toHaveCount(0); });
+test("P10 Text read-only RBAC", async ({page})=>{
+  await fixture(page,{viewer:true}); await page.goto("/app/text?workspace=1");
+  await expect(page.getByText("Read-only text sharing")).toBeVisible();
+  await expect(page.getByRole("button",{name:"New text share"})).toHaveCount(0);
+  await expect(page.locator('[data-text-id="11"]').getByRole("button",{name:"Edit"})).toHaveCount(0);
+});
+
+test("P10 Text empty state", async ({page})=>{ await fixture(page,{empty:true}); await page.goto("/app/text?workspace=1"); await expect(page.getByText("No text shares")).toBeVisible(); });
+
+test("P10 Text disabled state", async ({page})=>{ await fixture(page,{failList:true}); await page.goto("/app/text?workspace=1"); await expect(page.getByText("Unable to load text shares")).toBeVisible(); await expect(page.getByText("text service temporarily unavailable")).toBeVisible(); await expect(page.getByRole("button",{name:"Retry"})).toBeVisible(); });
+
+test("P10 Text quota state", async ({page})=>{
+  await fixture(page,{quotaOnCreate:true}); await page.goto("/app/text?workspace=1");
+  await page.getByRole("button",{name:"New text share"}).click(); const sheet=page.locator(".gj-side-sheet-popup");
+  await sheet.getByLabel("Title").fill("Quota test"); await sheet.getByLabel("Content").fill("quota");
+  await sheet.getByRole("button",{name:"Create text share",exact:true}).click();
+  await expect(sheet.getByText("Text sharing allowance reached")).toBeVisible();
+});
+
+test("P10 Text terminal consumed state is immutable", async ({page})=>{
+  await fixture(page); await page.goto("/app/text?workspace=1");
+  const terminal=page.locator('[data-text-id="12"]');
+  await expect(terminal).toHaveAttribute("data-text-state","consumed");
+  await expect(terminal.getByText("Consumed",{exact:true})).toBeVisible();
+  await expect(terminal.getByRole("button",{name:"Edit"})).toHaveCount(0);
+  await expect(terminal.getByRole("link",{name:"Open",exact:true})).toBeVisible();
+});
