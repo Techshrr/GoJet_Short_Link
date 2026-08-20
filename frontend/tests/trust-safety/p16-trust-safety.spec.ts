@@ -9,8 +9,61 @@ const fixtures: Record<string, unknown> = {
   "/api/admin/security": { data: [{ id: 22, event_type: "admin-login-risk", severity: "high", source: "auth", description: "Multiple failed privileged sign-ins", status: "open", created_at: "2026-08-18T12:00:00Z" }] },
   "/api/admin/audit": { data: [{ id: 31, actor: 2, workspace: 7, action: "admin.destination_risk_override", target_type: "short_link", target_id: "41", created_at: "2026-08-18T12:00:00Z" }] }
 };
-async function mock(page: Page) { await page.route("**/api/**", async (route) => { const url = new URL(route.request().url()); const key = Object.keys(fixtures).find((candidate) => url.pathname === candidate); if (route.request().method() !== "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ updated: true, queued: true, resolved: true }) }); return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(key ? fixtures[key] : { data: [] }) }); }); }
-const views = [{ name: "desktop", width: 1440, height: 1000 }, { name: "tablet", width: 900, height: 1000 }, { name: "mobile", width: 390, height: 844 }];
-for (const view of views) test.describe(view.name, () => { test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: view.width, height: view.height }); await mock(page); }); for (const item of [{ path: "/admin/destination-risk", title: "Destination Risk" }, { path: "/admin/file-security", title: "File Security" }, { path: "/admin/abuse", title: "Abuse Reports" }, { path: "/admin/security-events", title: "Security Events" }, { path: "/admin/audit", title: "Audit Log" }]) test(`${item.title} renders without horizontal document overflow`, async ({ page }) => { await page.goto(item.path); await expect(page.getByRole("heading", { name: item.title, level: 1 })).toBeVisible(); const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2); expect(overflow).toBeFalsy(); }); });
-test("destination review requires reason before high-risk actions", async ({ page }) => { await mock(page); await page.goto("/admin/destination-risk/41"); await expect(page.getByRole("heading", { name: "Destination Risk · #41", level: 1 })).toBeVisible(); await expect(page.getByRole("button", { name: "Apply override" })).toBeDisabled(); await page.getByLabel("Reason").fill("Reviewed by Trust & Safety"); await expect(page.getByRole("button", { name: "Apply override" })).toBeEnabled(); });
-test("abuse resolution requires governance reason", async ({ page }) => { await mock(page); await page.goto("/admin/abuse"); await page.getByRole("button", { name: "Handle" }).click(); await expect(page.getByRole("button", { name: "Save decision" })).toBeDisabled(); await page.getByLabel("Resolution reason").fill("Verified against submitted evidence"); await expect(page.getByRole("button", { name: "Save decision" })).toBeEnabled(); });
+
+async function mock(page: Page) {
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    const key = Object.keys(fixtures).find((candidate) => url.pathname === candidate);
+    if (route.request().method() !== "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ updated: true, queued: true, resolved: true }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(key ? fixtures[key] : { data: [] }) });
+  });
+}
+
+const views = [
+  { name: "desktop", width: 1440, height: 1000 },
+  { name: "tablet", width: 900, height: 1000 },
+  { name: "mobile", width: 390, height: 844 }
+];
+
+const pages = [
+  { path: "/admin/destination-risk", title: "Destination checks" },
+  { path: "/admin/file-security", title: "File protection" },
+  { path: "/admin/abuse", title: "Abuse reports" },
+  { path: "/admin/security-events", title: "Security events" },
+  { path: "/admin/audit", title: "Audit log" }
+];
+
+for (const view of views) {
+  test.describe(view.name, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width: view.width, height: view.height });
+      await mock(page);
+    });
+    for (const item of pages) {
+      test(`${item.title} renders without horizontal document overflow`, async ({ page }) => {
+        await page.goto(item.path);
+        await expect(page.getByRole("heading", { name: item.title, level: 1, exact: true })).toBeVisible();
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
+        expect(overflow).toBeFalsy();
+      });
+    }
+  });
+}
+
+test("destination review requires reason before high-risk actions", async ({ page }) => {
+  await mock(page);
+  await page.goto("/admin/destination-risk/41");
+  await expect(page.getByRole("heading", { name: "Destination check · #41", level: 1, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save decision", exact: true })).toBeDisabled();
+  await page.getByLabel("Reason").fill("Reviewed by Trust & Safety");
+  await expect(page.getByRole("button", { name: "Save decision", exact: true })).toBeEnabled();
+});
+
+test("abuse resolution requires governance reason", async ({ page }) => {
+  await mock(page);
+  await page.goto("/admin/abuse");
+  await page.getByRole("button", { name: "Handle", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save outcome", exact: true })).toBeDisabled();
+  await page.getByLabel("Resolution note").fill("Verified against submitted evidence");
+  await expect(page.getByRole("button", { name: "Save outcome", exact: true })).toBeEnabled();
+});
