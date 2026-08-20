@@ -7,6 +7,7 @@ import { Popover as BasePopover } from "@base-ui/react/popover";
 import { PreviewCard as BasePreviewCard } from "@base-ui/react/preview-card";
 import { ChevronDown, MoreHorizontal, X } from "@gojet/icons";
 import { IconButton } from "./index";
+import { useLocale } from "./locale";
 
 export interface MenuAction {
   id: string;
@@ -17,7 +18,9 @@ export interface MenuAction {
   onSelect?: () => void;
 }
 
-export function AlertDialog({ triggerLabel, title, description, confirmLabel = "确认", onConfirm }: { triggerLabel: string; title: string; description: string; confirmLabel?: string; onConfirm?: () => void }) {
+export function AlertDialog({ triggerLabel, title, description, confirmLabel, onConfirm }: { triggerLabel: string; title: string; description: string; confirmLabel?: string; onConfirm?: () => void }) {
+  const { text } = useLocale();
+  const resolvedConfirm = confirmLabel ?? text("Confirm", "确认");
   return (
     <BaseAlertDialog.Root>
       <BaseAlertDialog.Trigger className="gj-button" data-variant="destructive" data-size="md">{triggerLabel}</BaseAlertDialog.Trigger>
@@ -28,8 +31,8 @@ export function AlertDialog({ triggerLabel, title, description, confirmLabel = "
             <BaseAlertDialog.Title className="gj-dialog-title">{title}</BaseAlertDialog.Title>
             <BaseAlertDialog.Description className="gj-dialog-description">{description}</BaseAlertDialog.Description>
             <div className="gj-dialog-footer">
-              <BaseAlertDialog.Close className="gj-button" data-variant="ghost" data-size="md">取消</BaseAlertDialog.Close>
-              <BaseAlertDialog.Close className="gj-button" data-variant="destructive" data-size="md" onClick={onConfirm}>{confirmLabel}</BaseAlertDialog.Close>
+              <BaseAlertDialog.Close className="gj-button" data-variant="ghost" data-size="md">{text("Cancel", "取消")}</BaseAlertDialog.Close>
+              <BaseAlertDialog.Close className="gj-button" data-variant="destructive" data-size="md" onClick={onConfirm}>{resolvedConfirm}</BaseAlertDialog.Close>
             </div>
           </BaseAlertDialog.Popup>
         </BaseAlertDialog.Viewport>
@@ -62,10 +65,12 @@ function MenuItems({ actions, context = false }: { actions: MenuAction[]; contex
   return <>{actions.map((action) => <Fragment key={action.id}>{action.separatorBefore ? <BaseMenu.Separator className="gj-menu-separator" /> : null}<BaseMenu.Item className="gj-menu-item" data-destructive={action.destructive || undefined} disabled={action.disabled} onClick={action.onSelect}>{action.label}</BaseMenu.Item></Fragment>)}</>;
 }
 
-export function DropdownMenu({ label = "更多操作", actions }: { label?: string; actions: MenuAction[] }) {
+export function DropdownMenu({ label, actions }: { label?: string; actions: MenuAction[] }) {
+  const { text } = useLocale();
+  const resolvedLabel = label ?? text("More actions", "更多操作");
   return (
     <BaseMenu.Root>
-      <BaseMenu.Trigger className="gj-icon-button" aria-label={label} title={label}><MoreHorizontal size={16} strokeWidth={1.75} /></BaseMenu.Trigger>
+      <BaseMenu.Trigger className="gj-icon-button" aria-label={resolvedLabel} title={resolvedLabel}><MoreHorizontal size={16} strokeWidth={1.75} /></BaseMenu.Trigger>
       <BaseMenu.Portal>
         <BaseMenu.Positioner className="gj-overlay-positioner" align="end" sideOffset={6}>
           <BaseMenu.Popup className="gj-menu-popup"><MenuItems actions={actions} /></BaseMenu.Popup>
@@ -89,8 +94,7 @@ export function ContextMenu({ children, actions }: { children: ReactNode; action
     <BaseContextMenu.Root>
       <BaseContextMenu.Trigger className="gj-context-trigger">{children}</BaseContextMenu.Trigger>
       <BaseContextMenu.Portal>
-        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Popup></BaseContextMenu.Positioner>
-      </BaseContextMenu.Portal>
+        <BaseContextMenu.Positioner className="gj-overlay-positioner"><BaseContextMenu.Popup className="gj-menu-popup"><MenuItems context actions={actions} /></BaseContextMenu.Popup></BaseContextMenu.Positioner></BaseContextMenu.Portal>
     </BaseContextMenu.Root>
   );
 }
@@ -104,16 +108,19 @@ export function HoverCard({ href, trigger, children }: { href: string; trigger: 
   );
 }
 
-export function MobileDrawer({ triggerLabel = "打开菜单", title, description, children }: { triggerLabel?: string; title: string; description?: string; children: ReactNode }) {
+export function MobileDrawer({ triggerLabel, title, description, children }: { triggerLabel?: string; title: string; description?: string; children: ReactNode }) {
+  const { text } = useLocale();
+  const resolvedTrigger = triggerLabel ?? text("Open menu", "打开菜单");
+  const closeLabel = text("Close", "关闭");
   return (
     <BaseDrawer.Root swipeDirection="left">
-      <BaseDrawer.Trigger className="gj-button" data-variant="outline" data-size="md">{triggerLabel}</BaseDrawer.Trigger>
+      <BaseDrawer.Trigger className="gj-button" data-variant="outline" data-size="md">{resolvedTrigger}</BaseDrawer.Trigger>
       <BaseDrawer.Portal>
         <BaseDrawer.Backdrop className="gj-dialog-backdrop" />
         <BaseDrawer.Viewport className="gj-drawer-viewport">
           <BaseDrawer.Popup className="gj-drawer-popup">
             <BaseDrawer.Content className="gj-drawer-content">
-              <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label="关闭"><X size={16} /></IconButton>} /></div>
+              <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label={closeLabel}><X size={16} /></IconButton>} /></div>
               <div className="gj-sheet-body">{children}</div>
             </BaseDrawer.Content>
           </BaseDrawer.Popup>
@@ -124,6 +131,8 @@ export function MobileDrawer({ triggerLabel = "打开菜单", title, description
 }
 
 export function SideSheet({ triggerLabel, title, description, children }: { triggerLabel: string; title: string; description?: string; children: ReactNode }) {
+  const { text } = useLocale();
+  const closeLabel = text("Close", "关闭");
   return (
     <BaseDrawer.Root swipeDirection="right">
       <BaseDrawer.Trigger className="gj-button" data-variant="primary" data-size="md">{triggerLabel}</BaseDrawer.Trigger>
@@ -132,7 +141,7 @@ export function SideSheet({ triggerLabel, title, description, children }: { trig
         <BaseDrawer.Viewport className="gj-sheet-viewport">
           <BaseDrawer.Popup className="gj-side-sheet-popup">
             <BaseDrawer.Content className="gj-side-sheet-content">
-              <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label="关闭"><X size={16} /></IconButton>} /></div>
+              <div className="gj-sheet-head"><div><BaseDrawer.Title className="gj-dialog-title">{title}</BaseDrawer.Title>{description ? <BaseDrawer.Description className="gj-dialog-description">{description}</BaseDrawer.Description> : null}</div><BaseDrawer.Close render={<IconButton label={closeLabel}><X size={16} /></IconButton>} /></div>
               <div className="gj-side-sheet-body">{children}</div>
             </BaseDrawer.Content>
           </BaseDrawer.Popup>
