@@ -10,6 +10,7 @@ const filesClient = createFilesClient(api);
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 type Copy = (en: string, zh: string) => string;
 type FileState = "processing" | "safe" | "review" | "blocked" | "failed";
+type RequestMessage = [title: string, description: string];
 
 function useWorkspace() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: async () => normalizeWorkspaces((await linksClient.workspaces()) as { data: WorkspaceSummary[] } | WorkspaceSummary[]) });
@@ -23,7 +24,7 @@ function state(item: FileShareRecord): FileState {
   if (["review", "manual_review"].includes(item.scan_status)) return "review";
   return "processing";
 }
-function requestMessage(error: unknown, c: Copy) {
+function requestMessage(error: unknown, c: Copy): RequestMessage | null {
   if (!(error instanceof ApiError)) return null;
   if (error.status === 403) return [c("Permission denied", "没有操作权限"), c("Your current workspace role cannot perform this file action.", "你当前的工作区角色无权执行该文件操作。")];
   if (error.status === 429) return [c("Too many requests", "操作过于频繁"), c("Wait a moment and try again.", "请求过于频繁，请稍后再试。")];
