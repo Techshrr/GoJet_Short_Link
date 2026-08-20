@@ -9,6 +9,7 @@ async function fixture(page:Page){
   await page.route("**/api/**",async route=>{
     const req=route.request();const path=new URL(req.url()).pathname;const method=req.method();
     if(method==="GET"&&path==="/api/session")return json(route,{authenticated:true,identity:{id:7,email:"owner@example.com",displayName:"P14 Owner",emailVerified:true},csrfToken:"p14-csrf"});
+    if(method==="GET"&&path==="/api/workspaces")return json(route,{data:[{id:1,name:"P14 Workspace",type:"personal",role:"owner"}]});
     if(method==="GET"&&path==="/api/public/turnstile")return json(route,{enabled:false,surface:new URL(req.url()).searchParams.get("surface")||""});
     if(method==="GET"&&path==="/api/support/departments")return json(route,{data:[{id:1,name:"Technical Support",slug:"technical",description:"Product help"}]});
     if(method==="GET"&&path==="/api/support/tickets")return json(route,{data:[ticket]});
