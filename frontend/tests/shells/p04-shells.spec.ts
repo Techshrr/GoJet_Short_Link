@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type Route, type TestInfo } from "@playwright/test";
 
 const viewports = [
   { name: "desktop", width: 1440, height: 900 },
@@ -31,7 +31,7 @@ async function expectDimension(page: Page, selector: string, dimension: "width" 
   expect(Math.abs(actual - expected), `${selector} ${dimension} expected ${expected}, got ${actual}`).toBeLessThanOrEqual(1);
 }
 async function screenshot(page: Page, testInfo: TestInfo, target: string, viewport: string) { await page.screenshot({ path: testInfo.outputPath(`${target}-${viewport}.png`), fullPage: true }); }
-async function fulfillJson(route: Parameters<Parameters<Page["route"]>[1]>[0], body: unknown) {
+async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 }
 
