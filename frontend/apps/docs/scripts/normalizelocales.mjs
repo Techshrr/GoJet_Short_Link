@@ -32,7 +32,7 @@ function htmlFiles(dir) {
 for (const file of htmlFiles(root)) {
   const source = fs.readFileSync(file, 'utf8');
   const normalized = source
-    .replaceAll('/docs/zh-cn/', '/docs/zh-CN/')
+    .replaceAll('/docs/zh-cn', '/docs/zh-CN')
     .replaceAll('/docs/zh-CN/zh-cn/', '/docs/zh-CN/')
     .replaceAll('hreflang="zh-cn"', 'hreflang="zh-CN"');
   if (normalized !== source) fs.writeFileSync(file, normalized);
