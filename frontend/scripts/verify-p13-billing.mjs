@@ -28,12 +28,25 @@ for (const file of [
 ]) mustExist(file);
 
 mustContain("apps/workspace/src/router.tsx", ["BillingPage", 'path: "/billing"']);
-mustContain("apps/workspace/src/routes/BillingPage.tsx", ["data-p13-billing", "Quota usage", "Orders & invoices", "Payment started", "not shown as paid until the server confirms it", "fx_provider", "fx_rate", "plan.billing_periods"]);
+mustContain("apps/workspace/src/routes/BillingPage.tsx", [
+  "data-p13-billing",
+  "billingClient.workspace",
+  "billingClient.createInvoice",
+  "billingClient.paymentMethods",
+  "billingClient.checkout",
+  "billingClient.cancellation",
+  "queryClient.invalidateQueries",
+  "checkout.transaction_id",
+  "fx_provider",
+  "fx_rate",
+  "plan.billing_periods",
+  "useLocale"
+]);
 mustContain("apps/admin/src/router.tsx", ["PlansPage", "AdminBillingPage", "PaymentsPage", "FXPage", 'path: "/plans"', 'path: "/billing"', 'path: "/payments"', 'path: "/fx"']);
-mustContain("apps/admin/src/routes/PlansPage.tsx", ["data-p13-admin-plans", "Public", "Periods", "New plan", "Archive"]);
-mustContain("apps/admin/src/routes/AdminBillingPage.tsx", ["data-p13-admin-billing", "Audited manual settlement", "Settlement / FX"]);
-mustContain("apps/admin/src/routes/PaymentsPage.tsx", ["data-p13-admin-payments", "Sensitive callback payload is redacted", "Payload SHA-256", "Callback timeline"]);
-mustContain("apps/admin/src/routes/FXPage.tsx", ["data-p13-admin-fx", "Save audited FX override", "Change reason", "RATE CACHE", "FX HISTORY"]);
+mustContain("apps/admin/src/routes/PlansPage.tsx", ["data-p13-admin-plans", "commerceClient.adminPlans", "commerceClient.createPlan", "commerceClient.updatePlan", "commerceClient.archivePlan", "plan.billing_periods", "plan.is_public", "useLocale"]);
+mustContain("apps/admin/src/routes/AdminBillingPage.tsx", ["data-p13-admin-billing", "commerceClient.adminInvoices", "commerceClient.settleInvoice", "queryClient.invalidateQueries", "invoice.fx_provider", "invoice.fx_rate", "useLocale"]);
+mustContain("apps/admin/src/routes/PaymentsPage.tsx", ["data-p13-admin-payments", 'api.get<SettingsResponse>("/api/admin/settings")', 'api.put("/api/admin/settings/payments"', "commerceClient.adminPayments", "commerceClient.adminPayment", "payload_sha256", "useLocale"]);
+mustContain("apps/admin/src/routes/FXPage.tsx", ["data-p13-admin-fx", "commerceClient.adminFX", "commerceClient.updateFX", "queryClient.invalidateQueries", "manual_rates", "reason: reason.trim()", "useLocale"]);
 mustContain("packages/api-client/src/billing.ts", ["createBillingClient", '"purchase" | "upgrade" | "renewal"', "/billing/payment-methods", "/admin/payments", "/api/admin/fx"]);
 mustContain("../services/platformapi/cmd/server/billing.go", ["s.billing.Usage", "s.billing.PublicPlans", "s.billing.ValidatePlanSelection", '"usage": usage']);
 mustContain("../services/platformapi/cmd/server/billingpresentationroutes.go", [
@@ -47,4 +60,4 @@ mustContain("../database/migrations/p13commerceplanpresentation.sql", ["is_publi
 mustNotContain("apps/workspace/src/routes/BillingPage.tsx", ["localStorage.setItem", "sessionStorage.setItem", "mockBilling", "fakeBilling"]);
 mustNotContain("apps/admin/src/routes/PaymentsPage.tsx", ["provider_payload", "localStorage.setItem", "sessionStorage.setItem"]);
 
-console.log("P13 Billing contract verified: real quota usage, public managed plans and period enforcement, non-optimistic payment truth, redacted callbacks, audited FX override, responsive Workspace/Admin commerce surfaces.");
+console.log("P13 Billing contract verified: real quota usage, managed plans and billing periods, server-confirmed payment state, redacted callbacks, recorded exchange-rate changes and localized Workspace/Admin commerce surfaces.");
