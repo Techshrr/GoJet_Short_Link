@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   package:
@@ -98,3 +99,47 @@ jobs:
             dist/native/stage/gojet-v5-native-linux-amd64/MANIFEST.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Record successful test package
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker='<!-- v502-test-package -->';
+            const body=[
+              marker,
+              '## V5.0.2 test install package',
+              '',
+              '- Status: **success**',
+              `- SHA: \`${context.sha}\``,
+              `- Run ID: \`${context.runId}\``,
+              `- Artifact: \`gojet-v5.0.2-test-install-${context.sha}\``,
+              `- Actions: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '- Package verification: PASS',
+              '- Azure Ubuntu apt mirror dependency: not used',
+            ].join('\n');
+            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
+            const old=comments.find(c=>c.body?.includes(marker));
+            if(old) await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:old.id,body});
+            else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
+
+      - name: Record failed test package
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker='<!-- v502-test-package -->';
+            const body=[
+              marker,
+              '## V5.0.2 test install package',
+              '',
+              '- Status: **failure**',
+              `- SHA: \`${context.sha}\``,
+              `- Run ID: \`${context.runId}\``,
+              `- Actions: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '- No package is being presented until the package build and verification pass.',
+            ].join('\n');
+            const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
+            const old=comments.find(c=>c.body?.includes(marker));
+            if(old) await github.rest.issues.updateComment({owner:context.repo.owner,repo:context.repo.repo,comment_id:old.id,body});
+            else await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:8,body});
