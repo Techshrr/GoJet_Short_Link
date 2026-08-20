@@ -6,8 +6,12 @@ cd "$ROOT"
 fail=0
 while IFS= read -r -d '' file; do
   if grep -q -E 'apt-get (update|install)|playwright install --with-deps' "$file"; then
-    if grep -q -F 'playwright install --with-deps' "$file"; then
+    # Audit executable Playwright bootstrap commands, not policy assertions that
+    # intentionally mention the forbidden string inside grep/echo diagnostics.
+    playwright_hits="$(grep -n -E 'playwright install --with-deps' "$file" | grep -v -E '(^|[[:space:]])(if[[:space:]]+)?grep[[:space:]]|echo[[:space:]]' || true)"
+    if [ -n "$playwright_hits" ]; then
       echo "$file: Playwright --with-deps is forbidden" >&2
+      printf '%s\n' "$playwright_hits" >&2
       fail=1
     fi
     if grep -q -E 'apt-get (update|install)' "$file" && ! grep -q -F 'scripts/aptstable.sh' "$file"; then
