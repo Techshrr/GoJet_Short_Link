@@ -10,7 +10,7 @@ const targets = [
   { name: "auth", url: "http://127.0.0.1:4173/login", shell: ".gj-auth-shell" },
   { name: "workspace", url: "http://127.0.0.1:4174/app/", shell: ".gj-product-shell[data-shell='workspace']" },
   { name: "admin", url: "http://127.0.0.1:4175/admin/", shell: ".gj-product-shell[data-shell='admin']" },
-  { name: "docs", url: "http://127.0.0.1:4176/docs/en/", shell: "body" },
+  { name: "docs", url: "http://127.0.0.1:4176/docs/", shell: "body" },
 ] as const;
 
 function attachRuntimeGuards(page: Page) {
@@ -31,6 +31,9 @@ async function expectDimension(page: Page, selector: string, dimension: "width" 
   expect(Math.abs(actual - expected), `${selector} ${dimension} expected ${expected}, got ${actual}`).toBeLessThanOrEqual(1);
 }
 async function screenshot(page: Page, testInfo: TestInfo, target: string, viewport: string) { await page.screenshot({ path: testInfo.outputPath(`${target}-${viewport}.png`), fullPage: true }); }
+async function fulfillJson(route: Parameters<Parameters<Page["route"]>[1]>[0], body: unknown) {
+  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+}
 
 for (const target of targets) {
   for (const viewport of viewports) {
@@ -38,15 +41,31 @@ for (const target of targets) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const runtime = attachRuntimeGuards(page);
       if (target.name === "auth") {
-        await page.route("**/api/public/auth/providers", (route) => route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ providers: [] }),
+        await page.route("**/api/public/auth/providers", (route) => fulfillJson(route, { providers: [] }));
+        await page.route("**/api/public/turnstile**", (route) => fulfillJson(route, { enabled: false, surface: "login" }));
+      }
+      if (target.name === "workspace") {
+        await page.route("**/api/session", (route) => fulfillJson(route, {
+          authenticated: true,
+          identity: { id: 1, email: "shell@example.test", displayName: "Shell User", emailVerified: true },
+          csrfToken: "shell-csrf",
         }));
-        await page.route("**/api/public/turnstile**", (route) => route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ enabled: false, surface: "login" }),
+        await page.route("**/api/workspaces", (route) => fulfillJson(route, { data: [{ id: 1, name: "Shell Workspace" }] }));
+        await page.route("**/api/workspaces/1/overview", (route) => fulfillJson(route, {
+          today_clicks: 0, month_clicks: 0, unique_visitors: 0, active_links: 0,
+          usage: { plan_name: "Starter", links: 0, link_limit: 100, qr_codes: 0, qr_limit: 25, members: 1, member_limit: 3, file_bytes: 0, file_storage_bytes: 1073741824 },
+          trend: [], recent: [], anomalies: [], generated_at: "2026-08-20T00:00:00Z",
+        }));
+      }
+      if (target.name === "admin") {
+        await page.route("**/api/admin/auth/me", (route) => fulfillJson(route, {
+          id: 1, email: "admin@example.test", display_name: "Shell Admin", role: "super_admin", permissions: ["*"],
+        }));
+        await page.route("**/api/admin/overview", (route) => fulfillJson(route, {
+          users: 0, workspaces: 0, active_links: 0, today_clicks: 0, mail_failures: 0, abuse_reports: 0, domain_errors: 0, file_scan_backlog: 0,
+        }));
+        await page.route("**/api/admin/analytics/overview", (route) => fulfillJson(route, {
+          today_clicks: 0, visits_30d: 0, unique_visitors_30d: 0, trend: [], sources: [], countries: [], devices: [], browsers: [], pipeline: {},
         }));
       }
       await page.goto(target.url, { waitUntil: "networkidle" });
