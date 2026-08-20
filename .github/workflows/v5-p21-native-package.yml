@@ -2,7 +2,7 @@ name: V5 P21 Native Package
 
 on:
   push:
-    branches: ["rebuild/v5-*"]
+    branches: ["rebuild/v5-*", "rebuild/v5.*"]
     paths:
       - "frontend/**"
       - "app/**"
