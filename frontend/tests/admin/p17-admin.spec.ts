@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const resourceRows = ["link","qr","file","text","bio"].map((resource_type,index)=>({resource_type,resource_id:index+1,title:`${resource_type} resource`,workspace:"Acme",owner:"owner@example.com",visibility:"public",status:"active",created_at:"2026-08-18T12:00:00Z"}));
 const getFixtures: Record<string, unknown> = {
+  "/api/admin/auth/me": { id: 2, email: "admin@example.com", display_name: "Admin", role: "super_admin", permissions: ["*"] },
   "/api/admin/overview": { users: 12, workspaces: 4, links: 38 },
   "/api/admin/diagnostics": { alert_count: 1, jobs: [{ name:"analytics-rollup",status:"completed",started_at:"2026-08-18T11:00:00Z",finished_at:"2026-08-18T11:01:00Z" }] },
   "/api/admin/users": { data: [{ id:1,email:"user@example.com",display_name:"User",status:"active",email_verified:true,created_at:"2026-08-18T12:00:00Z" }] },
