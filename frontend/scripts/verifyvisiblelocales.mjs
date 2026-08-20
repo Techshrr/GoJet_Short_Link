@@ -37,7 +37,8 @@ for(const relative of ['packages/ui/src/locale.tsx','packages/ui/src/locale-copy
 function explicitLocaleHelpers(source){
   const helpers=new Set();
   if(!source.includes('useLocale'))return helpers;
-  if(/const\s*\{[^}]*\btext\b[^}]*\}\s*=\s*useLocale\s*\(/s.test(source))helpers.add('text');
+  if(/const\s*\{[^}]*\btext\b(?!\s*:)[^}]*\}\s*=\s*useLocale\s*\(/s.test(source))helpers.add('text');
+  for(const match of source.matchAll(/\btext\s*:\s*([A-Za-z_$][\w$]*)/g))helpers.add(match[1]);
   const directC=/const\s+c(?:\s*:\s*Copy)?\s*=\s*\(\s*en\s*,\s*(?:cn|zh)\s*\)\s*=>[\s\S]{0,120}(?:locale\s*===\s*["']zh-CN["']|\bzh\s*\?)/.test(source);
   const copyHook=/function\s+useCopy\s*\([^)]*\)[\s\S]{0,240}locale\s*===\s*["']zh-CN["'][\s\S]{0,120}return[\s\S]{0,120}\(\s*en\s*,\s*zh\s*\)/.test(source)&&/const\s+c\s*=\s*useCopy\s*\(\s*\)/.test(source);
   if(directC||copyHook)helpers.add('c');
