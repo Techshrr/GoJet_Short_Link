@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/monitoring"
 	"github.com/Techshrr/GoJet_Short_Link/services/analyticsreconciler/internal/reconciler"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
@@ -25,6 +26,8 @@ func main() {
 	defer db.Close()
 	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
 	defer rdb.Close()
+	if err = rdb.Ping(ctx).Err(); err != nil { log.Fatalf("redis unavailable: %v", err) }
+	monitoring.StartRuntimeHeartbeat(ctx, rdb, "analyticsreconciler")
 	batch, _ := strconv.Atoi(getenv("ANALYTICS_RECONCILE_BATCH", "500"))
 	intervalSeconds, _ := strconv.Atoi(getenv("ANALYTICS_RECONCILE_INTERVAL_SECONDS", "60"))
 	if intervalSeconds < 10 {
