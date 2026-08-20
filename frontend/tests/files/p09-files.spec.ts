@@ -76,13 +76,11 @@ for (const viewport of viewports) {
 
     await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
     await expect(page.getByText("launch-kit.pdf")).toBeVisible();
-    await expect(page.locator('[data-file-id="11"]')).toHaveAttribute("data-file-state", "safe");
-    await expect(page.locator('[data-file-id="12"]')).toHaveAttribute("data-file-state", "scanning");
-    await expect(page.locator('[data-file-id="13"]')).toHaveAttribute("data-file-state", "blocked");
-    await expect(page.getByRole("link", { name: "Open share" })).toHaveCount(1);
-    await expect(page.locator('[data-file-id="12"]').getByText("Not public")).toBeVisible();
-    await expect(page.locator('[data-file-id="13"]').getByText("Not public")).toBeVisible();
-    await expect(page.getByText("Partial safety state")).toBeVisible();
+    await expect(page.getByText("Ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("Safety check in progress", { exact: true })).toBeVisible();
+    await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Not ready", exact: true })).toHaveCount(2);
 
     await page.getByRole("button", { name: "Upload file" }).click();
     const sheet = page.locator(".gj-side-sheet-popup");
@@ -93,10 +91,9 @@ for (const viewport of viewports) {
     else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
 
     await expect(page.getByText("Maximum file size: 100 MB", { exact: false })).toBeVisible();
-    await expect(page.getByText("Folder upload", { exact: true })).toBeVisible();
-    await page.getByLabel("Browse file").setInputFiles({ name: "browser-upload.txt", mimeType: "text/plain", buffer: Buffer.from("secure test file") });
+    await page.getByLabel("File").setInputFiles({ name: "browser-upload.txt", mimeType: "text/plain", buffer: Buffer.from("secure test file") });
     await page.getByRole("button", { name: "Upload file", exact: true }).last().click();
-    await expect(page.getByText("Processing").first()).toBeVisible();
+    await expect(page.getByText("Safety check in progress", { exact: true }).first()).toBeVisible();
     expect(state.uploads).toBe(1);
 
     await noOverflow(page);
@@ -109,9 +106,9 @@ test("P09 Files read-only RBAC", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await fixture(page, { viewer: true });
   await page.goto("/app/files?workspace=1");
-  await expect(page.getByText("Read-only file access")).toBeVisible();
+  await expect(page.getByText("Read-only files")).toBeVisible();
   await expect(page.getByRole("button", { name: "Upload file" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Open share" })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
 });
 
@@ -124,5 +121,7 @@ test("P09 Files empty state", async ({ page }) => {
 test("P09 Files disabled state", async ({ page }) => {
   await fixture(page, { failFiles: true });
   await page.goto("/app/files?workspace=1");
-  await expect(page.getByText("File service disabled")).toBeVisible();
+  await expect(page.getByText("Unable to load files")).toBeVisible();
+  await expect(page.getByText("file service temporarily unavailable")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 });
