@@ -66,12 +66,14 @@ jobs:
           PY
           echo "/tmp/gojet-fonttools/bin" >> "$GITHUB_PATH"
 
-      - name: Reject Azure Ubuntu mirror dependency
+      - name: Confirm package build path does not invoke apt
         run: |
-          if grep -R -n -F 'azure.archive.ubuntu.com/ubuntu' .github scripts deploy install.sh installer public/install 2>/dev/null; then
-            echo 'azure.archive.ubuntu.com/ubuntu is forbidden in the test-package path' >&2
+          set -euo pipefail
+          if grep -nE '(^|[[:space:]])(sudo[[:space:]]+)?apt(-get)?[[:space:]]' scripts/packagev5native.sh scripts/preparepdffonts.sh scripts/verifyv5nativepackage.sh; then
+            echo 'Test package build path must not invoke apt.' >&2
             exit 1
           fi
+          echo 'Package build path uses no apt mirror.'
 
       - name: Build Native test install package
         run: bash scripts/packagev5native.sh
@@ -116,7 +118,7 @@ jobs:
               `- Artifact: \`gojet-v5.0.2-test-install-${context.sha}\``,
               `- Actions: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               '- Package verification: PASS',
-              '- Azure Ubuntu apt mirror dependency: not used',
+              '- Test-package build invokes no apt mirror',
             ].join('\n');
             const comments=await github.paginate(github.rest.issues.listComments,{owner:context.repo.owner,repo:context.repo.repo,issue_number:8,per_page:100});
             const old=comments.find(c=>c.body?.includes(marker));
