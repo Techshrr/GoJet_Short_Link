@@ -26,7 +26,6 @@ const currentAnalytics = {
   destinations: [{ name: "primary", count: 120 }],
   recent: [{ timestamp: "2026-08-18T04:00:00Z", source: "direct", country: "SG", device: "mobile" }]
 };
-const previousAnalytics = { ...currentAnalytics, clicks: 80, unique_visitors: 60, bot_visits: 10 };
 
 async function installApiFixture(page: Page, options: FixtureOptions = {}): Promise<FixtureState> {
   const state: FixtureState = { requests: [], analyticsCalls: 0 };
@@ -57,8 +56,8 @@ async function installApiFixture(page: Page, options: FixtureOptions = {}): Prom
     if (method === "GET" && path === "/api/workspaces/1/bio-pages") return json(route, { data: [{ views: 34 }] });
     if (method === "GET" && path === "/api/workspaces/1/links/11/analytics") {
       state.analyticsCalls += 1;
-      if (options.emptyAnalytics) return json(route, { ...currentAnalytics, clicks: 0, unique_visitors: 0, bot_visits: 0, sources: [], countries: [], devices: [], browsers: [], operating_systems: [], utm_sources: [] });
-      return json(route, state.analyticsCalls === 1 ? currentAnalytics : previousAnalytics);
+      if (options.emptyAnalytics) return json(route, { ...currentAnalytics, clicks: 0, unique_visitors: 0, bot_visits: 0, sources: [], countries: [], devices: [], browsers: [], recent: [] });
+      return json(route, currentAnalytics);
     }
     return json(route, { error: `Unhandled P07 fixture route: ${method} ${path}` }, 404);
   });
@@ -85,16 +84,15 @@ for (const viewport of viewports) {
     await page.goto("/app/analytics?workspace=1");
 
     await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
-    await expect(page.getByText("Today clicks")).toBeVisible();
-    await expect(page.getByText("redis-realtime+mysql-history")).toBeVisible();
-    await expect(page.getByText("QR visits")).toBeVisible();
+    await expect(page.getByText("Today", { exact: true })).toBeVisible();
+    await expect(page.getByText("31", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("QR scans")).toBeVisible();
     await expect(page.getByText("15", { exact: true }).first()).toBeVisible();
-    await expect(page.getByLabel("Resource filter")).toBeVisible();
-    await expect(page.getByLabel("Domain filter")).toBeVisible();
-    await expect(page.getByLabel("Campaign filter")).toBeVisible();
-    await expect(page.getByLabel("Country filter")).toBeDisabled();
-    await expect(page.getByLabel("Device filter")).toBeDisabled();
+    await expect(page.getByLabel("Link")).toBeVisible();
+    await expect(page.getByLabel("Domain")).toBeVisible();
+    await expect(page.getByLabel("Campaign")).toBeVisible();
     await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+    await expect(page.getByText("redis-realtime+mysql-history")).toHaveCount(0);
 
     await expectNoHorizontalOverflow(page);
     expect(runtimeErrors).toEqual([]);
@@ -103,27 +101,21 @@ for (const viewport of viewports) {
   });
 }
 
-test("P07 resource analytics, compare, domain/campaign resource filtering and dimension focus", async ({ page }) => {
+test("P07 link analytics respects domain/campaign selection and shows real dimensions", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const state = await installApiFixture(page);
   await page.goto("/app/analytics?workspace=1");
-  await page.getByLabel("Domain filter").selectOption("go.gt");
+  await page.getByLabel("Domain").selectOption("go.gt");
   await expect.poll(() => state.requests.some((entry) => entry.includes("GET /api/workspaces/1/links/presentation") && entry.includes("domain=go.gt"))).toBe(true);
-  await page.getByLabel("Campaign filter").selectOption("7");
+  await page.getByLabel("Campaign").selectOption("7");
   await expect.poll(() => state.requests.some((entry) => entry.includes("campaign=7"))).toBe(true);
-  await page.getByLabel("Resource filter").selectOption("11");
+  await page.getByLabel("Link").selectOption("11");
   await expect(page.getByText("Unique visitors")).toBeVisible();
-  await expect(page.getByLabel("Country filter")).toBeEnabled();
-  await expect(page.getByLabel("Device filter")).toBeEnabled();
-  await page.getByLabel("Country filter").selectOption("SG");
-  await page.getByLabel("Device filter").selectOption("mobile");
-  const countriesSection = page.locator('.analytics-dimension[aria-label="Countries"]');
-  const devicesSection = page.locator('.analytics-dimension[aria-label="Devices"]');
-  await expect(countriesSection.getByText("SG", { exact: true })).toBeVisible();
-  await expect(devicesSection.getByText("mobile", { exact: true })).toBeVisible();
-  await page.locator(".analytics-compare input").check();
-  await expect.poll(() => state.analyticsCalls).toBeGreaterThanOrEqual(2);
-  await expect(page.getByText("+50.0% vs previous")).toBeVisible();
+  await expect(page.locator('.analytics-dimension[aria-label="Countries / regions"]').getByText("SG", { exact: true })).toBeVisible();
+  await expect(page.locator('.analytics-dimension[aria-label="Devices"]').getByText("mobile", { exact: true })).toBeVisible();
+  await expect(page.locator('.analytics-dimension[aria-label="Browsers"]').getByText("Chrome", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent visits" })).toBeVisible();
+  await expect.poll(() => state.analyticsCalls).toBeGreaterThanOrEqual(1);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -132,7 +124,6 @@ test("P07 analytics RBAC denies data-plane requests", async ({ page }) => {
   const state = await installApiFixture(page, { viewer: true });
   await page.goto("/app/analytics?workspace=1");
   await expect(page.getByText("Analytics permission required")).toBeVisible();
-  await expect(page.getByText("Analytics unavailable")).toBeVisible();
   expect(state.requests.some((entry) => entry.includes("/overview"))).toBe(false);
   expect(state.requests.some((entry) => entry.includes("/links/11/analytics"))).toBe(false);
 });
@@ -141,8 +132,8 @@ test("P07 partial resource error preserves healthy counters", async ({ page }) =
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { partialResources: true });
   await page.goto("/app/analytics?workspace=1");
-  await expect(page.getByText("Partial resource data")).toBeVisible();
-  await expect(page.getByText("QR visits")).toBeVisible();
+  await expect(page.getByText("Some content data is temporarily unavailable")).toBeVisible();
+  await expect(page.getByText("QR scans")).toBeVisible();
   await expect(page.getByText("15", { exact: true }).first()).toBeVisible();
 });
 
@@ -150,16 +141,17 @@ test("P07 rate-limited overview becomes explicit error state", async ({ page }) 
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { failOverview: true });
   await page.goto("/app/analytics?workspace=1");
-  await expect(page.getByText("无法加载工作区分析")).toBeVisible();
+  await expect(page.getByText("Unable to load workspace analytics")).toBeVisible();
   await expect(page.getByText("analytics rate limited")).toBeVisible();
-  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 });
 
 test("P07 empty link analytics state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { emptyAnalytics: true });
   await page.goto("/app/analytics?workspace=1");
-  await page.getByLabel("Resource filter").selectOption("11");
-  await expect(page.getByText("No countries data")).toBeVisible();
-  await expect(page.getByText("No devices data")).toBeVisible();
+  await page.getByLabel("Link").selectOption("11");
+  await expect(page.locator('.analytics-dimension[aria-label="Countries / regions"]').getByText("No data")).toBeVisible();
+  await expect(page.locator('.analytics-dimension[aria-label="Devices"]').getByText("No data")).toBeVisible();
+  await expect(page.getByText("No visits")).toBeVisible();
 });
