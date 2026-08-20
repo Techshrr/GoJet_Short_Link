@@ -1,2 +1,2 @@
 export * from "./index";
-export { GoJetLocaleProvider, localized, normalizeLocale, useLocale, type GoJetLocale } from "./locale";
+export { LocaleProvider, LocaleSwitch, LocalizedSurface, localized, localizedError, useLocale, type GoJetLocale } from "./locale";
