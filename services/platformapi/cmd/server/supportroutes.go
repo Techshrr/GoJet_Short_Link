@@ -26,6 +26,11 @@ func (s *server) registerSupportAndBotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments", s.admin("tickets.manage", s.adminListSupportAttachments))
 	mux.HandleFunc("GET /api/admin/support/tickets/{ticket}/attachments/{attachment}", s.admin("tickets.manage", s.adminDownloadSupportAttachment))
 
+	// V5.0.3 uses a separate authoritative runtime-health endpoint rather than
+	// the legacy expected-service inventory. The latter remains available only
+	// for compatibility with older clients.
+	mux.HandleFunc("GET /api/admin/runtime-services", s.admin("operations.manage", s.adminRuntimeServicesV503))
+
 	// Workspace link-domain and official-link creation routes are owned by
 	// registerProductRoutes. Plan creation is owned by
 	// registerBillingPresentationRoutes. Keeping one registration owner per
