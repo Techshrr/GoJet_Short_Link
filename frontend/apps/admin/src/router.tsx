@@ -1,5 +1,6 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
+import { useLocale } from "@gojet/ui";
 import { AdminShell } from "./AdminShell";
 
 const AdminOverviewPage = lazy(() => import("./routes/AdminOverviewPage"));
@@ -15,6 +16,7 @@ const OAuthPage = lazy(() => import("./routes/OAuthPage"));
 const AnnouncementsPage = lazy(() => import("./routes/AnnouncementsPageV503"));
 const GeneralSettingsPage = lazy(() => import("./routes/GeneralSettingsPageV503"));
 const TurnstilePage = lazy(() => import("./routes/TurnstilePageV503"));
+const ServicesPage = lazy(() => import("./routes/ServicesPageV503"));
 const core = (name: keyof typeof import("./routes/AdminP17Core")) => lazy(() => import("./routes/AdminP17Core").then((module) => ({ default: module[name] as ComponentType })));
 const platform = (name: keyof typeof import("./routes/AdminP17OpsPlatform")) => lazy(() => import("./routes/AdminP17OpsPlatform").then((module) => ({ default: module[name] as ComponentType })));
 const resource = (name: keyof typeof import("./routes/AdminResourcePages")) => lazy(() => import("./routes/AdminResourcePages").then((module) => ({ default: module[name] as ComponentType })));
@@ -31,7 +33,6 @@ const AdministratorsPage = core("AdministratorsPage");
 const RolesPage = core("RolesPage");
 const PermissionsPage = core("PermissionsPage");
 const JobsPage = platform("JobsPage");
-const ServicesPage = platform("ServicesPage");
 const OfficialDomainsPage = platform("OfficialDomainsPage");
 const StoragePage = platform("StoragePage");
 const IntegrationsPage = platform("IntegrationsPage");
@@ -44,7 +45,9 @@ const AuditPage = lazy(() => import("./routes/TrustSafetyPages").then((module) =
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return <AdminShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet Admin</span><p>正在加载…</p></main>}><Outlet /></Suspense></AdminShell>;
+  const { locale } = useLocale();
+  const loading = locale === "zh-CN" ? "正在加载…" : "Loading…";
+  return <AdminShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet Admin</span><p>{loading}</p></main>}><Outlet /></Suspense></AdminShell>;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
