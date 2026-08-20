@@ -76,7 +76,7 @@ for (const viewport of viewports) {
     await expect(page.getByRole("heading", { name: "Domains ready for publishing" })).toBeVisible();
     await expect(page.getByText("go.gt")).toBeVisible();
     await expect(page.getByRole("heading", { name: "go.example.com" })).toBeVisible();
-    await expect(page.getByText("DNS ownership")).toBeVisible();
+    await expect(page.getByText("DNS ownership", { exact: true })).toBeVisible();
     await expect(page.getByText("HTTPS", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Verify now" })).toBeVisible();
 
