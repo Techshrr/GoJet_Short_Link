@@ -75,13 +75,16 @@ jobs:
           cache: npm
           cache-dependency-path: packagelock.json
 
+      - name: Normalize Ubuntu package sources
+        run: bash scripts/aptstable.sh
+
       - name: Install Analytics Dashboard dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y default-mysql-client redis-tools nginx
           bash scripts/npmci.sh
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Validate Analytics Dashboard sources
         run: |
