@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Toast as BaseToast } from "@base-ui/react/toast";
 import { CheckCircle2, Info, TriangleAlert, X } from "@gojet/icons";
+import { useLocale } from "./locale";
 
 export type ToastTone = "info" | "success" | "warning" | "danger";
 export const toastManager = BaseToast.createToastManager();
@@ -16,6 +17,7 @@ function ToastIcon({ tone }: { tone: ToastTone }) {
 }
 
 function ToastList() {
+  const { text } = useLocale();
   const { toasts } = BaseToast.useToastManager();
   return toasts.map((toast) => {
     const tone = (["info", "success", "warning", "danger"] as const).includes(toast.type as ToastTone) ? toast.type as ToastTone : "info";
@@ -27,7 +29,7 @@ function ToastList() {
             <BaseToast.Title className="gj-toast-title" />
             <BaseToast.Description className="gj-toast-description" />
           </div>
-          <BaseToast.Close className="gj-toast-close" aria-label="关闭通知"><X size={16} strokeWidth={1.75} aria-hidden="true" /></BaseToast.Close>
+          <BaseToast.Close className="gj-toast-close" aria-label={text("Close notification", "关闭通知")}><X size={16} strokeWidth={1.75} aria-hidden="true" /></BaseToast.Close>
         </BaseToast.Content>
       </BaseToast.Root>
     );
