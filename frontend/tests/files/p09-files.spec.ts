@@ -91,7 +91,7 @@ for (const viewport of viewports) {
     else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
 
     await expect(page.getByText("Maximum file size: 100 MB", { exact: false })).toBeVisible();
-    await page.getByLabel("File").setInputFiles({ name: "browser-upload.txt", mimeType: "text/plain", buffer: Buffer.from("secure test file") });
+    await sheet.locator("#file-upload").setInputFiles({ name: "browser-upload.txt", mimeType: "text/plain", buffer: Buffer.from("secure test file") });
     await page.getByRole("button", { name: "Upload file", exact: true }).last().click();
     await expect(page.getByText("Safety check in progress", { exact: true }).first()).toBeVisible();
     expect(state.uploads).toBe(1);
