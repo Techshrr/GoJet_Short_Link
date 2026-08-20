@@ -86,8 +86,8 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const manifest = JSON.parse(fs.readFileSync('apps/workspace/dist/.vite/manifest.json', 'utf8'));
-          const entry = Object.values(manifest).find((item) => item && item.src === 'src/routes/BioPage.tsx');
-          if (!entry || entry.isDynamicEntry !== true) throw new Error('BioPage.tsx is not a dynamic entry');
+          const entry = Object.values(manifest).find((item) => item && item.src === 'src/routes/BioPageV503.tsx');
+          if (!entry || entry.isDynamicEntry !== true) throw new Error('BioPageV503.tsx is not a dynamic entry');
           NODE
 
       - name: Test P05-P11 Go backend, public Bio safety, fileworker and analytics runtime
