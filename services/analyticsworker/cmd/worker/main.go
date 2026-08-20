@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/monitoring"
 	"github.com/Techshrr/GoJet_Short_Link/services/analyticsworker/internal/worker"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
@@ -31,6 +32,7 @@ func main() {
 	if err = rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("redis unavailable: %v", err)
 	}
+	monitoring.StartRuntimeHeartbeat(ctx, rdb, "analyticsworker")
 	batch, _ := strconv.ParseInt(getenv("ANALYTICS_BATCH_SIZE", "100"), 10, 64)
 	w := worker.New(rdb, db, "gojet:analytics:events", getenv("ANALYTICS_GROUP", "gojet-mysql"), getenv("ANALYTICS_CONSUMER", "worker-1"), batch)
 	log.Printf("starting analytics worker %s", w)
