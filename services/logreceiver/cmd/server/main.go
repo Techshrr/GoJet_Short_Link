@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/Techshrr/GoJet_Short_Link/app/logstore"
+	"github.com/Techshrr/GoJet_Short_Link/app/monitoring"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -25,6 +27,11 @@ func main() {
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
+	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
+	defer rdb.Close()
+	rootCtx := context.Background()
+	if err = rdb.Ping(rootCtx).Err(); err != nil { log.Fatal(err) }
+	monitoring.StartRuntimeHeartbeat(rootCtx, rdb, "logreceiver")
 	store := logstore.New(db)
 	token := required("LOG_INGEST_TOKEN")
 	mux := http.NewServeMux()
@@ -53,7 +60,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			for {
-				n, e := store.Purge(context.Background(), 1000)
+				n, e := store.Purge(rootCtx, 1000)
 				if e != nil || n < 1000 {
 					break
 				}
