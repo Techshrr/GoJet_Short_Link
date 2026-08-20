@@ -31,6 +31,7 @@ async function fixture(page: Page, options: Options = {}): Promise<State> {
     const method = request.method();
     state.requests.push(`${method} ${path}${url.search}`);
 
+    if (method === "GET" && path === "/api/session") return json(route, { authenticated: true, identity: { id: 7, email: "owner@example.com", displayName: "P09 Owner", emailVerified: true }, csrfToken: "p09-csrf" });
     if (method === "GET" && path === "/api/workspaces") return json(route, { data: [{ id: 1, name: "P09 Workspace", type: "personal", role: options.viewer ? "viewer" : "owner" }] });
     if (method === "GET" && path === "/api/workspaces/1/fileshares") {
       if (options.failFiles) return json(route, { error: "file service temporarily unavailable" }, 503);
