@@ -10,9 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Techshrr/GoJet_Short_Link/app/monitoring"
 	"github.com/Techshrr/GoJet_Short_Link/app/objectstorage"
 	"github.com/Techshrr/GoJet_Short_Link/app/resources"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -32,6 +34,10 @@ func main() {
 	clamEndpoint := strings.TrimSpace(getenv("CLAMAV_ADDRESS", "disabled"))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	rdb := redis.NewClient(&redis.Options{Addr: getenv("REDIS_ADDRESS", "redis:6379"), Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD")})
+	defer rdb.Close()
+	if err = rdb.Ping(ctx).Err(); err != nil { log.Fatal(err) }
+	monitoring.StartRuntimeHeartbeat(ctx, rdb, "fileworker")
 
 	if clamEndpoint == "" || clamEndpoint == "disabled" {
 		log.Printf("file scanner is disabled because ClamAV is unavailable; file shares will remain quarantined until the scanner is configured")
