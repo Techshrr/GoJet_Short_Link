@@ -27,11 +27,11 @@ done < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*
 
 # The centralized preflight itself must be strict and must leave no active Azure
 # archive entry after normalization.
-grep -Fq 'azure.archive.ubuntu.com' scripts/aptstable.sh
-grep -Fq 'https://archive.ubuntu.com/ubuntu' scripts/aptstable.sh
-grep -Fq 'Acquire::Retries' scripts/aptstable.sh
-grep -Fq 'ForceIPv4' scripts/aptstable.sh
-grep -Fq 'azure.archive.ubuntu.com still present after normalization' scripts/aptstable.sh
+grep -Fq 'azure.archive.ubuntu.com' scripts/aptstable.sh || { echo 'aptstable.sh does not normalize the Azure archive host' >&2; exit 1; }
+grep -Fq 'https://archive.ubuntu.com/ubuntu' scripts/aptstable.sh || { echo 'aptstable.sh does not select the stable Ubuntu archive' >&2; exit 1; }
+grep -Fq 'Acquire::Retries' scripts/aptstable.sh || { echo 'aptstable.sh does not configure retries' >&2; exit 1; }
+grep -Fq 'ForceIPv4' scripts/aptstable.sh || { echo 'aptstable.sh does not force deterministic IPv4 package fetches' >&2; exit 1; }
+grep -Fq 'still present after normalization' scripts/aptstable.sh || { echo 'aptstable.sh does not fail closed when Azure sources survive normalization' >&2; exit 1; }
 
 if [ "$fail" -ne 0 ]; then
   exit 1
