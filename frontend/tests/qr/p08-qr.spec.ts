@@ -19,6 +19,7 @@ async function fixture(page: Page, options: Options = {}): Promise<State> {
   await page.route("**/api/**", async (route) => {
     const request = route.request(); const url = new URL(request.url()); const path = url.pathname; const method = request.method();
     state.requests.push(`${method} ${path}${url.search}`);
+    if (method === "GET" && path === "/api/session") return json(route, { authenticated: true, identity: { id: 7, email: "owner@example.com", displayName: "P08 Owner", emailVerified: true }, csrfToken: "p08-csrf" });
     if (method === "GET" && path === "/api/workspaces") return json(route, { data: [{ id: 1, name: "P08 Workspace", type: "personal", role: options.viewer ? "viewer" : "owner" }] });
     if (method === "GET" && path === "/api/workspaces/1/links/presentation") return json(route, { data: [{ id: 10, workspace_id: 1, created_by: 1, code: "launch", domain: "go.example.com", destination: "https://example.com", title: "Launch", status: "active", redirect_status: 302, one_time: false }], total: 1, limit: 100, offset: 0 });
     if (method === "GET" && path === "/api/workspaces/1/link-risks") return json(route, { data: [{ link_id: 10, automatic_decision: "allow", effective_decision: "allow", score: 0, provider: "fixture", pending: false, manual: false }] });
