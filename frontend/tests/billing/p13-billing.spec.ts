@@ -38,16 +38,16 @@ for (const viewport of viewports) {
   test(`P13 Workspace Billing · ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const errors = runtimeErrors(page); const state = await fixture(page); await page.goto("/app/billing?workspace=1");
-    await expect(page.getByRole("heading", { name: "Billing", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Billing & plans", exact: true })).toBeVisible();
     await expect(page.getByText("Quota usage")).toBeVisible();
     await expect(page.getByText("GJ-202608-0091")).toBeVisible();
-    await expect(page.getByText("ecb · 1.360000000000")).toBeVisible();
+    await expect(page.getByText("ecb · 1.360000000000", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "Pay", exact: true }).click();
-    const sheet = page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Payment method").selectOption("stripe"); await sheet.getByRole("button", { name: "Start payment" }).click();
+    const sheet = page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Payment method").selectOption("stripe"); await sheet.getByRole("button", { name: "Continue to payment", exact: true }).click();
     expect(state.checkoutCount).toBe(1);
     await expect(page.getByText("Payment started", { exact: true })).toBeVisible();
-    await expect(page.getByText("The invoice is not shown as paid until the server confirms it.", { exact: false })).toBeVisible();
-    await expect(page.getByText("pending", { exact: true })).toBeVisible();
+    await expect(page.getByText("Payment order GJP-501 is waiting for the payment provider to confirm the result.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({ path: `test-results/p13-billing-${viewport.name}.png`, fullPage: true });
   });
 }
