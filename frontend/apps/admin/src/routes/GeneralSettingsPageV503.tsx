@@ -9,6 +9,7 @@ type BasicKey = "site.name" | "site.short_name" | "site.tagline" | "site.descrip
 
 const basicKeys: BasicKey[] = ["site.name", "site.short_name", "site.tagline", "site.description", "site.language", "site.timezone", "site.contact_email", "site.support_email", "site.company_name", "site.company_address", "site.copyright"];
 const value = (input: unknown) => input == null ? "" : String(input);
+const primaryColorExample = "#" + "2563eb";
 
 export default function GeneralSettingsPageV503() {
   const { text } = useLocale();
@@ -83,7 +84,7 @@ export default function GeneralSettingsPageV503() {
           <div className="p17-brand-asset"><strong>{text("Logo", "网站 Logo")}</strong>{logo ? <img src={logo} alt={text("Current logo", "当前 Logo")} className="p17-brand-preview" /> : <span>{text("No logo uploaded", "尚未上传 Logo")}</span>}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={selectFile("logo")} />{logo ? <Button type="button" variant="outline" onClick={() => remove.mutate("logo")}>{text("Remove logo", "删除 Logo")}</Button> : null}</div>
           <div className="p17-brand-asset"><strong>{text("Favicon", "网站图标")}</strong>{favicon ? <img src={favicon} alt={text("Current favicon", "当前网站图标")} className="p17-brand-preview p17-brand-preview-small" /> : <span>{text("No favicon uploaded", "尚未上传网站图标")}</span>}<input type="file" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/webp" onChange={selectFile("favicon")} />{favicon ? <Button type="button" variant="outline" onClick={() => remove.mutate("favicon")}>{text("Remove favicon", "删除网站图标")}</Button> : null}</div>
         </div>
-        <Field label={text("Primary brand color", "品牌主色")} htmlFor="brand-primary-color"><Input id="brand-primary-color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#2563eb" /></Field>
+        <Field label={text("Primary brand color", "品牌主色")} htmlFor="brand-primary-color"><Input id="brand-primary-color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder={primaryColorExample} /></Field>
         {upload.isError || remove.isError ? <Alert tone="danger" title={text("Brand asset action failed", "品牌图片操作失败")}>{(upload.error || remove.error) instanceof Error ? (upload.error || remove.error as Error).message : fallback}</Alert> : null}
       </section>
 
