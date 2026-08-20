@@ -38,6 +38,7 @@ async function installApiFixture(page: Page, options: FixtureOptions = {}): Prom
     const method = request.method();
     state.requests.push(`${method} ${path}${url.search}`);
 
+    if (method === "GET" && path === "/api/session") return json(route, { authenticated: true, identity: { id: 7, email: "owner@example.com", displayName: "P07 Owner", emailVerified: true }, csrfToken: "p07-csrf" });
     if (method === "GET" && path === "/api/workspaces") return json(route, { data: [{ id: 1, name: "P07 Workspace", type: "personal", role: options.viewer ? "viewer" : "owner" }] });
     if (method === "GET" && path === "/api/workspaces/1/links/capabilities") return json(route, { role: options.viewer ? "viewer" : "owner", can_view: true, can_edit: !options.viewer, can_analytics: !options.viewer, can_manage: !options.viewer });
     if (method === "GET" && path === "/api/workspaces/1/link-domains") return json(route, { data: [{ hostname: "go.gt", label: "GoJet", source: "official", is_default: true }] });
