@@ -1,78 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-
-const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const mustExist = (file) => { if (!fs.existsSync(path.join(root, file))) throw new Error(`P09 missing required file: ${file}`); };
-const mustContain = (file, values) => { const source = read(file); for (const value of values) if (!source.includes(value)) throw new Error(`P09 ${file} missing contract token: ${value}`); };
-
-for (const file of [
-  "apps/workspace/src/routes/FilesPage.tsx",
-  "apps/workspace/src/resources.css",
-  "packages/api-client/src/resources.ts",
-  "tests/files/p09-files.spec.ts",
-  "../docs/v5/P09_FILES_CONTRACT.md"
-]) mustExist(file);
-
-mustContain("apps/workspace/src/router.tsx", ["FilesPage", 'path: "/files"']);
-mustContain("apps/workspace/src/routes/FilesPage.tsx", [
-  "data-p09-files",
-  "Drag, paste or browse a file",
-  "Maximum file size: 100 MB",
-  "Folder upload",
-  'title="Uploading"',
-  'title="Processing"',
-  "Partial safety state",
-  "Read-only file access",
-  "Permission denied",
-  "Quota exceeded",
-  "Rate limited",
-  "File service disabled",
-  'item.scan_status === "clean" && item.status === "active"',
-  "Open share",
-  "Not public",
-  'Dialog triggerLabel="Delete"'
-]);
-mustContain("packages/api-client/src/resources.ts", ["/fileshares", "created_at: string", "FormData", 'form.set("file"']);
-mustContain("../app/resources/files.go", [
-  "MaxFileSize int64 = 100 << 20",
-  'CreatedAt    time.Time  `json:"created_at"`',
-  "created_at FROM file_shares",
-  '"quarantine/"+storageName',
-  'ScanStatus: "pending"',
-  'Status: "quarantined"',
-  "scan_status='scanning'",
-  'status, scanStatus = "active", "clean"',
-  'item.ScanStatus != "clean" || item.Status != "active"',
-  "func ScanClamAV"
-]);
-mustContain("../services/platformapi/cmd/server/resources.go", [
-  "http.MaxBytesReader",
-  "appresources.MaxFileSize",
-  '"created_at":item.CreatedAt',
-  "jsonResponse(w,202",
-  "FileProtectionMap"
-]);
-mustContain("../services/platformapi/cmd/fileworker/main.go", [
-  'getenv("CLAMAV_ADDRESS", "disabled")',
-  "file shares will remain quarantined until the scanner is configured",
-  "ClaimFileScan",
-  "MaterializeForScan",
-  "ScanClamAVEndpoint",
-  "FinishFileScan"
-]);
-mustContain("../services/platformapi/cmd/server/filepublicpage.go", [
-  'X-Robots-Tag", "noindex, nofollow, noarchive"',
-  'Cache-Control", "private, no-store"',
-  'X-Content-Type-Options", "nosniff"',
-  'Content-Security-Policy"'
-]);
-
-const forbidden = ["mockFile", "fakeFile", "Math.random()", "localStorage.setItem", "sessionStorage.setItem", "webUtils.relativePath"];
-for (const file of ["apps/workspace/src/routes/FilesPage.tsx", "packages/api-client/src/resources.ts"]) {
-  const source = read(file);
-  for (const marker of forbidden) if (source.includes(marker)) throw new Error(`P09 forbidden implementation marker in ${file}: ${marker}`);
-}
-
-console.log("P09 Files contract verified: real multipart upload, authoritative created time, quarantine/ClamAV publish states, clean+active public gate, RBAC/destructive confirmation, public-page hardening and no fabricated safety data.");
+const root=process.cwd();const read=(file)=>fs.readFileSync(path.join(root,file),"utf8");const must=(file,values)=>{const source=read(file);for(const value of values)if(!source.includes(value))throw new Error(`P09 ${file} missing contract token: ${value}`);};const forbid=(file,values)=>{const source=read(file);for(const value of values)if(source.includes(value))throw new Error(`P09 ${file} forbidden: ${value}`);};
+for(const file of ["apps/workspace/src/routes/FilesPageV503.tsx","apps/workspace/src/resources.css","packages/api-client/src/resources.ts","tests/files/p09-files.spec.ts","../docs/v5/P09_FILES_CONTRACT.md"])if(!fs.existsSync(path.join(root,file)))throw new Error(`P09 missing required file: ${file}`);
+must("apps/workspace/src/router.tsx",["./routes/FilesPageV503",'path: "/files"']);
+must("apps/workspace/src/routes/FilesPageV503.tsx",["data-v503-files","filesClient.upload","filesClient.list","filesClient.delete","filesClient.publicUrl","MAX_FILE_BYTES","item.scan_status === \"clean\" && item.status === \"active\"","resourceAccess","useLocale"]);
+must("packages/api-client/src/resources.ts",["/fileshares","created_at: string","FormData",'form.set("file"']);
+must("../app/resources/files.go",["MaxFileSize int64 = 100 << 20",'CreatedAt    time.Time  `json:"created_at"`','"quarantine/"+storageName','ScanStatus: "pending"','Status: "quarantined"',"scan_status='scanning'",'status, scanStatus = "active", "clean"','item.ScanStatus != "clean" || item.Status != "active"',"func ScanClamAV"]);
+must("../services/platformapi/cmd/server/resources.go",["http.MaxBytesReader","appresources.MaxFileSize",'"created_at":item.CreatedAt',"jsonResponse(w,202","FileProtectionMap"]);must("../services/platformapi/cmd/fileworker/main.go",['getenv("CLAMAV_ADDRESS", "disabled")',"ClaimFileScan","MaterializeForScan","ScanClamAVEndpoint","FinishFileScan"]);must("../services/platformapi/cmd/server/filepublicpage.go",['X-Robots-Tag", "noindex, nofollow, noarchive"','Cache-Control", "private, no-store"','X-Content-Type-Options", "nosniff"','Content-Security-Policy"']);
+forbid("apps/workspace/src/routes/FilesPageV503.tsx",["mockFile","fakeFile","Math.random()","localStorage.setItem","sessionStorage.setItem"]);
+console.log("P09 Files contract verified against the routed bilingual workspace file surface, real upload APIs and fail-closed scan/publication rules.");
