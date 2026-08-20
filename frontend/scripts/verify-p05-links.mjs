@@ -18,9 +18,9 @@ requireAll('P05 list/create implementation', list, [
 forbid('P05 list runtime fixtures', list, ['mockLinks','fixtureLinks','demoLinks','localStorage.setItem','sessionStorage.setItem']);
 
 const detail = readFrontend('apps/workspace/src/routes/LinkDetailPageV503.tsx');
-requireAll('P05 detail implementation', detail, ['data-v503-link-detail','linksClient.get','linksClient.capabilities','linksClient.risk','LinkDetailPanelsV503','useLocale']);
+requireAll('P05 detail implementation', detail, ['data-v503-link-detail','linksClient.get','linksClient.capabilities','linksClient.risks','linksClient.update','LinkDetailPanelsV503','useLocale']);
 const panels = readFrontend('apps/workspace/src/links/LinkDetailPanelsV503.tsx');
-requireAll('P05 detail editors', panels, ['validateLinkRouting','linksClient.updateRouting','linksClient.updateDestinations','linksClient.updateUTM','linksClient.updateAccess','linksClient.restoreVersion','linksClient.qr','useLocale']);
+requireAll('P05 detail editors', panels, ['validateLinkRouting','linksClient.analytics','linksClient.qrUrl','linksClient.bulkDelete','linksClient.versions','linksClient.restore','useLocale']);
 forbid('P05 detail persistence', panels, ['localStorage.setItem','sessionStorage.setItem']);
 
 const api = readFrontend('packages/api-client/src/links.ts');
