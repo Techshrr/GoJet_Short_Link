@@ -65,13 +65,15 @@ test('legal pages contain detailed content instead of placeholder copy', async (
     await page.goto(route);
     await expect(page.locator('.legal-section')).toHaveCount(await page.locator('.legal-section').count());
     expect(await page.locator('.legal-section').count()).toBeGreaterThanOrEqual(7);
-    await expect(page.locator('.legal-note')).toBeVisible();
-    await expect(page.locator('.legal-content').getByRole('link', { name: 'Report Abuse', exact: true })).toBeVisible();
+    const related = page.locator('.legal-note');
+    await expect(related).toBeVisible();
+    await expect(related.getByRole('link', { name: 'Report Abuse', exact: true })).toBeVisible();
 
     await page.goto(`/zh-CN${route}`);
     expect(await page.locator('.legal-section').count()).toBeGreaterThanOrEqual(7);
-    await expect(page.locator('.legal-note')).toBeVisible();
-    await expect(page.locator('.legal-content').getByRole('link', { name: '举报滥用', exact: true })).toBeVisible();
+    const relatedZh = page.locator('.legal-note');
+    await expect(relatedZh).toBeVisible();
+    await expect(relatedZh.getByRole('link', { name: '举报滥用', exact: true })).toBeVisible();
   }
 });
 
