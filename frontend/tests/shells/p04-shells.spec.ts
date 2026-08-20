@@ -64,9 +64,7 @@ for (const target of targets) {
         await page.route("**/api/admin/overview", (route) => fulfillJson(route, {
           users: 0, workspaces: 0, active_links: 0, today_clicks: 0, mail_failures: 0, abuse_reports: 0, domain_errors: 0, file_scan_backlog: 0,
         }));
-        await page.route("**/api/admin/analytics/overview", (route) => fulfillJson(route, {
-          today_clicks: 0, visits_30d: 0, unique_visitors_30d: 0, trend: [], sources: [], countries: [], devices: [], browsers: [], pipeline: {},
-        }));
+        await page.route("**/api/admin/diagnostics", (route) => fulfillJson(route, { alert_count: 0, alerts: 0 }));
       }
       await page.goto(target.url, { waitUntil: "networkidle" });
       await expect(page.locator(target.shell).first()).toBeVisible();
