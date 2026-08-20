@@ -164,7 +164,7 @@ for (const viewport of viewports) {
       await page.getByRole("button", { name: "Edit" }).click();
       const settingsPanel = page.getByRole("tabpanel", { name: "Settings" });
       await expect(settingsPanel.getByText("Link settings")).toBeVisible();
-      await settingsPanel.getByLabel("Change reason").fill("P05 browser gate update");
+      await settingsPanel.getByLabel("Reason for change").fill("P05 browser gate update");
       await settingsPanel.getByRole("button", { name: "Save settings" }).click();
       await expect.poll(() => state.putBody).not.toBeNull();
       const body = state.putBody as { reason?: string; link?: { destination?: string; redirect_status?: number } };
@@ -192,7 +192,7 @@ test("P05 Links API error state", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   await installApiFixture(page, { failList: true });
   await page.goto("/app/links?workspace=1");
-  await expect(page.getByText("无法加载链接")).toBeVisible();
+  await expect(page.getByText("Unable to load links")).toBeVisible();
   await expect(page.getByText("links temporarily unavailable")).toBeVisible();
-  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 });
