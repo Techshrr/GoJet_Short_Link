@@ -153,5 +153,5 @@ test("P07 empty link analytics state", async ({ page }) => {
   await page.getByLabel("Link").selectOption("11");
   await expect(page.locator('.analytics-dimension[aria-label="Countries / regions"]').getByText("No data")).toBeVisible();
   await expect(page.locator('.analytics-dimension[aria-label="Devices"]').getByText("No data")).toBeVisible();
-  await expect(page.getByText("No visits")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No visits", exact: true })).toBeVisible();
 });
