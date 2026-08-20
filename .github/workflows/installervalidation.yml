@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - rebuild/v5.0.2-auth-i18n-product-copy
+      - rebuild/v5.0.3-systemic-product-rebuild
     paths:
       - '.github/workflows/installervalidation.yml'
       - 'installer/**'
