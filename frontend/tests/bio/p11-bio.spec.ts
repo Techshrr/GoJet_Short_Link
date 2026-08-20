@@ -33,19 +33,25 @@ function runtimeErrors(page:Page){const errors:string[]=[];page.on("pageerror",(
 async function noOverflow(page:Page){const size=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));expect(size.scroll).toBeLessThanOrEqual(size.client+1);}
 
 for(const viewport of viewports){
-  test(`P11 Bio builder · ${viewport.name}`,async({page})=>{
+  test(`P11 profile builder · ${viewport.name}`,async({page})=>{
     await page.setViewportSize({width:viewport.width,height:viewport.height}); const errors=runtimeErrors(page); const state=await fixture(page); await page.goto("/app/bio?workspace=1");
-    await expect(page.getByRole("heading",{name:"Bio",exact:true})).toBeVisible(); await expect(page.getByText("Creator page")).toBeVisible();
-    await page.locator('[data-bio-id="31"]').click(); await expect(page.locator("[data-bio-builder]")).toBeVisible(); await expect(page.getByLabel("Bio live phone preview")).toContainText("Build, ship and share.");
+    await expect(page.getByRole("heading",{name:"Profile pages",exact:true})).toBeVisible(); await expect(page.getByText("Creator page")).toBeVisible();
+    await page.locator('[data-bio-id="31"]').click(); await expect(page.locator("[data-bio-builder]")).toBeVisible(); await expect(page.getByLabel("Profile live phone preview")).toContainText("Build, ship and share.");
     await expect(page.getByRole("tab")).toHaveCount(7); for(const name of ["Content","Appearance","Social","Domain","Analytics","SEO","Settings"]) await expect(page.getByRole("tab",{name,exact:true})).toBeVisible();
-    await page.getByRole("tab",{name:"Content",exact:true}).click(); await page.getByLabel("Bio",{exact:true}).fill("Updated from P11 browser gate"); await page.getByRole("button",{name:"Save changes",exact:true}).click(); await expect(page.getByText("Saved")).toBeVisible(); expect(state.updates).toBe(1);
-    await page.getByRole("tab",{name:"SEO",exact:true}).click(); await expect(page.getByText("SEO default: noindex")).toBeVisible();
-    await page.getByRole("button",{name:"Create Bio"}).click(); const sheet=page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Title").fill("New public profile"); await sheet.getByLabel("Custom code").fill("new-profile"); await sheet.getByRole("button",{name:"Create Bio",exact:true}).click(); await expect(sheet.getByText("Bio created")).toBeVisible(); expect(state.creates).toBe(1);
+    await page.getByRole("tab",{name:"Content",exact:true}).click(); await page.getByLabel("Introduction",{exact:true}).fill("Updated from P11 browser gate"); await page.getByRole("button",{name:"Save changes",exact:true}).click(); await expect(page.getByText("Saved",{exact:true})).toBeVisible(); expect(state.updates).toBe(1);
+    await expect(page.getByLabel("Profile live phone preview")).toContainText("Updated from P11 browser gate");
+    await page.getByRole("tab",{name:"SEO",exact:true}).click(); await expect(page.getByText("Search indexing is disabled")).toBeVisible();
+    await page.getByRole("button",{name:"New profile page"}).click(); const sheet=page.locator(".gj-side-sheet-popup"); await expect(sheet).toBeVisible();
+    const box=await sheet.boundingBox(); expect(box).not.toBeNull(); if(viewport.name==="mobile") expect(Math.round(box!.width)).toBeGreaterThanOrEqual(viewport.width-1); else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
+    await sheet.getByLabel("Page title").fill("New public profile"); await sheet.getByLabel("Public slug").fill("new-profile"); await sheet.getByRole("button",{name:"Create profile page",exact:true}).click(); await expect(sheet.getByText("Profile page created")).toBeVisible(); expect(state.creates).toBe(1);
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({path:`test-results/p11-bio-${viewport.name}.png`,fullPage:true});
   });
 }
 
-test("P11 Bio read-only RBAC",async({page})=>{await fixture(page,{viewer:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("Read-only Bio access")).toBeVisible();await expect(page.getByRole("button",{name:"Create Bio"})).toHaveCount(0);await page.locator('[data-bio-id="31"]').click();await expect(page.getByRole("button",{name:"Save changes"})).toHaveCount(0);});
-test("P11 Bio empty state",async({page})=>{await fixture(page,{empty:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("No Bio pages")).toBeVisible();});
-test("P11 Bio disabled state",async({page})=>{await fixture(page,{failList:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("Bio service disabled")).toBeVisible();});
-test("P11 Bio quota state",async({page})=>{await fixture(page,{quotaOnCreate:true});await page.goto("/app/bio?workspace=1");await page.getByRole("button",{name:"Create Bio"}).click();const sheet=page.locator(".gj-side-sheet-popup");await sheet.getByLabel("Title").fill("Quota profile");await sheet.getByRole("button",{name:"Create Bio",exact:true}).click();await expect(sheet.getByText("Quota exceeded")).toBeVisible();});
+test("P11 profile pages read-only RBAC",async({page})=>{await fixture(page,{viewer:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("Read-only profile pages").first()).toBeVisible();await expect(page.getByRole("button",{name:"New profile page"})).toHaveCount(0);await page.locator('[data-bio-id="31"]').click();await expect(page.getByRole("button",{name:"Save changes"})).toHaveCount(0);await expect(page.getByLabel("Profile live phone preview")).toBeVisible();});
+
+test("P11 profile pages empty state",async({page})=>{await fixture(page,{empty:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("No profile pages")).toBeVisible();});
+
+test("P11 profile pages disabled state",async({page})=>{await fixture(page,{failList:true});await page.goto("/app/bio?workspace=1");await expect(page.getByText("Profile-page service unavailable")).toBeVisible();await expect(page.getByRole("button",{name:"Retry"})).toBeVisible();});
+
+test("P11 profile pages quota state",async({page})=>{await fixture(page,{quotaOnCreate:true});await page.goto("/app/bio?workspace=1");await page.getByRole("button",{name:"New profile page"}).click();const sheet=page.locator(".gj-side-sheet-popup");await sheet.getByLabel("Page title").fill("Quota profile");await sheet.getByRole("button",{name:"Create profile page",exact:true}).click();await expect(sheet.getByText("Profile-page allowance reached")).toBeVisible();});
