@@ -20,7 +20,7 @@ do
 done
 
 for config in deploy/nginx/gojet.conf deploy/nginx/gojethost.conf deploy/nginx/gojetnative.conf deploy/nginx/gojetbtrewrite.conf; do
-  grep -Fq 'try_files $uri $uri.html' "$config" || { echo "$config does not map clean public URLs to flat HTML files" >&2; exit 1; }
+  grep -Fq 'try_files $uri $uri.html $uri/index.html' "$config" || { echo "$config does not map clean public URLs to flat or nested HTML files" >&2; exit 1; }
 done
 
 tmp="$(mktemp -d)"
@@ -91,7 +91,7 @@ sed \
 grep -Fq "root $stage/public;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged public root' >&2; exit 1; }
 grep -Fq "alias $stage/public/app/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged customer console' >&2; exit 1; }
 grep -Fq "alias $stage/public/admin/;" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use packaged administrator console' >&2; exit 1; }
-grep -Fq 'try_files $uri $uri.html @redirect;' "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use flat public clean URL mapping' >&2; exit 1; }
+grep -Fq 'try_files $uri $uri.html $uri/index.html @redirect;' "$tmp/gojet.conf" || { echo 'temporary Host Nginx config does not use canonical clean URL mapping' >&2; exit 1; }
 grep -Fq "127.0.0.1:$REDIRECT_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate redirectengine upstream' >&2; exit 1; }
 grep -Fq "127.0.0.1:$PLATFORM_TEST_PORT" "$tmp/gojet.conf" || { echo 'temporary Host Nginx config did not isolate platformapi upstream' >&2; exit 1; }
 
