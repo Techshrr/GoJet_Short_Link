@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const fixtures: Record<string, unknown> = {
+  "/api/admin/auth/me": { id: 1, email: "admin@gojet.cc", display_name: "Trust Admin", role: "super_admin", permissions: ["*"] },
   "/api/admin/destination-risks": { data: [{ link_id: 41, workspace_id: 7, code: "launch", destination: "https://example.com", decision: "review", effective_decision: "review", score: 58, scanned_at: "2026-08-18T12:00:00Z" }] },
   "/api/admin/destination-risks/41": { risk: { link_id: 41, decision: "review", effective_decision: "review", score: 58, provider: "internal-provider", scanned_url: "https://example.com", scanned_at: "2026-08-18T12:00:00Z" }, targets: ["https://example.com"], stale: false },
   "/api/admin/files": { data: [{ id: 9, name: "sample.zip", workspace: "Security Lab", mime: "application/zip", size: 2048, scan_status: "error", scan_attempts: 2, created_at: "2026-08-18T12:00:00Z" }] },
