@@ -50,24 +50,43 @@ for (const viewport of viewports) {
     await expect(page.getByText("15", { exact: true }).first()).toBeVisible();
     await page.getByText("Launch QR").click();
     await expect(page.locator("[data-qr-detail]")).toBeVisible();
-    await expect(page.getByText("Download PNG")).toBeVisible();
-    await expect(page.getByText("Download SVG")).toBeVisible();
-    await expect(page.getByText("Download PDF")).toBeVisible();
-    await page.getByRole("button", { name: "Create QR" }).click();
+    await expect(page.getByRole("link", { name: "Download PNG" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Download SVG" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
+    await page.getByRole("button", { name: "Create QR code" }).click();
     const sheet = page.locator(".gj-side-sheet-popup"); await expect(sheet).toBeVisible();
     const box = await sheet.boundingBox(); expect(box).not.toBeNull();
     if (viewport.name === "mobile") expect(Math.round(box!.width)).toBeGreaterThanOrEqual(viewport.width - 1); else { expect(box!.width).toBeGreaterThanOrEqual(520); expect(box!.width).toBeLessThanOrEqual(560); }
     await page.locator("#qr-link").selectOption("10");
     await page.locator("#qr-name").fill("New QR");
-    await expect(page.getByAltText("Live QR preview")).toBeVisible();
-    await page.getByRole("button", { name: "Create QR", exact: true }).last().click();
-    await expect(page.getByText("QR created")).toBeVisible();
+    await expect(page.getByAltText("QR code preview")).toBeVisible();
+    await page.getByRole("button", { name: "Create QR code", exact: true }).last().click();
+    await expect(page.getByText("QR code created")).toBeVisible();
     expect(state.creates).toHaveLength(1);
     await noOverflow(page); expect(errors).toEqual([]);
     await page.screenshot({ path: `test-results/p08-qr-${viewport.name}.png`, fullPage: true });
   });
 }
 
-test("P08 QR read-only RBAC", async ({ page }) => { await page.setViewportSize({ width: 1024, height: 768 }); await fixture(page, { viewer: true }); await page.goto("/app/qr?workspace=1"); await expect(page.getByText("Read-only QR access")).toBeVisible(); await expect(page.getByRole("button", { name: "Create QR" })).toHaveCount(0); await expect(page.getByText("Launch QR")).toBeVisible(); });
-test("P08 QR empty state", async ({ page }) => { await fixture(page, { empty: true }); await page.goto("/app/qr?workspace=1"); await expect(page.getByText("No QR codes")).toBeVisible(); });
-test("P08 QR disabled/error state", async ({ page }) => { await fixture(page, { failQR: true }); await page.goto("/app/qr?workspace=1"); await expect(page.getByText("QR service unavailable")).toBeVisible(); });
+test("P08 QR read-only RBAC", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await fixture(page, { viewer: true });
+  await page.goto("/app/qr?workspace=1");
+  await expect(page.getByText("QR codes are read-only")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create QR code" })).toHaveCount(0);
+  await expect(page.getByText("Launch QR")).toBeVisible();
+});
+
+test("P08 QR empty state", async ({ page }) => {
+  await fixture(page, { empty: true });
+  await page.goto("/app/qr?workspace=1");
+  await expect(page.getByText("No QR codes yet")).toBeVisible();
+});
+
+test("P08 QR disabled/error state", async ({ page }) => {
+  await fixture(page, { failQR: true });
+  await page.goto("/app/qr?workspace=1");
+  await expect(page.getByText("QR-code service unavailable")).toBeVisible();
+  await expect(page.getByText("qr service temporarily unavailable")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
