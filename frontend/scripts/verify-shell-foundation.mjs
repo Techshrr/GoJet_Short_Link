@@ -22,9 +22,11 @@ requireAll('Website navigation', sitePreview, ['Products', 'Solutions', 'Integra
 forbid('Website visible engineering copy', sitePreview, ['GOJET V5 · P04', 'structural P04 shell gate', 'P19 owns', 'P04 verifies', 'implemented in P15', 'owned by P15']);
 
 const workspaceShell = read('apps/workspace/src/WorkspaceShell.tsx');
-requireAll('Workspace navigation', workspaceShell, ['Overview', 'CONTENT', 'Links', 'QR Codes', 'Files', 'Text', 'Bio Pages', 'REPORTS', 'Analytics', 'ORGANIZE', 'Domains', 'Campaigns', 'Tags', 'INTEGRATIONS', 'API Keys', 'Webhooks', 'WORKSPACE', 'Members', 'Billing', 'Settings', 'useLocale']);
-forbid('Workspace first-level IA', workspaceShell, ['label: "Folders"', 'label: "UTM"', 'label: "A/B"', 'label: "Routing"', 'label: "Access"', 'DEVELOPER']);
-requireAll('Workspace shell mount', read('apps/workspace/src/router.tsx'), ['<WorkspaceShell', 'basepath: "/app"']);
+requireAll('Workspace navigation', workspaceShell, ['Overview', 'CONTENT', 'Links', 'QR Codes', 'Files', 'Text', 'Bio Pages', 'REPORTS', 'Analytics', 'ORGANIZE', 'Domains', 'Campaigns', 'Tags', 'WORKSPACE', 'Members', 'Billing', 'Settings', 'Support', 'useLocale']);
+forbid('Workspace first-level IA', workspaceShell, ['label: "Folders"', 'label: "UTM"', 'label: "A/B"', 'label: "Routing"', 'label: "Access"', 'DEVELOPER', 'INTEGRATIONS', 'API Keys', 'Webhooks', '/app/api-keys', '/app/webhooks']);
+const workspaceRouter = read('apps/workspace/src/router.tsx');
+requireAll('Workspace shell mount', workspaceRouter, ['<WorkspaceShell', 'basepath: "/app"']);
+forbid('Workspace dead integration routes', workspaceRouter, ['/api-keys', '/webhooks']);
 
 const adminShell = read('apps/admin/src/AdminShell.tsx');
 requireAll('Admin navigation', adminShell, ['ACCOUNTS', 'Users', 'Workspaces', 'Memberships', 'CONTENT', 'PROTECTION', 'Destination checks', 'File protection', 'Abuse reports', 'Security events', 'SERVICE', 'Support tickets', 'Announcements', 'Mail', 'Background tasks', 'Service status', 'BILLING', 'Plans', 'Payments', 'Exchange rates', 'ADMIN ACCESS', 'Administrators', 'Administrator roles', 'Administrator permissions', 'Audit log', 'SYSTEM SETTINGS', 'General settings', 'Official domains', 'OAuth', 'Turnstile', 'Mail settings', 'Message templates', 'File storage', 'Integrations', 'useLocale']);
@@ -49,4 +51,4 @@ requireAll('P04 fixed viewport gate', browser, ['width: 1440, height: 900', 'wid
 
 if (fs.existsSync(path.join(root, '../.github/workflows/v5-p04-lockfile-refresh.yml'))) throw new Error('one-time P04 lockfile refresh workflow must be removed after use');
 
-console.log('P04 five-surface shell contract verified with shared zh-CN/en locale controls and user-facing navigation wording.');
+console.log('P04 five-surface shell contract verified with shared zh-CN/en locale controls and route-backed user-facing navigation.');
