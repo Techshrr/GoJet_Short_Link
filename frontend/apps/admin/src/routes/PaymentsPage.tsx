@@ -32,7 +32,6 @@ const providers: ProviderSpec[] = [
 ];
 
 function asBool(value: unknown) { return value === true || value === "true" || value === 1; }
-function asText(value: unknown) { return value === undefined || value === null || value === "********" ? "" : String(value); }
 
 function PaymentChannels() {
   const { text } = useLocale();
