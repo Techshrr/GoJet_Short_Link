@@ -11,7 +11,7 @@ const badWording = [
   /\bbackend capability\b/i,/\boperational source\b/i,/\bexact[- ]head\b/i,/\bfrozen shell\b/i,
   /\bP(?:0?[1-9]|1[0-9])\b/,/\bRBAC\b/,/visit_type\s*=/i,/\bV5 does not\b/i,/\bserver[- ]enforced\b/i
 ];
-const neutral = /^(?:GoJet(?:\s+Admin)?|API|APIs|Webhook|Webhooks|QR|QR Codes|PNG|SVG|PDF|CSV|OAuth|Turnstile|DNS|HTTPS|HTTP|URL|URLs|IP|CNAME|TXT|JSON|HTML|Markdown|ClamAV|MySQL|Redis|SMTP|TOTP|2FA|UTC|GB|MB|KB|px|[^\s@]+@[^\s@]+\.[^\s@]+|(?:[a-z0-9-]+\.)+[a-z]{2,}|#[0-9a-f]{3,8}|[0-9 .:/+%#()_-]+)$/i;
+const neutral = /^(?:GoJet(?:\s+Admin)?|API|APIs|Webhook|Webhooks|QR|QR Codes|PNG|SVG|PDF|CSV|OAuth|Turnstile|DNS|HTTPS|HTTP|URL|URLs|IP|CNAME|TXT|JSON|HTML|Markdown|ClamAV|MySQL|Redis|SMTP|TOTP|2FA|UTC|GB|MB|KB|px|noindex,nofollow|[^\s@]+@[^\s@]+\.[^\s@]+|(?:[a-z0-9-]+\.)+[a-z]{2,}|#[0-9a-f]{3,8}|\d+\s*(?:px|KB|MB|GB|%)|[a-z0-9]*\d[a-z0-9-]*|[a-z0-9]+-[a-z0-9-]+|[0-9 .:/+%#()_-]+)$/i;
 
 function name(node){return ts.isIdentifier(node)||ts.isStringLiteralLike(node)?node.text:node.getText().replace(/^['"]|['"]$/g,'');}
 function literal(node){return ts.isStringLiteralLike(node)||ts.isNoSubstitutionTemplateLiteral(node)?node.text:undefined;}
@@ -34,15 +34,27 @@ for(const relative of ['packages/ui/src/locale.tsx','packages/ui/src/locale-copy
   visit(ast);
 }
 
+function explicitLocaleHelpers(source){
+  const helpers=new Set();
+  if(!source.includes('useLocale'))return helpers;
+  if(/const\s*\{[^}]*\btext\b[^}]*\}\s*=\s*useLocale\s*\(/s.test(source))helpers.add('text');
+  const directC=/const\s+c(?:\s*:\s*Copy)?\s*=\s*\(\s*en\s*,\s*(?:cn|zh)\s*\)\s*=>[\s\S]{0,120}(?:locale\s*===\s*["']zh-CN["']|\bzh\s*\?)/.test(source);
+  const copyHook=/function\s+useCopy\s*\([^)]*\)[\s\S]{0,240}locale\s*===\s*["']zh-CN["'][\s\S]{0,120}return[\s\S]{0,120}\(\s*en\s*,\s*zh\s*\)/.test(source)&&/const\s+c\s*=\s*useCopy\s*\(\s*\)/.test(source);
+  if(directC||copyHook)helpers.add('c');
+  return helpers;
+}
+
 const failures=[];
 const publicFiles=roots.flatMap((relative)=>walkFiles(path.join(root,relative))).filter((absolute)=>!absolute.endsWith(path.join('apps','site','src','routes','DevUi.tsx')));
 for(const absolute of publicFiles){
   const relative=path.relative(root,absolute);
   const source=fs.readFileSync(absolute,'utf8');
   const ast=ts.createSourceFile(relative,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  const helpers=explicitLocaleHelpers(source);
   const local=new Map();
+  function localeCall(node){return ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&helpers.has(node.expression.text)&&node.arguments.length>=2;}
   function collect(node){
-    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='text'&&node.arguments.length>=2){const en=literal(node.arguments[0]);const zh=literal(node.arguments[1]);if(en!==undefined&&zh!==undefined){const pair={en,zh};local.set(en,pair);local.set(zh,pair);}}
+    if(localeCall(node)){const en=literal(node.arguments[0]);const zh=literal(node.arguments[1]);if(en!==undefined&&zh!==undefined){const pair={en,zh};local.set(en,pair);local.set(zh,pair);}}
     ts.forEachChild(node,collect);
   }
   collect(ast);
@@ -55,6 +67,7 @@ for(const absolute of publicFiles){
   }
   function renderedExpression(node){
     if(ts.isJsxElement(node)||ts.isJsxSelfClosingElement(node)||ts.isJsxFragment(node))return;
+    if(localeCall(node))return;
     const value=literal(node);if(value!==undefined){check(node,'jsx-expression',value);return;}
     if(ts.isParenthesizedExpression(node))return renderedExpression(node.expression);
     if(ts.isConditionalExpression(node)){renderedExpression(node.whenTrue);renderedExpression(node.whenFalse);return;}
@@ -64,7 +77,7 @@ for(const absolute of publicFiles){
     if(ts.isJsxText(node))check(node,'jsx-text',node.getText());
     if(ts.isJsxAttribute(node)&&visibleAttrs.has(node.name.getText())){const init=node.initializer;if(init&&ts.isStringLiteral(init))check(init,`attribute:${node.name.getText()}`,init.text);else if(init&&ts.isJsxExpression(init)&&init.expression)renderedExpression(init.expression);}
     if(ts.isPropertyAssignment(node)&&visibleProps.has(name(node.name))){const value=literal(node.initializer);if(value!==undefined)check(node.initializer,`property:${name(node.name)}`,value);}
-    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='text'&&node.arguments.length>=2){const en=literal(node.arguments[0]);const zh=literal(node.arguments[1]);if(en!==undefined&&zh!==undefined&&(bad(en)||bad(zh)))report(node,'text()',`${en} / ${zh}`,'localized visible copy contains internal engineering wording');}
+    if(localeCall(node)){const en=literal(node.arguments[0]);const zh=literal(node.arguments[1]);if(en!==undefined&&zh!==undefined&&(bad(en)||bad(zh)))report(node,`${node.expression.text}()`,`${en} / ${zh}`,'localized visible copy contains internal engineering wording');}
     ts.forEachChild(node,visit);
   }
   visit(ast);
