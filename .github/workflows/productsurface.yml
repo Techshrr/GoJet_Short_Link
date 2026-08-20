@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'rebuild/v5.0.2-auth-i18n-product-copy'
+      - 'rebuild/v5.0.3-final'
 
 concurrency:
   group: gojetproductsurface${{ github.ref }}
@@ -71,6 +72,7 @@ jobs:
           set -euo pipefail
           python3 scripts/checknames.py
           python3 scripts/checkschema.py
+          node --check tests/e2e/socialauthsettings.spec.js
           chmod 0755 scripts/preparepdffonts.sh
           scripts/preparepdffonts.sh
           bash scripts/runmigrations.sh
@@ -115,7 +117,9 @@ jobs:
       - name: Reject retired visible and CI contracts
         run: |
           set -euo pipefail
-          if grep -R -n -F 'playwright install --with-deps' .github/workflows; then
+          forbidden='playwright install --with'
+          forbidden+='-deps'
+          if grep -R -n -F "$forbidden" .github/workflows; then
             echo 'Playwright is not allowed to invoke apt implicitly. Use browser-only installation after controlled package setup.' >&2
             exit 1
           fi
