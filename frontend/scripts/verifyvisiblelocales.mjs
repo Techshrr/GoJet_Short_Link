@@ -11,7 +11,7 @@ const badWording = [
   /\bbackend capability\b/i,/\boperational source\b/i,/\bexact[- ]head\b/i,/\bfrozen shell\b/i,
   /\bP(?:0?[1-9]|1[0-9])\b/,/\bRBAC\b/,/visit_type\s*=/i,/\bV5 does not\b/i,/\bserver[- ]enforced\b/i
 ];
-const neutral = /^(?:GoJet(?:\s+Admin)?|API|APIs|Webhook|Webhooks|QR|QR Codes|PNG|SVG|PDF|CSV|OAuth|Turnstile|DNS|HTTPS|HTTP|URL|URLs|IP|CNAME|TXT|JSON|HTML|Markdown|ClamAV|MySQL|Redis|SMTP|TOTP|2FA|UTC|GB|MB|KB|px|noindex,nofollow|[^\s@]+@[^\s@]+\.[^\s@]+|(?:[a-z0-9-]+\.)+[a-z]{2,}|#[0-9a-f]{3,8}|\d+\s*(?:px|KB|MB|GB|%)|[a-z0-9]*\d[a-z0-9-]*|[a-z0-9]+-[a-z0-9-]+|[0-9 .:/+%#()_-]+)$/i;
+const neutral = /^(?:GoJet(?:\s+Admin)?|API|APIs|Webhook|Webhooks|QR|QR Codes|PNG|SVG|PDF|CSV|OAuth|Turnstile|DNS|HTTPS|HTTP|URL|URLs|IP|CNAME|TXT|JSON|HTML|Markdown|ClamAV|MySQL|Redis|SMTP|TOTP|2FA|UTC|GB|MB|KB|px|ECB|bps|STARTTLS|TLS|EHLO|noindex,nofollow|(?:PNG|SVG|PDF)(?:\s*·\s*(?:PNG|SVG|PDF))+|(?:Asia|Europe|America|Africa|Australia|Pacific)\/[A-Za-z_+-]+|KB\s*·?|[^\s@]+@[^\s@]+\.[^\s@]+|(?:[a-z0-9-]+\.)+[a-z]{2,}|#[0-9a-f]{3,8}|\d+\s*(?:px|KB|MB|GB|%)|[a-z0-9]*\d[a-z0-9-]*|[a-z0-9]+-[a-z0-9-]+|[0-9 .:/+%#()_-]+)$/i;
 
 function name(node){return ts.isIdentifier(node)||ts.isStringLiteralLike(node)?node.text:node.getText().replace(/^['"]|['"]$/g,'');}
 function literal(node){return ts.isStringLiteralLike(node)||ts.isNoSubstitutionTemplateLiteral(node)?node.text:undefined;}
@@ -43,6 +43,12 @@ function explicitLocaleHelpers(source){
   if(directC||copyHook)helpers.add('c');
   return helpers;
 }
+function explicitLocaleConditional(node){
+  if(!ts.isConditionalExpression(node))return false;
+  const condition=node.condition.getText();
+  const branches=literal(node.whenTrue)!==undefined&&literal(node.whenFalse)!==undefined;
+  return branches&&/(?:locale|value\.locale)\s*={2,3}\s*["']zh-CN["']|["']zh-CN["']\s*={2,3}\s*(?:locale|value\.locale)/.test(condition);
+}
 
 const failures=[];
 const publicFiles=roots.flatMap((relative)=>walkFiles(path.join(root,relative))).filter((absolute)=>!absolute.endsWith(path.join('apps','site','src','routes','DevUi.tsx')));
@@ -55,6 +61,7 @@ for(const absolute of publicFiles){
   function localeCall(node){return ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&helpers.has(node.expression.text)&&node.arguments.length>=2;}
   function collect(node){
     if(localeCall(node)){const en=literal(node.arguments[0]);const zh=literal(node.arguments[1]);if(en!==undefined&&zh!==undefined){const pair={en,zh};local.set(en,pair);local.set(zh,pair);}}
+    if(explicitLocaleConditional(node)){const a=literal(node.whenTrue);const b=literal(node.whenFalse);if(a!==undefined&&b!==undefined){const pair={en:a,zh:b};local.set(a,pair);local.set(b,pair);}}
     ts.forEachChild(node,collect);
   }
   collect(ast);
@@ -67,7 +74,7 @@ for(const absolute of publicFiles){
   }
   function renderedExpression(node){
     if(ts.isJsxElement(node)||ts.isJsxSelfClosingElement(node)||ts.isJsxFragment(node))return;
-    if(localeCall(node))return;
+    if(localeCall(node)||explicitLocaleConditional(node))return;
     const value=literal(node);if(value!==undefined){check(node,'jsx-expression',value);return;}
     if(ts.isParenthesizedExpression(node))return renderedExpression(node.expression);
     if(ts.isConditionalExpression(node)){renderedExpression(node.whenTrue);renderedExpression(node.whenFalse);return;}
