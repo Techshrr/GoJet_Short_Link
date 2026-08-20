@@ -36,7 +36,7 @@ const getFixtures: Record<string, unknown> = {
   "/api/admin/official-domains": { data: [{ id: 1, hostname: "go.example.com", label: "Primary", status: "active", is_default: true, sort_order: 0 }] },
   "/api/admin/bot-protection": { "turnstile.enabled": true, "turnstile.site_key": "site-key", "turnstile.secret_configured": true, "turnstile.fail_open": false, "turnstile.allowed_hostnames": ["gojet.cc"], "turnstile.registration": true, "turnstile.login": true },
   "/api/admin/storage": { backend: "s3", health: "startup-validated", bucket: "gojet", region: "sg", access_key_configured: true, secret_key_configured: true, namespaces: { files: "files/", quarantine: "quarantine/", temporary: "temporary/" } },
-  "/api/admin/runtime-services": { data: runtimeServices, expected_services: runtimeServices.map((item) => item.service), generated_at: "2026-08-18T12:00:00Z" },
+  "/api/admin/runtime-services": { data: runtimeServices, expected_services: 8, generated_at: "2026-08-18T12:00:00Z" },
   "/api/admin/integrations/api-keys": { data: [{ id: 1, name: "Read API", prefix: "gjk_12345678", scopes: ["read"], status: "active", last_used_at: null }] },
   "/api/admin/integrations/webhooks": { data: [{ id: 1, name: "Deploy hook", url: "https://hooks.example.com/gojet", events: ["link.updated"], status: "active", secret_configured: true, last_delivery_status: 200 }] },
 };
@@ -58,7 +58,7 @@ async function mock(page: Page) {
 const pages = [
   ["/admin/", "Overview"], ["/admin/users", "Users"], ["/admin/workspaces", "Workspaces"], ["/admin/memberships", "Memberships"],
   ["/admin/links", "Links"], ["/admin/domains", "Domains"], ["/admin/qr", "QR Codes"], ["/admin/files", "Files"], ["/admin/text", "Text"], ["/admin/bio", "Bio Pages"],
-  ["/admin/announcements", "Announcements"], ["/admin/jobs", "Jobs"], ["/admin/services", "Service status"],
+  ["/admin/announcements", "Announcements"], ["/admin/jobs", "Background tasks"], ["/admin/services", "Service status"],
   ["/admin/administrators", "Administrators"], ["/admin/roles", "Roles"], ["/admin/permissions", "Permissions"],
   ["/admin/general", "General settings"], ["/admin/official-domains", "Official Domains"], ["/admin/turnstile", "Turnstile"], ["/admin/storage", "Storage"], ["/admin/integrations", "Integrations"],
 ] as const;
@@ -74,20 +74,20 @@ for (const view of [{ name: "desktop", width: 1440, height: 1000 }, { name: "tab
   });
 }
 
-test("user suspension is gated by an explicit governance reason", async ({ page }) => {
+test("user suspension is gated by an explicit administrator reason", async ({ page }) => {
   await mock(page);
   await page.goto("/admin/users");
   await page.getByRole("button", { name: "Change status" }).click();
-  await expect(page.getByRole("button", { name: "Apply status" })).toBeDisabled();
-  await page.getByLabel("Governance reason").fill("Policy violation reviewed by operations");
-  await expect(page.getByRole("button", { name: "Apply status" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save status" })).toBeDisabled();
+  await page.getByLabel("Administrator reason").fill("Policy violation reviewed by operations");
+  await expect(page.getByRole("button", { name: "Save status" })).toBeEnabled();
 });
 
 test("API key plaintext is shown only after creation and is never browser-persisted", async ({ page }) => {
   await mock(page);
   await page.goto("/admin/integrations");
   await page.getByLabel("Name").first().fill("CI key");
-  await page.getByLabel("Governance reason").first().fill("CI acceptance");
+  await page.getByLabel("Administrator reason").first().fill("CI acceptance");
   await page.getByRole("button", { name: "Create API key" }).click();
   await expect(page.getByText("gjk_once_only_test_value")).toBeVisible();
   expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: [], session: [] });
@@ -97,8 +97,8 @@ test("webhook secret is shown once and service/storage views do not expose crede
   await mock(page);
   await page.goto("/admin/integrations");
   await page.getByLabel("Name").nth(1).fill("CI hook");
-  await page.getByLabel("Public endpoint URL").fill("https://hooks.example.com/gojet");
-  await page.getByLabel("Governance reason").nth(1).fill("CI acceptance");
+  await page.getByLabel("Receiving URL").fill("https://hooks.example.com/gojet");
+  await page.getByLabel("Administrator reason").nth(1).fill("CI acceptance");
   await page.getByRole("button", { name: "Create webhook" }).click();
   await expect(page.getByText("gwh_once_only_test_value")).toBeVisible();
   await page.goto("/admin/storage");
