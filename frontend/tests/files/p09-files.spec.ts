@@ -79,7 +79,7 @@ for (const viewport of viewports) {
     await expect(page.getByText("Ready", { exact: true })).toBeVisible();
     await expect(page.getByText("Safety check in progress", { exact: true })).toBeVisible();
     await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Open file", exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Not ready", exact: true })).toHaveCount(2);
 
     await page.getByRole("button", { name: "Upload file" }).click();
@@ -108,7 +108,7 @@ test("P09 Files read-only RBAC", async ({ page }) => {
   await page.goto("/app/files?workspace=1");
   await expect(page.getByText("Read-only files")).toBeVisible();
   await expect(page.getByRole("button", { name: "Upload file" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Open file", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
 });
 
