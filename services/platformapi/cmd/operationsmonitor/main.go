@@ -37,18 +37,20 @@ func main() {
 	if err = rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatal(err)
 	}
+	rootCtx := context.Background()
+	monitoring.StartRuntimeHeartbeat(rootCtx, rdb, "operationsmonitor")
 
 	riskStore := destinationrisk.NewStore(db)
 	riskScanner := newDestinationRiskScanner()
 	var riskCacheDirty atomic.Bool
-	bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	bootstrapCtx, bootstrapCancel := context.WithTimeout(rootCtx, 15*time.Second)
 	if err = destinationrisk.BackfillRedis(bootstrapCtx, db, rdb); err != nil {
 		riskCacheDirty.Store(true)
 		log.Printf("destination risk cache backfill: %v", err)
 	}
 	bootstrapCancel()
-	go runRiskCacheRecoveryLoop(context.Background(), db, rdb, &riskCacheDirty)
-	go runRiskLoop(context.Background(), riskStore, riskScanner, rdb, &riskCacheDirty)
+	go runRiskCacheRecoveryLoop(rootCtx, db, rdb, &riskCacheDirty)
+	go runRiskLoop(rootCtx, riskStore, riskScanner, rdb, &riskCacheDirty)
 
 	interval, _ := strconv.Atoi(value("OPERATIONS_MONITOR_INTERVAL_SECONDS", "60"))
 	if interval < 10 {
@@ -56,7 +58,7 @@ func main() {
 	}
 	service := monitoring.New(db, os.Getenv("ALERT_RECIPIENT"))
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(rootCtx, 30*time.Second)
 		err = service.Run(ctx)
 		cancel()
 		if err != nil {
