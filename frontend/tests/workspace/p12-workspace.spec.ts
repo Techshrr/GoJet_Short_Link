@@ -22,6 +22,7 @@ async function fixture(page: Page, options: Options = {}): Promise<State> {
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/api/**", async (route) => {
     const req = route.request(); const path = new URL(req.url()).pathname; const method = req.method(); state.requests.push(`${method} ${path}`);
+    if (method === "GET" && path === "/api/session") return json(route, { authenticated: true, identity: { id: 7, email: "owner@example.com", displayName: "P12 Owner", emailVerified: true }, csrfToken: "p12-csrf" });
     if (method === "GET" && path === "/api/workspaces") return json(route, { data: [{ id: 1, name: "P12 Workspace", type: "company", role }] });
     if (method === "GET" && path === "/api/workspaces/1/members") return json(route, { members, invitations });
     if (method === "POST" && path === "/api/workspaces/1/invitations") { state.invites += 1; return json(route, { queued: true }, 201); }
