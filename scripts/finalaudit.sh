@@ -6,7 +6,9 @@ cd "$ROOT"
 # Repository-level naming/schema and accidental legacy exposure.
 python3 scripts/checknames.py
 python3 scripts/checkschema.py
-if grep -R -I -n -E 'playwright install --with-deps' .github/workflows; then
+forbidden='playwright install --with'
+forbidden+='-deps'
+if grep -R -I -n -F "$forbidden" .github/workflows; then
   echo 'Playwright must not invoke apt implicitly.' >&2
   exit 1
 fi
