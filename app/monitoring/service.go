@@ -3,9 +3,14 @@ package monitoring
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Service struct {
@@ -23,6 +28,66 @@ var checks = []check{
 	{key: "analytics.dead_letters", category: "analytics", severity: "critical", title: "分析事件进入死信", query: `SELECT COUNT(*) FROM analytics_worker_failures WHERE state='dead_letter'`, threshold: 0},
 	{key: "analytics.worker_lag", category: "analytics", severity: "warning", title: "分析 Worker 数据积压", query: `SELECT COUNT(*) FROM analytics_reconciliation WHERE status='worker_lag'`, threshold: 10},
 	{key: "files.scan_errors", category: "files", severity: "critical", title: "文件安全扫描失败", query: `SELECT COUNT(*) FROM file_shares WHERE scan_status='error'`, threshold: 0},
+}
+
+// RuntimeHeartbeat is the shared, server-authoritative service liveness contract.
+// Every long-running GoJet process publishes the same shape to Redis. Admin reads
+// this evidence instead of inventing a healthy state from an expected-service list.
+type RuntimeHeartbeat struct {
+	Service   string    `json:"service"`
+	Version   string    `json:"version"`
+	PID       int       `json:"pid"`
+	StartedAt time.Time `json:"started_at"`
+	LastSeen  time.Time `json:"last_seen_at"`
+}
+
+func RuntimeHeartbeatKey(service string) string { return "gojet:runtime:heartbeat:" + service }
+
+func RuntimeVersion() string {
+	if value := strings.TrimSpace(os.Getenv("GOJET_VERSION")); value != "" { return value }
+	for _, path := range []string{"VERSION", "./VERSION", "/opt/gojet/VERSION"} {
+		if data, err := os.ReadFile(path); err == nil {
+			if value := strings.TrimSpace(string(data)); value != "" { return value }
+		}
+	}
+	return "unknown"
+}
+
+// StartRuntimeHeartbeat writes immediately and every 15 seconds. A 45 second TTL
+// means an abruptly stopped service disappears without requiring a cleanup hook.
+func StartRuntimeHeartbeat(ctx context.Context, rdb *redis.Client, service string) {
+	if rdb == nil || strings.TrimSpace(service) == "" { return }
+	started := time.Now().UTC()
+	publish := func() {
+		now := time.Now().UTC()
+		body, err := json.Marshal(RuntimeHeartbeat{Service: service, Version: RuntimeVersion(), PID: os.Getpid(), StartedAt: started, LastSeen: now})
+		if err != nil { return }
+		writeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		_ = rdb.Set(writeCtx, RuntimeHeartbeatKey(service), body, 45*time.Second).Err()
+		cancel()
+	}
+	publish()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				publish()
+			}
+		}
+	}()
+}
+
+func ReadRuntimeHeartbeat(ctx context.Context, rdb *redis.Client, service string) (RuntimeHeartbeat, error) {
+	var heartbeat RuntimeHeartbeat
+	if rdb == nil { return heartbeat, redis.Nil }
+	value, err := rdb.Get(ctx, RuntimeHeartbeatKey(service)).Result()
+	if err != nil { return heartbeat, err }
+	if err = json.Unmarshal([]byte(value), &heartbeat); err != nil { return RuntimeHeartbeat{}, err }
+	return heartbeat, nil
 }
 
 func New(db *sql.DB, recipient string) *Service {
