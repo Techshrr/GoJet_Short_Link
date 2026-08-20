@@ -8,18 +8,16 @@ import (
 
 type userLinkRiskState struct {
 	LinkID            int64      `json:"link_id"`
-	AutomaticDecision string     `json:"automatic_decision"`
 	EffectiveDecision string     `json:"effective_decision"`
-	Score             int        `json:"score"`
 	ScannedAt         *time.Time `json:"scanned_at,omitempty"`
 	NextScanAt        *time.Time `json:"next_scan_at,omitempty"`
 	Pending           bool       `json:"pending"`
-	Manual            bool       `json:"manual"`
 }
 
-// workspaceLinkRisks exposes only the minimum customer-facing risk state needed
-// to render an honest link status. Provider identity, evidence, administrator
-// identity and manual review notes remain admin-only.
+// workspaceLinkRisks exposes only the minimum customer-facing state required
+// to explain whether a link is usable, under review or blocked. Provider names,
+// scores, evidence, administrator identity and manual-review notes are strictly
+// admin-only and are never serialized to Workspace clients.
 func (s *server) workspaceLinkRisks(w http.ResponseWriter, r *http.Request) {
 	workspaceID, err := pathID(r, "id")
 	if err != nil {
@@ -33,7 +31,6 @@ func (s *server) workspaceLinkRisks(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.QueryContext(r.Context(), `
 SELECT l.id,
        COALESCE(r.decision,'review'),
-       COALESCE(r.score,0),
        r.scanned_at,
        r.next_scan_at,
        r.manual_decision
@@ -51,16 +48,16 @@ ORDER BY l.id DESC`, workspaceID)
 	items := make([]userLinkRiskState, 0)
 	for rows.Next() {
 		var item userLinkRiskState
+		var automaticDecision string
 		var scannedAt, nextScanAt sql.NullTime
 		var manual sql.NullString
-		if err = rows.Scan(&item.LinkID, &item.AutomaticDecision, &item.Score, &scannedAt, &nextScanAt, &manual); err != nil {
+		if err = rows.Scan(&item.LinkID, &automaticDecision, &scannedAt, &nextScanAt, &manual); err != nil {
 			jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"error": "链接安全状态暂时不可用"})
 			return
 		}
-		item.EffectiveDecision = item.AutomaticDecision
+		item.EffectiveDecision = automaticDecision
 		if manual.Valid && manual.String != "" {
 			item.EffectiveDecision = manual.String
-			item.Manual = true
 		}
 		if scannedAt.Valid {
 			value := scannedAt.Time.UTC()
@@ -70,8 +67,8 @@ ORDER BY l.id DESC`, workspaceID)
 			value := nextScanAt.Time.UTC()
 			item.NextScanAt = &value
 		}
-		item.Pending = !scannedAt.Valid || (!item.Manual && nextScanAt.Valid && !nextScanAt.Time.After(now))
-		if item.Pending && !item.Manual {
+		item.Pending = !scannedAt.Valid || (!manual.Valid && nextScanAt.Valid && !nextScanAt.Time.After(now))
+		if item.Pending && !manual.Valid {
 			item.EffectiveDecision = "review"
 		}
 		items = append(items, item)
