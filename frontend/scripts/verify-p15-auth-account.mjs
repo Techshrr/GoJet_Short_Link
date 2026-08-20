@@ -37,7 +37,6 @@ matches("apps/site/src/router.tsx", [
   /path\s*:\s*"\/forgot-password"/,
   /path\s*:\s*"\/reset-password"/
 ]);
-
 has("apps/site/src/routes/AuthPage.tsx", [
   "data-p15-auth",
   "social_handoff",
@@ -45,27 +44,23 @@ has("apps/site/src/routes/AuthPage.tsx", [
   "two_factor_required",
   "/api/auth/login/2fa",
   "/api/public/email-code",
-  "Confirm password",
-  "Keep me signed in on this device for 30 days",
   "remember_session",
   "turnstile_token",
   "localizedError",
-  "Terms of Service",
-  "Privacy Policy",
-  "Acceptable Use Policy",
   'href="/legal/terms/"',
   'href="/legal/privacy/"',
-  'href="/legal/acceptable-use/"'
+  'href="/legal/acceptable-use/"',
+  "useLocale"
 ]);
-has("apps/site/src/TurnstileField.tsx", ["/api/public/turnstile", "challenges.cloudflare.com/turnstile", "data-turnstile-surface"]);
+has("apps/site/src/TurnstileField.tsx", ["/api/public/turnstile", "challenges.cloudflare.com/turnstile", "data-turnstile-surface", "useLocale"]);
 has("packages/ui/src/locale.tsx", ["localizedError", "gojet_locale", '"zh-CN"', '"en"']);
 
 has("../services/platformapi/cmd/server/identity.go", [
   "TurnstileToken",
-  "enforceTurnstile(w, r, \"registration\"",
-  "enforceTurnstile(w,r,\"login\"",
-  "enforceTurnstile(w,r,\"forgot_password\"",
-  "enforceTurnstile(w,r,\"reset_password\""
+  'enforceTurnstile(w, r, "registration"',
+  'enforceTurnstile(w,r,"login"',
+  'enforceTurnstile(w,r,"forgot_password"',
+  'enforceTurnstile(w,r,"reset_password"'
 ]);
 has("../app/identity/service.go", ["LoginWithMetadataTTL", "登录会话有效期无效"]);
 has("../app/identity/sessionissue.go", ["IssueSessionWithTTL"]);
@@ -76,10 +71,28 @@ matches("apps/workspace/src/router.tsx", [
   /path\s*:\s*"\/settings\/sessions"/,
   /path\s*:\s*"\/settings\/connected-accounts"/
 ]);
-has("apps/workspace/src/routes/SettingsPage.tsx", ["data-p15-settings", "Authenticator app", "backup codes", "Revoke all other sessions", "Connected Accounts", "/api/me/social-identities"]);
+has("apps/workspace/src/routes/SettingsPage.tsx", [
+  "data-p15-settings",
+  "/api/me/security",
+  "/api/me/totp/setup",
+  "/api/me/totp/enable",
+  "/api/me/totp/backup-codes",
+  "/api/me/sessions",
+  "/api/me/social-identities",
+  "clearClientSessionState",
+  "useLocale"
+]);
 
 matches("apps/admin/src/router.tsx", [/path\s*:\s*"\/oauth"/]);
-has("apps/admin/src/routes/OAuthPage.tsx", ["data-p15-admin-oauth", "Write-only secret", "/api/admin/auth/providers", "/api/admin/settings/socialauth"]);
+has("apps/admin/src/routes/OAuthPage.tsx", [
+  "data-p15-admin-oauth",
+  "/api/admin/auth/providers",
+  "/api/admin/settings/socialauth",
+  'if (draft.secret.trim()) body[prefix + "client_secret"] = draft.secret',
+  "provider.configured",
+  "useLocale",
+  "localizedError"
+]);
 
 has("packages/auth/src/index.ts", [
   'cookieValue("gojet_csrf")',
@@ -97,4 +110,4 @@ has("../database/migrations/useraccountsecurity.sql", ["CREATE TABLE user_mfa", 
 for (const file of ["apps/site/src/routes/AuthPage.tsx", "apps/workspace/src/routes/SettingsPage.tsx", "apps/admin/src/routes/OAuthPage.tsx", "packages/auth/src/index.ts"]) lacks(file, ["localStorage.setItem", "sessionStorage.setItem", "localStorage.getItem", "sessionStorage.getItem"]);
 lacks("apps/admin/src/routes/OAuthPage.tsx", ['value={String(values[prefix+"client_secret"]', 'value="********"']);
 
-console.log("P15 Auth/Account contract verified: bilingual sign-in/register/recovery/legal links, locale-safe API errors, Turnstile, remember-session, OAuth handoff, cookie+CSRF sessions, TOTP/backup codes, session revocation, connected accounts and write-only OAuth secrets.");
+console.log("P15 Auth/Account contract verified: localized account flows, Turnstile, remember-session, cookie/CSRF sessions, TOTP backup codes, session revocation, connected accounts and write-only external sign-in credentials.");
