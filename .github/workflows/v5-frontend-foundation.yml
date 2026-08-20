@@ -123,18 +123,18 @@ jobs:
 
       - name: Verify P01 static and split boundaries
         run: |
-          test -f apps/docs/dist/en/index.html
+          test -f apps/docs/dist/index.html
           test -f apps/docs/dist/zh-CN/index.html
           node <<'NODE'
           const fs = require('node:fs');
           const checks = [
-            ['workspace', 'src/routes/LinksPage.tsx'],
-            ['workspace', 'src/routes/LinkDetailPage.tsx'],
+            ['workspace', 'src/routes/LinksPageV503.tsx'],
+            ['workspace', 'src/routes/LinkDetailPageV503.tsx'],
             ['workspace', 'src/routes/DomainsPage.tsx'],
-            ['workspace', 'src/routes/AnalyticsPage.tsx'],
+            ['workspace', 'src/routes/AnalyticsPageV503.tsx'],
             ['workspace', 'src/routes/QRPage.tsx'],
-            ['workspace', 'src/routes/FilesPage.tsx'],
-            ['workspace', 'src/routes/TextPage.tsx'],
+            ['workspace', 'src/routes/FilesPageV503.tsx'],
+            ['workspace', 'src/routes/TextPageV503.tsx'],
             ['admin', 'src/routes/AdminOverviewPage.tsx'],
           ];
           for (const [app, source] of checks) {
