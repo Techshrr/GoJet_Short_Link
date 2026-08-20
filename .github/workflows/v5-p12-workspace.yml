@@ -84,7 +84,7 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
           const manifest = JSON.parse(fs.readFileSync('apps/workspace/dist/.vite/manifest.json', 'utf8'));
-          for (const src of ['src/routes/MembersPage.tsx','src/routes/OrganizationPage.tsx']) {
+          for (const src of ['src/routes/MembersPageV503.tsx','src/routes/OrganizationPage.tsx']) {
             const entry = Object.values(manifest).find((item) => item && item.src === src);
             if (!entry || entry.isDynamicEntry !== true) throw new Error(`${src} is not a dynamic entry`);
           }
