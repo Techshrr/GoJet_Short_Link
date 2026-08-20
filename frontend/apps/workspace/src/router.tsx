@@ -1,10 +1,11 @@
 import { Suspense, lazy } from "react";
 import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from "@tanstack/react-router";
+import { useLocale } from "@gojet/ui";
 import { WorkspaceShell } from "./WorkspaceShell";
 
 const WorkspaceFoundation = lazy(() => import("./routes/WorkspaceFoundation"));
-const LinksPage = lazy(() => import("./routes/LinksPage"));
-const LinkDetailPage = lazy(() => import("./routes/LinkDetailPage"));
+const LinksPage = lazy(() => import("./routes/LinksPageV503"));
+const LinkDetailPage = lazy(() => import("./routes/LinkDetailPageV503"));
 const DomainsPage = lazy(() => import("./routes/DomainsPage"));
 const AnalyticsPage = lazy(() => import("./routes/AnalyticsPage"));
 const QRPage = lazy(() => import("./routes/QRPage"));
@@ -19,7 +20,8 @@ const SettingsPage = lazy(() => import("./routes/SettingsPage"));
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return <WorkspaceShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet</span><p>正在加载…</p></main>}><Outlet /></Suspense></WorkspaceShell>;
+  const { locale } = useLocale();
+  return <WorkspaceShell pathname={pathname}><Suspense fallback={<main className="shell-page-proof"><span>GoJet</span><p>{locale === "zh-CN" ? "正在加载…" : "Loading…"}</p></main>}><Outlet /></Suspense></WorkspaceShell>;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
