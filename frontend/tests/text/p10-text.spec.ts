@@ -48,6 +48,7 @@ for (const viewport of viewports) {
     await expect(page.getByText("Single use log")).toBeVisible();
     await expect(page.locator('[data-text-id="11"]')).toHaveAttribute("data-text-state","active");
     await expect(page.locator('[data-text-id="12"]')).toHaveAttribute("data-text-state","consumed");
+    await expect(page.getByRole("link",{name:"Open text",exact:true})).toHaveCount(2);
 
     await page.getByRole("button",{name:"New text share"}).click();
     const sheet=page.locator(".gj-side-sheet-popup");
@@ -92,5 +93,5 @@ test("P10 Text terminal consumed state is immutable", async ({page})=>{
   await expect(terminal).toHaveAttribute("data-text-state","consumed");
   await expect(terminal.getByText("Consumed",{exact:true})).toBeVisible();
   await expect(terminal.getByRole("button",{name:"Edit"})).toHaveCount(0);
-  await expect(terminal.getByRole("link",{name:"Open",exact:true})).toBeVisible();
+  await expect(terminal.getByRole("link",{name:"Open text",exact:true})).toBeVisible();
 });
