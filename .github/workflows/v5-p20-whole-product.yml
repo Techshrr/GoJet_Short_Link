@@ -3,7 +3,7 @@ name: V5 P20 Whole Product Gate
 on:
   workflow_call:
   push:
-    branches: ["rebuild/v5-*"]
+    branches: ["rebuild/v5-*", "rebuild/v5.*"]
     paths:
       - "frontend/**"
       - "app/**"
