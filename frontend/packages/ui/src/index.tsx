@@ -114,3 +114,5 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
 
 export interface BreadcrumbItem { label: string; href?: string; }
 export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) { return <nav className="gj-breadcrumb" aria-label="面包屑">{items.map((item, index) => <span key={`${item.label}-${index}`}>{index > 0 ? <span aria-hidden="true">/ </span> : null}{item.href ? <a href={item.href}>{item.label}</a> : <span aria-current="page">{item.label}</span>}</span>)}</nav>; }
+
+export { LocaleProvider, LocaleSwitch, LocalizedSurface, localized, localizedError, useLocale, type GoJetLocale } from "./locale";
