@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@gojet/auth";
-import { Alert, Badge, Button, DataRegion, Field, Page, PageHeader, Select, Textarea } from "@gojet/ui";
+import { Alert, Badge, Button, DataRegion, Field, Page, PageHeader, Select, Textarea, useLocale } from "@gojet/ui";
 import { DataTable, type ColumnDef } from "@gojet/ui/data";
 
 type Row = Record<string, unknown>;
@@ -22,6 +22,7 @@ const tone = (value: string): Tone => { const v = value.toLowerCase(); if (["act
 const useAdmin = (key: string, endpoint: string) => useQuery({ queryKey: ["admin", "p17", key], queryFn: () => api.get<unknown>(endpoint) });
 
 export function AdminOverviewPage() {
+  const { text } = useLocale();
   const overview = useAdmin("overview", "/api/admin/overview");
   const diagnostics = useAdmin("diagnostics", "/api/admin/diagnostics");
   const summary = asObject(overview.data); const health = asObject(diagnostics.data);
@@ -32,10 +33,11 @@ export function AdminOverviewPage() {
     { metric: "Open alerts", value: health.alert_count ?? health.alerts ?? "—" },
   ];
   const columns: ColumnDef<Row>[] = [{ header: "Signal", accessorFn: (row) => str(row, "metric") }, { header: "Current", accessorFn: (row) => str(row, "value") }];
-  return <Page data-p17-admin="overview"><PageHeader title="Overview" description="Platform-wide operational and governance summary sourced from the Admin overview and diagnostics APIs." />{overview.error || diagnostics.error ? <Alert tone="danger" title="Overview partially unavailable">{err(overview.error || diagnostics.error)}</Alert> : null}<DataRegion title="Platform signals"><DataTable data={metrics} columns={columns} label="Admin overview signals" density="compact" loading={overview.isLoading || diagnostics.isLoading} /></DataRegion></Page>;
+  return <Page data-p17-admin="overview"><PageHeader title="Overview" description="Platform-wide operational and governance summary sourced from the Admin overview and diagnostics APIs." />{overview.error || diagnostics.error ? <Alert tone="danger" title="Overview partially unavailable">{err(overview.error || diagnostics.error)}</Alert> : null}<DataRegion title="Platform signals"><DataTable data={metrics} columns={columns} label={text("Admin overview", "后台概览")} density="compact" loading={overview.isLoading || diagnostics.isLoading} /></DataRegion></Page>;
 }
 
 export function AdminUsersPage() {
+  const { text } = useLocale();
   const query = useAdmin("users", "/api/admin/users?limit=200"); const qc = useQueryClient();
   const [selected, setSelected] = useState<Row | null>(null); const [status, setStatus] = useState("suspended"); const [reason, setReason] = useState("");
   const mutation = useMutation({ mutationFn: () => { if (!selected || reason.trim().length < 3) throw new Error("Governance reason must contain at least 3 characters."); return api.patch(`/api/admin/governance/users/${rid(selected)}/status`, { status, reason: reason.trim() }); }, onSuccess: async () => { setSelected(null); setReason(""); await qc.invalidateQueries({ queryKey: ["admin", "p17", "users"] }); } });
@@ -45,19 +47,21 @@ export function AdminUsersPage() {
     { header: "Verified", accessorFn: (row) => str(row, "email_verified_at", str(row, "email_verified")) }, { header: "Created", accessorFn: (row) => when(row) },
     { id: "actions", header: "Governance", enableSorting: false, cell: ({ row }) => <Button size="sm" variant="outline" onClick={() => { setSelected(row.original); setStatus(str(row.original, "status") === "suspended" ? "active" : "suspended"); setReason(""); }}>Change status</Button> },
   ];
-  return <Page data-p17-admin="users"><PageHeader title="Users" description="Global user governance. Suspend/restore is server-enforced, audited, and requires a reason; suspension revokes active sessions." /><DataRegion title="User directory"><DataTable data={asRows(query.data)} columns={columns} label="Admin users" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion>{selected ? <section className="p17-action-card"><h2>Govern user · {str(selected, "email")}</h2><Field label="New status" htmlFor="user-status"><Select id="user-status" value={status} onChange={(event) => setStatus(event.currentTarget.value)}><option value="active">Active</option><option value="suspended">Suspended</option></Select></Field><Field label="Governance reason" htmlFor="user-reason" required help="3–500 characters. Stored in the audit trail."><Textarea id="user-reason" rows={4} value={reason} onChange={(event) => setReason(event.currentTarget.value)} /></Field>{mutation.error ? <Alert tone="danger" title="User action failed">{err(mutation.error)}</Alert> : null}<div className="p17-actions"><Button disabled={reason.trim().length < 3} loading={mutation.isPending} onClick={() => mutation.mutate()}>Apply status</Button><Button variant="ghost" onClick={() => setSelected(null)}>Cancel</Button></div></section> : null}</Page>;
+  return <Page data-p17-admin="users"><PageHeader title="Users" description="Global user governance. Suspend/restore is server-enforced, audited, and requires a reason; suspension revokes active sessions." /><DataRegion title="User directory"><DataTable data={asRows(query.data)} columns={columns} label={text("Admin users", "后台用户") } density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion>{selected ? <section className="p17-action-card"><h2>{text("Change user account", "修改用户账号")} · {str(selected, "email")}</h2><Field label="New status" htmlFor="user-status"><Select id="user-status" value={status} onChange={(event) => setStatus(event.currentTarget.value)}><option value="active">Active</option><option value="suspended">Suspended</option></Select></Field><Field label="Governance reason" htmlFor="user-reason" required help="3–500 characters. Stored in the audit trail."><Textarea id="user-reason" rows={4} value={reason} onChange={(event) => setReason(event.currentTarget.value)} /></Field>{mutation.error ? <Alert tone="danger" title={text("User action failed", "用户操作失败")}>{err(mutation.error)}</Alert> : null}<div className="p17-actions"><Button disabled={reason.trim().length < 3} loading={mutation.isPending} onClick={() => mutation.mutate()}>Apply status</Button><Button variant="ghost" onClick={() => setSelected(null)}>Cancel</Button></div></section> : null}</Page>;
 }
 
 export function AdminWorkspacesPage() {
+  const { text } = useLocale();
   const query = useAdmin("workspaces", "/api/admin/workspaces?limit=200");
   const columns: ColumnDef<Row>[] = [{ header: "Workspace", accessorFn: (row) => str(row, "name") }, { header: "ID", accessorFn: (row) => str(row, "id") }, { header: "Owner", accessorFn: (row) => str(row, "owner_email", str(row, "owner_id")) }, { header: "Plan", accessorFn: (row) => str(row, "plan", str(row, "plan_code")) }, { header: "Status", accessorFn: (row) => str(row, "status"), cell: ({ row }) => <Badge tone={tone(str(row.original, "status"))}>{str(row.original, "status")}</Badge> }, { header: "Created", accessorFn: (row) => when(row) }];
-  return <Page data-p17-admin="workspaces"><PageHeader title="Workspaces" description="Cross-tenant workspace inventory and lifecycle state. Workspace mutations remain RBAC-protected on the server." /><DataRegion title="Workspace inventory"><DataTable data={asRows(query.data)} columns={columns} label="Admin workspaces" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
+  return <Page data-p17-admin="workspaces"><PageHeader title="Workspaces" description="Cross-tenant workspace inventory and lifecycle state. Workspace mutations remain RBAC-protected on the server." /><DataRegion title="Workspace inventory"><DataTable data={asRows(query.data)} columns={columns} label={text("Admin workspaces", "后台工作区")} density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
 }
 
 export function AdminMembershipsPage() {
+  const { text } = useLocale();
   const query = useAdmin("memberships", "/api/admin/memberships?limit=200");
   const columns: ColumnDef<Row>[] = [{ header: "Workspace", accessorFn: (row) => str(row, "workspace") }, { header: "User", accessorFn: (row) => str(row, "email") }, { header: "Role", accessorFn: (row) => str(row, "role") }, { header: "Status", accessorFn: (row) => str(row, "status"), cell: ({ row }) => <Badge tone={tone(str(row.original, "status"))}>{str(row.original, "status")}</Badge> }, { header: "Joined", accessorFn: (row) => when(row, "joined_at") }];
-  return <Page data-p17-admin="memberships"><PageHeader title="Memberships" description="Global workspace membership view backed by the workspace membership authority, not duplicated browser state." /><DataRegion title="Membership inventory"><DataTable data={asRows(query.data)} columns={columns} label="Admin memberships" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
+  return <Page data-p17-admin="memberships"><PageHeader title="Memberships" description="Global workspace membership view backed by the workspace membership authority, not duplicated browser state." /><DataRegion title="Membership inventory"><DataTable data={asRows(query.data)} columns={columns} label={text("Admin memberships", "后台成员关系")} density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
 }
 
 type ResourceKind = "link" | "qr" | "file" | "text" | "bio";
@@ -75,9 +79,10 @@ export const AdminTextPage = () => <ResourceGovernancePage kind="text" title="Te
 export const AdminBioPage = () => <ResourceGovernancePage kind="bio" title="Bio Pages" />;
 
 export function AdminDomainsPage() {
+  const { text } = useLocale();
   const query = useAdmin("domains", "/api/admin/domains?limit=200");
   const columns: ColumnDef<Row>[] = [{ header: "Domain", accessorFn: (row) => str(row, "hostname", str(row, "domain")) }, { header: "Workspace", accessorFn: (row) => str(row, "workspace", str(row, "workspace_id")) }, { header: "Status", accessorFn: (row) => str(row, "status"), cell: ({ row }) => <Badge tone={tone(str(row.original, "status"))}>{str(row.original, "status")}</Badge> }, { header: "Verification", accessorFn: (row) => str(row, "verification_status", str(row, "verified_at")) }, { header: "Created", accessorFn: (row) => when(row) }];
-  return <Page data-p17-admin="domains"><PageHeader title="Domains" description="Cross-workspace custom-domain governance and verification state." /><DataRegion title="Domain inventory"><DataTable data={asRows(query.data)} columns={columns} label="Admin domains" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
+  return <Page data-p17-admin="domains"><PageHeader title="Domains" description="Cross-workspace custom-domain governance and verification state." /><DataRegion title="Domain inventory"><DataTable data={asRows(query.data)} columns={columns} label={text("Admin domains", "后台域名")} density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
 }
 
 function adminPayload(value: unknown) { const payload = asObject(value); return { rows: asRows(value), roles: asObject(payload.role_templates), permissions: payload.permission_catalog }; }
@@ -89,14 +94,16 @@ export function AdministratorsPage() {
 }
 
 export function RolesPage() {
+  const { text } = useLocale();
   const query = useAdmin("role-catalog", "/api/admin/administrators"); const roles = asObject(asObject(query.data).role_templates); const data = Object.entries(roles).map(([name, value]) => ({ name, permissions: Array.isArray(value) ? value.join(", ") : String(value ?? "") }));
   const columns: ColumnDef<Row>[] = [{ header: "Role", accessorFn: (row) => str(row, "name") }, { header: "Effective permissions", accessorFn: (row) => str(row, "permissions") }];
-  return <Page data-p17-admin="roles"><PageHeader title="Roles" description="Effective Admin role templates returned by the same server authority used during authorization." /><DataRegion title="Role templates"><DataTable data={data} columns={columns} label="Admin role templates" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
+  return <Page data-p17-admin="roles"><PageHeader title="Roles" description="Effective Admin role templates returned by the same server authority used during authorization." /><DataRegion title="Role templates"><DataTable data={data} columns={columns} label={text("Admin role templates", "后台管理员角色模板")} density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
 }
 
 export function PermissionsPage() {
+  const { text } = useLocale();
   const query = useAdmin("permission-catalog", "/api/admin/administrators"); const raw = asObject(query.data).permission_catalog;
   const data: Row[] = Array.isArray(raw) ? raw.map((entry) => typeof entry === "string" ? { permission: entry } : asObject(entry)) : Object.entries(asObject(raw)).map(([permission, description]) => ({ permission, description: String(description ?? "") }));
   const columns: ColumnDef<Row>[] = [{ header: "Permission", accessorFn: (row) => str(row, "permission", str(row, "name")) }, { header: "Description", accessorFn: (row) => str(row, "description", str(row, "label")) }];
-  return <Page data-p17-admin="permissions"><PageHeader title="Permissions" description="Permission catalog used by Admin RBAC. Client rendering is informational; the server remains the enforcement boundary." /><DataRegion title="Permission catalog"><DataTable data={data} columns={columns} label="Admin permission catalog" density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
+  return <Page data-p17-admin="permissions"><PageHeader title="Permissions" description="Permission catalog used by Admin RBAC. Client rendering is informational; the server remains the enforcement boundary." /><DataRegion title="Permission catalog"><DataTable data={data} columns={columns} label={text("Admin permission catalog", "后台权限目录")} density="compact" loading={query.isLoading} error={query.error ? err(query.error) : ""} /></DataRegion></Page>;
 }
