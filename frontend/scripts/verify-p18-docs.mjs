@@ -13,7 +13,7 @@ const en = [
   "developers/index.mdx", "developers/api-reference.mdx", "security/index.mdx",
   "self-hosting/index.mdx", "self-hosting/operations.mdx"
 ];
-const zh = en.map((file) => `zh-CN/${file}`);
+const zh = en.map((file) => `zh-cn/${file}`);
 for (const file of [
   "apps/docs/package.json",
   "apps/docs/astro.config.mjs",
@@ -27,7 +27,7 @@ has("apps/docs/package.json", ["astro build && node scripts/normalizelocales.mjs
 has("apps/docs/astro.config.mjs", [
   "base: \"/docs\"", "output: \"static\"", "@astrojs/starlight", "defaultLocale: \"root\"",
   "Start using GoJet", "Create and manage content", "API and automation",
-  "Account and content protection", "Self-hosting and maintenance", "\"zh-CN\""
+  "Account and content protection", "Self-hosting and maintenance", "\"zh-cn\"", "lang: \"zh-CN\""
 ]);
 lacks("apps/docs/astro.config.mjs", ["defaultLocale: \"en\""]);
 has("apps/docs/scripts/normalizelocales.mjs", [
@@ -48,17 +48,17 @@ has("apps/docs/src/content/docs/index.mdx", [
   "GoJet Help & Documentation", "Start with your account and workspace", "Create and manage what you publish",
   "Connect other systems", "Maintain a self-hosted installation"
 ]);
-has("apps/docs/src/content/docs/zh-CN/index.mdx", [
+has("apps/docs/src/content/docs/zh-cn/index.mdx", [
   "GoJet 帮助与文档", "从账号和工作区开始", "创建和管理对外发布的内容", "接入其他系统", "维护自托管环境"
 ]);
 has("apps/docs/src/content/docs/developers/api-reference.mdx", [
   "POST `/api/links`", "Authentication", "Request body", "curl example", "JavaScript example", "PHP example", "Go example",
   "Successful response", "Common errors", "GET `/api/links/{id}`"
 ]);
-has("apps/docs/src/content/docs/zh-CN/developers/api-reference.mdx", [
+has("apps/docs/src/content/docs/zh-cn/developers/api-reference.mdx", [
   "POST `/api/links`", "鉴权", "请求体", "curl 示例", "JavaScript 示例", "PHP 示例", "Go 示例",
   "成功响应", "常见错误", "GET `/api/links/{id}`"
 ]);
-for (const locale of ["", "zh-CN/"]) has(`apps/docs/src/content/docs/${locale}self-hosting/index.mdx`, ["Nginx", "PHP 8.3", "MySQL 8", "Redis"]);
+for (const locale of ["", "zh-cn/"]) has(`apps/docs/src/content/docs/${locale}self-hosting/index.mdx`, ["Nginx", "PHP 8.3", "MySQL 8", "Redis"]);
 
-console.log("P18 Docs contract verified: /docs is English, /docs/zh-CN is Simplified Chinese, lowercase duplicate locale output is normalized away, no redirect flash page can shadow the generated documentation, and the help set remains task-oriented and detailed.");
+console.log("P18 Docs contract verified: source locales follow Starlight directory conventions, /docs is English, /docs/zh-CN is the canonical Simplified Chinese output after normalization, lowercase duplicate output is removed, no redirect flash page can shadow the generated documentation, and the help set remains task-oriented and detailed.");
