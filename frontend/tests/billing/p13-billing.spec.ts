@@ -19,6 +19,7 @@ async function fixture(page: Page, role: Role = "owner") {
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/api/**", async (route) => {
     const req = route.request(); const path = new URL(req.url()).pathname; const method = req.method();
+    if (method === "GET" && path === "/api/session") return json(route, { authenticated: true, identity: { id: 7, email: "owner@example.com", displayName: "P13 Owner", emailVerified: true }, csrfToken: "p13-csrf" });
     if (method === "GET" && path === "/api/workspaces") return json(route, { data: [{ id: 1, name: "Commerce Workspace", type: "company", role }] });
     if (method === "GET" && path === "/api/workspaces/1/billing") return json(route, billing);
     if (method === "GET" && path === "/api/workspaces/1/billing/payment-methods") return json(route, { data: [{ code: "stripe", name: "Stripe", enabled: true, mode: "redirect" }] });
