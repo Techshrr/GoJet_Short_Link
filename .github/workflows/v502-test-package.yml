@@ -1,0 +1,100 @@
+name: V5.0.2 Test Install Package
+
+on:
+  push:
+    branches:
+      - "rebuild/v5.0.2-auth-i18n-product-copy"
+    paths:
+      - ".github/workflows/v502-test-package.yml"
+      - "frontend/**"
+      - "app/**"
+      - "services/**"
+      - "database/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "installer/**"
+      - "public/install/**"
+      - "install.sh"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build test install package
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frozen frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare FontTools without apt mirror dependency
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/gojet-fonttools
+          . /tmp/gojet-fonttools/bin/activate
+          python -m pip install --disable-pip-version-check --no-input fonttools
+          python - <<'PY'
+          from fontTools.ttLib import TTFont
+          from fontTools.varLib.instancer import instantiateVariableFont
+          print('FontTools ready without apt')
+          PY
+          echo "/tmp/gojet-fonttools/bin" >> "$GITHUB_PATH"
+
+      - name: Reject Azure Ubuntu mirror dependency
+        run: |
+          if grep -R -n -F 'azure.archive.ubuntu.com/ubuntu' .github scripts deploy install.sh installer public/install 2>/dev/null; then
+            echo 'azure.archive.ubuntu.com/ubuntu is forbidden in the test-package path' >&2
+            exit 1
+          fi
+
+      - name: Build Native test install package
+        run: bash scripts/packagev5native.sh
+
+      - name: Verify package structure and exact SHA
+        env:
+          GOJET_EXPECTED_SHA: ${{ github.sha }}
+        run: bash scripts/verifyv5nativepackage.sh
+
+      - name: Write test-package marker
+        run: |
+          printf '%s\n' 'TEST PACKAGE - NOT RELEASE CERTIFIED' > dist/native/TEST-PACKAGE.txt
+          printf 'Git SHA: %s\n' '${{ github.sha }}' >> dist/native/TEST-PACKAGE.txt
+
+      - name: Upload test install package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gojet-v5.0.2-test-install-${{ github.sha }}
+          path: |
+            dist/native/gojet-v5-native-linux-amd64.tar.gz
+            dist/native/gojet-v5-native-linux-amd64.tar.gz.sha256
+            dist/native/TEST-PACKAGE.txt
+            dist/native/stage/gojet-v5-native-linux-amd64/VERSION-MANIFEST.json
+            dist/native/stage/gojet-v5-native-linux-amd64/SBOM.cdx.json
+            dist/native/stage/gojet-v5-native-linux-amd64/MANIFEST.sha256
+          if-no-files-found: error
+          retention-days: 30
