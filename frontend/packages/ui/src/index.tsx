@@ -109,7 +109,7 @@ export function Dialog({ triggerLabel, title, description, children, confirmLabe
 }
 
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
-  return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<span />}>{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="gj-tooltip-positioner" sideOffset={6}><BaseTooltip.Popup className="gj-tooltip-popup">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root>;
+  return <BaseTooltip.Provider><BaseTooltip.Root><BaseTooltip.Trigger render={<span />}>{children}</BaseTooltip.Trigger><BaseTooltip.Portal><BaseTooltip.Positioner className="gj-tooltip-positioner" sideOffset={6}><BaseTooltip.Popup className="gj-tooltip-popup">{label}</BaseTooltip.Popup></BaseTooltip.Positioner></BaseTooltip.Portal></BaseTooltip.Root></BaseTooltip.Provider>;
 }
 
 export interface BreadcrumbItem { label: string; href?: string | undefined; }
