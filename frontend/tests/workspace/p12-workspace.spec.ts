@@ -47,8 +47,8 @@ for (const viewport of viewports) {
   test(`P12 members · ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height }); const errors = runtimeErrors(page); const state = await fixture(page); await page.goto("/app/members?workspace=1");
     await expect(page.getByRole("heading", { name: "Members", exact: true })).toBeVisible(); await expect(page.getByText("owner@gojet.cc")).toBeVisible(); await expect(page.getByText("invitee@gojet.cc")).toBeVisible();
-    await page.getByRole("button", { name: "Invite member" }).click(); const sheet = page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Email").fill("new@gojet.cc"); await sheet.getByRole("button", { name: "Send invitation" }).click(); expect(state.invites).toBe(1);
-    const roleSelect = page.getByLabel("Role for editor@gojet.cc"); await roleSelect.selectOption("analyst"); expect(state.roleChanges).toBe(1);
+    await page.getByRole("button", { name: "Invite member" }).click(); const sheet = page.locator(".gj-side-sheet-popup"); await sheet.getByLabel("Email address").fill("new@gojet.cc"); await sheet.getByRole("button", { name: "Send invitation" }).click(); await expect.poll(() => state.invites).toBe(1);
+    const roleSelect = page.getByLabel("Role for editor@gojet.cc"); await roleSelect.selectOption("analyst"); await expect.poll(() => state.roleChanges).toBe(1);
     await noOverflow(page); expect(errors).toEqual([]); await page.screenshot({ path: `test-results/p12-members-${viewport.name}.png`, fullPage: true });
   });
 
@@ -61,10 +61,10 @@ for (const viewport of viewports) {
 
 test("P12 tag creation uses only the frozen token palette", async ({ page }) => {
   const state = await fixture(page); await page.goto("/app/tags?workspace=1"); await page.getByRole("button", { name: "New tag" }).click();
-  const sheet = page.locator(".gj-side-sheet-popup"); const palette = sheet.getByRole("radiogroup", { name: "Tag color token palette" }); await expect(palette).toBeVisible(); await expect(palette.getByRole("radio")).toHaveCount(7); await expect(sheet.locator('input[type="color"]')).toHaveCount(0);
+  const sheet = page.locator(".gj-side-sheet-popup"); const palette = sheet.getByRole("radiogroup", { name: "Tag color palette" }); await expect(palette).toBeVisible(); await expect(palette.getByRole("radio")).toHaveCount(7); await expect(sheet.locator('input[type="color"]')).toHaveCount(0);
   await palette.getByRole("radio", { name: "Cyan" }).click(); await sheet.getByLabel("Name").fill("Docs"); await sheet.getByRole("button", { name: "Create tag" }).click();
-  expect(state.tagCreates).toBe(1); expect(state.lastTagColor).toBe("#06b6d4");
+  await expect.poll(() => state.tagCreates).toBe(1); expect(state.lastTagColor).toBe("#06b6d4");
 });
 
-test("P12 member RBAC is read-only for viewer", async ({ page }) => { await fixture(page, { role: "viewer" }); await page.goto("/app/members?workspace=1"); await expect(page.getByText("Read-only member access")).toBeVisible(); await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0); await expect(page.getByLabel("Role for editor@gojet.cc")).toHaveCount(0); });
+test("P12 member RBAC is read-only for viewer", async ({ page }) => { await fixture(page, { role: "viewer" }); await page.goto("/app/members?workspace=1"); await expect(page.getByText("Member management is read-only")).toBeVisible(); await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0); await expect(page.getByLabel("Role for editor@gojet.cc")).toHaveCount(0); });
 test("P12 organization RBAC is read-only for analyst", async ({ page }) => { await fixture(page, { role: "analyst" }); await page.goto("/app/tags?workspace=1"); await expect(page.getByText("Read-only organization access")).toBeVisible(); await expect(page.getByRole("button", { name: "New campaign" })).toHaveCount(0); await expect(page.getByRole("button", { name: "New tag" })).toHaveCount(0); });
