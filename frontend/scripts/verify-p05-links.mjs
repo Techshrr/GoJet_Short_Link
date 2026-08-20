@@ -13,7 +13,7 @@ requireAll('P05 workspace routes', router, ['path: "/links"','path: "/links/$lin
 
 const list = readFrontend('apps/workspace/src/routes/LinksPageV503.tsx');
 requireAll('P05 list/create implementation', list, [
-  'data-v503-links-list','linksClient.create','linksClient.list','linksClient.capabilities','linksClient.domains','linksClient.organization','linksClient.risks','linksClient.bulkStatus','linksClient.bulkTags','linksClient.bulkDelete','linksClient.exportCsv','useLocale','CreateLinkForm','source: selectedDomain.source','one_time: oneTime'
+  'data-v503-links-list','linksClient.create','linksClient.list','linksClient.capabilities','linksClient.domains','linksClient.organization','linksClient.risks','linksClient.bulkStatus','linksClient.bulkTags','linksClient.bulkDelete','linksClient.exportUrl','useLocale','CreateLinkForm','source: selectedDomain.source','one_time: oneTime'
 ]);
 forbid('P05 list runtime fixtures', list, ['mockLinks','fixtureLinks','demoLinks','localStorage.setItem','sessionStorage.setItem']);
 
