@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@gojet/ui";
 
 type TurnstileConfig = { enabled: boolean; site_key?: string; surface: string; unavailable?: boolean };
 type TurnstileApi = { render: (container: HTMLElement, options: { sitekey: string; callback: (token: string) => void; "expired-callback": () => void; "error-callback": () => void; theme: "auto" }) => string; remove: (id: string) => void };
@@ -28,6 +29,7 @@ function loadTurnstile(): Promise<void> {
 }
 
 export default function TurnstileField({ surface, onToken }: { surface: string; onToken: (token: string) => void }) {
+  const { text } = useLocale();
   const host = useRef<HTMLDivElement>(null);
   const [config, setConfig] = useState<TurnstileConfig | null>(null);
   const [failed, setFailed] = useState(false);
@@ -52,5 +54,5 @@ export default function TurnstileField({ surface, onToken }: { surface: string; 
     return () => { cancelled = true; if (widget && window.turnstile) window.turnstile.remove(widget); };
   }, [config, onToken]);
   if (!config?.enabled) return null;
-  return <div className="auth-turnstile" data-turnstile-surface={surface}><div ref={host} />{failed || config.unavailable ? <small role="alert">Bot verification could not load. Refresh the page before submitting.</small> : null}</div>;
+  return <div className="auth-turnstile" data-turnstile-surface={surface}><div ref={host} />{failed || config.unavailable ? <small role="alert">{text("Verification could not load. Refresh the page before submitting.", "验证组件无法加载，请刷新页面后再提交。")}</small> : null}</div>;
 }
