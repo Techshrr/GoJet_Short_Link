@@ -81,6 +81,8 @@ jobs:
       - name: Install frozen frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      - name: Normalize Ubuntu package sources
+        run: bash scripts/aptstable.sh
       - name: Install static PDF font build dependency
         run: |
           sudo apt-get update
